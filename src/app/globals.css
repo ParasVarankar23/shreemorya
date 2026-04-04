@@ -1,2 +1,15 @@
 @import "tailwindcss";
 
+
+:root {
+    --font-poppins: "Poppins", sans-serif;
+    --font-kaushan: "Kaushan Script", cursive;
+}
+
+body {
+    font-family: var(--font-poppins);
+}
+
+.font-script {
+    font-family: var(--font-kaushan);
+}

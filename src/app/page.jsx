@@ -1,749 +1,902 @@
 "use client";
 
-import { motion } from "framer-motion";
 import Image from "next/image";
-import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import gsap from "gsap";
 import {
-  FaArrowRight,
-  FaBus,
-  FaCalendarAlt,
-  FaChevronRight,
-  FaClock,
-  FaFacebookF,
-  FaHeadset,
-  FaInstagram,
   FaMapMarkerAlt,
+  FaPlaneDeparture,
+  FaCalendarAlt,
+  FaUserFriends,
+  FaArrowRight,
   FaPhoneAlt,
-  FaShieldAlt,
   FaStar,
-  FaUsers,
+  FaQuoteLeft,
+  FaFacebookF,
+  FaInstagram,
+  FaTwitter,
+  FaYoutube,
+  FaBars,
+  FaTimes,
+  FaBus,
+  FaCheckCircle,
   FaWhatsapp,
 } from "react-icons/fa";
+import {
+  MdTravelExplore,
+  MdOutlinePayments,
+  MdSupportAgent,
+} from "react-icons/md";
+import { GiPalmTree, GiCommercialAirplane } from "react-icons/gi";
 
-// ============================================================
-// MORYA TRAVELS - FULL HOME PAGE (SECTION WISE)
-// Next.js + Tailwind CSS + Framer Motion + React Icons
-// File suggestion: app/page.jsx
-// ============================================================
-
-const navLinks = [
-  { name: "Home", href: "#home" },
-  { name: "Routes", href: "#routes" },
-  { name: "Why Us", href: "#why-us" },
-  { name: "Services", href: "#services" },
-  { name: "Testimonials", href: "#testimonials" },
-  { name: "Contact", href: "#contact" },
+const easySteps = [
+  {
+    id: "01",
+    title: "Choose Pickup & Destination",
+    desc: "Select pickup point, destination and preferred bus or tour package in seconds.",
+    icon: <MdTravelExplore className="text-2xl" />,
+  },
+  {
+    id: "02",
+    title: "Secure Your Booking",
+    desc: "Fast, secure and trusted booking with easy payment options for every traveler.",
+    icon: <MdOutlinePayments className="text-2xl" />,
+  },
+  {
+    id: "03",
+    title: "Enjoy Comfortable Travel",
+    desc: "Travel safely with premium buses, smooth planning and 24/7 support from Morya.",
+    icon: <MdSupportAgent className="text-2xl" />,
+  },
 ];
 
-const popularRoutes = [
+const packages = [
   {
-    title: "Mumbai to Borivali",
-    price: "₹499",
+    title: "Basic Tour Package",
+    price: "₹8,999",
     image:
-      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80",
+    features: ["Bus Travel", "Hotel Stay", "Breakfast", "Pickup / Drop"],
   },
   {
-    title: "Pune to Mumbai",
-    price: "₹699",
+    title: "Standard Family Package",
+    price: "₹14,999",
     image:
-      "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=80",
+    features: ["AC Bus", "Premium Hotel", "Meals Included", "Sightseeing"],
   },
   {
-    title: "Satara to Panvel",
-    price: "₹899",
+    title: "Luxury Premium Package",
+    price: "₹24,999",
     image:
-      "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
+    features: ["Luxury Bus", "Luxury Stay", "Full Meals", "Tour Guide"],
   },
 ];
 
-const features = [
+const blogs = [
   {
-    icon: FaClock,
-    title: "On-Time Pickup",
-    desc: "Reliable schedule and timely departure for every route.",
+    title: "Top Hill Stations To Visit This Year",
+    image:
+      "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80",
+    whiteCard: false,
   },
   {
-    icon: FaShieldAlt,
-    title: "Safe Journey",
-    desc: "Verified drivers, trusted service and secure travel experience.",
+    title: "Best Family Tour Packages In India",
+    image:
+      "https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&w=1200&q=80",
+    whiteCard: false,
   },
   {
-    icon: FaHeadset,
-    title: "24/7 Support",
-    desc: "Quick support for bookings, route help and travel assistance.",
-  },
-  {
-    icon: FaUsers,
-    title: "Comfort Seating",
-    desc: "Comfortable seating for daily, weekly and seasonal passengers.",
+    title: "Travel Smart With Morya Tours",
+    image:
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
+    whiteCard: true,
   },
 ];
-
-const services = [
-  "Daily Route Booking",
-  "Seasonal Seat Reservations",
-  "Group Travel Support",
-  "Festival / Event Booking",
-  "Pickup & Drop Assistance",
-  "Customer WhatsApp Updates",
-];
-
-const testimonials = [
-  {
-    name: "Rahul Patil",
-    text: "Very smooth booking and always on time. Morya Travels is best for regular travel.",
-  },
-  {
-    name: "Sneha Jadhav",
-    text: "Clean bus, easy seat booking and fast support on WhatsApp. Highly recommended.",
-  },
-  {
-    name: "Amit More",
-    text: "I use it every month for family travel. Good service and trusted team.",
-  },
-];
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 40 },
-  visible: { opacity: 1, y: 0 },
-};
-
-const stagger = {
-  hidden: {},
-  visible: {
-    transition: {
-      staggerChildren: 0.12,
-    },
-  },
-};
-
-function SectionTitle({ badge, title, subtitle }) {
-  return (
-    <motion.div
-      variants={fadeUp}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.6 }}
-      className="mx-auto mb-12 max-w-3xl text-center"
-    >
-      <p className="mb-3 inline-flex rounded-full bg-teal-50 px-4 py-1 text-sm font-semibold text-teal-700">
-        {badge}
-      </p>
-      <h2 className="text-3xl font-bold tracking-tight text-slate-900 md:text-5xl">
-        {title}
-      </h2>
-      <p className="mt-4 text-base text-slate-600 md:text-lg">{subtitle}</p>
-    </motion.div>
-  );
-}
-
-function Navbar() {
-  return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <Link href="#home" className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-500 text-white shadow-lg shadow-teal-500/30">
-            <FaBus className="text-lg" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-white md:text-xl">Morya Travels</h1>
-            <p className="text-xs text-slate-300">Safe • Fast • Trusted</p>
-          </div>
-        </Link>
-
-        <nav className="hidden items-center gap-8 lg:flex">
-          {navLinks.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className="text-sm font-medium text-slate-200 transition hover:text-teal-400"
-            >
-              {item.name}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <Link
-            href="https://wa.me/919309940782"
-            className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10 md:inline-flex"
-          >
-            Contact Us
-          </Link>
-          <Link
-            href="#booking"
-            className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/30 transition hover:bg-teal-600"
-          >
-            Book Now <FaArrowRight className="text-xs" />
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function HeroSection() {
-  return (
-    <section
-      id="home"
-      className="relative overflow-hidden bg-slate-950 text-white py-10"
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.2),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(14,165,233,0.15),transparent_25%)]" />
-
-      <div className="relative mx-auto grid max-w-7xl gap-10 px-4 pb-20 pt-8 sm:px-6 lg:grid-cols-2 lg:px-8 lg:pb-28">
-        <motion.div
-          initial={{ opacity: 0, x: -40 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8 }}
-          className="flex flex-col justify-center"
-        >
-          <span className="mb-4 inline-flex w-fit rounded-full border border-teal-400/20 bg-teal-400/10 px-4 py-2 text-sm font-semibold text-teal-300">
-            Trusted Travel Partner For Daily Routes
-          </span>
-
-          <h2 className="text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">
-            Book Your Journey With <span className="text-teal-400">Morya Travels</span>
-          </h2>
-
-          <p className="mt-6 max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
-            Fast booking, comfortable travel, and trusted pickup & drop service for your regular and seasonal routes.
-          </p>
-
-          <div className="mt-8 flex flex-wrap gap-4">
-            <Link
-              href="#booking"
-              className="inline-flex items-center gap-2 rounded-2xl bg-teal-500 px-6 py-3 font-semibold text-white shadow-xl shadow-teal-500/25 transition hover:bg-teal-600"
-            >
-              Start Booking <FaChevronRight className="text-xs" />
-            </Link>
-            <Link
-              href="#routes"
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
-            >
-              View Routes
-            </Link>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, x: 40 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.9 }}
-          className="relative"
-        >
-          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 p-3 shadow-2xl backdrop-blur-xl">
-            <div className="relative h-[520px] overflow-hidden rounded-[1.5rem]">
-              <Image
-                src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1400&auto=format&fit=crop"
-                alt="Morya Travels Hero"
-                fill
-                className="object-cover"
-                priority
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/10 to-transparent" />
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* HERO BOOKING BAR */}
-      <div id="booking" className="relative z-10 mx-auto mb-14 max-w-6xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.7 }}
-          className="grid gap-4 rounded-[2rem] border border-white/10 bg-white p-4 shadow-2xl md:grid-cols-4 md:p-5"
-        >
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <FaMapMarkerAlt className="text-teal-600" /> Select Pickup
-            </label>
-            <select className="w-full bg-transparent text-sm text-slate-700 outline-none">
-              <option>Choose Pickup</option>
-              <option>Satara</option>
-              <option>Pune</option>
-              <option>Panvel</option>
-              <option>Borivali</option>
-            </select>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <FaMapMarkerAlt className="text-sky-600" /> Select Drop
-            </label>
-            <select className="w-full bg-transparent text-sm text-slate-700 outline-none">
-              <option>Choose Drop</option>
-              <option>Mumbai</option>
-              <option>Panvel</option>
-              <option>Pune</option>
-              <option>Satara</option>
-            </select>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <FaCalendarAlt className="text-orange-500" /> Travel Date
-            </label>
-            <input type="date" className="w-full bg-transparent text-sm text-slate-700 outline-none" />
-          </div>
-
-          <button className="rounded-2xl bg-slate-950 px-5 py-4 text-sm font-bold text-white transition hover:bg-slate-900">
-            Search Bus
-          </button>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function StatsStrip() {
-  const stats = useMemo(
-    () => [
-      { value: "48+", label: "Popular Routes" },
-      { value: "6000+", label: "Monthly Bookings" },
-      { value: "24/7", label: "Customer Support" },
-      { value: "4.9", label: "Average Rating" },
-    ],
-    []
-  );
-
-  return (
-    <section className="bg-white pt-24">
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
-        {stats.map((item) => (
-          <motion.div
-            key={item.label}
-            variants={fadeUp}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm"
-          >
-            <h3 className="text-3xl font-black text-slate-900">{item.value}</h3>
-            <p className="mt-2 text-sm font-medium text-slate-600">{item.label}</p>
-          </motion.div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function WhyChooseUs() {
-  return (
-    <section id="why-us" className="bg-white py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionTitle
-          badge="Why Choose Morya Travels"
-          title="Simple Booking. Safe Travel. Better Experience."
-          subtitle="Built for daily passengers, families, and seasonal travel bookings with comfort and trust."
-        />
-
-        <motion.div
-          variants={stagger}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.2 }}
-          className="grid gap-6 md:grid-cols-2 xl:grid-cols-4"
-        >
-          {features.map((item) => {
-            const Icon = item.icon;
-            return (
-              <motion.div
-                key={item.title}
-                variants={fadeUp}
-                transition={{ duration: 0.5 }}
-                className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
-              >
-                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-2xl text-teal-600">
-                  <Icon />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900">{item.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{item.desc}</p>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function PopularRoutes() {
-  return (
-    <section id="routes" className="bg-slate-50 py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionTitle
-          badge="Popular Routes"
-          title="Top Routes For Daily & Seasonal Travel"
-          subtitle="You can later connect this section with your backend and MongoDB to show dynamic routes and pricing."
-        />
-
-        <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
-          {popularRoutes.map((route, index) => (
-            <motion.div
-              key={route.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.08 }}
-              className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm"
-            >
-              <div className="relative h-64">
-                <Image src={route.image} alt={route.title} fill className="object-cover" />
-              </div>
-              <div className="p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-xl font-bold text-slate-900">{route.title}</h3>
-                  <span className="rounded-full bg-teal-50 px-3 py-1 text-sm font-bold text-teal-700">
-                    {route.price}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Comfortable travel option with reliable pickup and smooth route management.
-                </p>
-                <button className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-900">
-                  Book This Route <FaArrowRight className="text-xs" />
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ServicesSection() {
-  return (
-    <section id="services" className="bg-white py-24">
-      <div className="mx-auto grid max-w-7xl gap-14 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, x: -40 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white"
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.2),transparent_35%)]" />
-          <div className="relative">
-            <p className="mb-4 inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-teal-300">
-              Our Services
-            </p>
-            <h3 className="text-3xl font-bold md:text-4xl">Travel Services Built For Real Passengers</h3>
-            <p className="mt-5 text-slate-300 leading-8">
-              Morya Travels is perfect for your daily seat booking, village pickup points, seasonal rush bookings, and group travel.
-            </p>
-
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              {services.map((item) => (
-                <div
-                  key={item}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm font-medium"
-                >
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, x: 40 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="grid gap-6"
-        >
-          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-100 text-teal-700">
-                <FaWhatsapp className="text-xl" />
-              </div>
-              <div>
-                <h4 className="text-xl font-bold text-slate-900">WhatsApp Booking Support</h4>
-                <p className="text-sm text-slate-600">Quick ticket updates and customer communication.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-                <FaBus className="text-xl" />
-              </div>
-              <div>
-                <h4 className="text-xl font-bold text-slate-900">Smart Route Management</h4>
-                <p className="text-sm text-slate-600">Best for your route-based booking system project.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
-                <FaStar className="text-xl" />
-              </div>
-              <div>
-                <h4 className="text-xl font-bold text-slate-900">Premium User Experience</h4>
-                <p className="text-sm text-slate-600">Clean layout, animations and mobile-friendly booking flow.</p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function TestimonialSection() {
-  return (
-    <section id="testimonials" className="bg-slate-50 py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionTitle
-          badge="Testimonials"
-          title="What Our Customers Say"
-          subtitle="Real feedback from passengers who trust Morya Travels for regular and family travel."
-        />
-
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {testimonials.map((item, index) => (
-            <motion.div
-              key={item.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.08 }}
-              className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm"
-            >
-              <div className="mb-5 flex items-center gap-1 text-yellow-500">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <FaStar key={i} />
-                ))}
-              </div>
-              <p className="text-sm leading-8 text-slate-600">“{item.text}”</p>
-              <div className="mt-6 border-t border-slate-100 pt-4">
-                <h4 className="font-bold text-slate-900">{item.name}</h4>
-                <p className="text-sm text-slate-500">Regular Passenger</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CTASection() {
-  return (
-    <section className="bg-white py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="rounded-[2.5rem] bg-slate-950 p-8 text-white md:p-12"
-        >
-          <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
-            <div>
-              <p className="mb-4 inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-teal-300">
-                Ready To Travel?
-              </p>
-              <h3 className="text-3xl font-black md:text-5xl">Book Your Seat With Morya Travels Today</h3>
-              <p className="mt-5 max-w-2xl text-slate-300 leading-8">
-                Start with pickup, drop and date selection — simple, fast and easy booking flow.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-4 lg:justify-end">
-              <Link
-                href="#booking"
-                className="rounded-2xl bg-teal-500 px-6 py-3 font-semibold text-white transition hover:bg-teal-600"
-              >
-                Book Now
-              </Link>
-              <Link
-                href="https://wa.me/919309940782"
-                className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
-              >
-                WhatsApp Us
-              </Link>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function ContactSection() {
-  return (
-    <section id="contact" className="bg-slate-50 py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionTitle
-          badge="Contact Us"
-          title="Reach & Get In Touch With Us"
-          subtitle="You can connect this section later with your real contact form or backend API."
-        />
-
-        <div className="grid gap-8 lg:grid-cols-2">
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm"
-          >
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
-                  <FaPhoneAlt />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">Phone</p>
-                  <p className="font-semibold text-slate-900">+91 93099 40782</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
-                  <FaWhatsapp />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">WhatsApp</p>
-                  <p className="font-semibold text-slate-900">Quick Booking Support</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
-                  <FaMapMarkerAlt />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">Service Area</p>
-                  <p className="font-semibold text-slate-900">Satara • Pune • Panvel • Mumbai</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.form
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm"
-          >
-            <div className="grid gap-5">
-              <input
-                type="text"
-                placeholder="Your Name"
-                className="rounded-2xl border border-slate-200 px-4 py-4 text-sm outline-none transition focus:border-teal-500"
-              />
-              <input
-                type="text"
-                placeholder="Phone Number"
-                className="rounded-2xl border border-slate-200 px-4 py-4 text-sm outline-none transition focus:border-teal-500"
-              />
-              <textarea
-                rows={5}
-                placeholder="Your Message"
-                className="rounded-2xl border border-slate-200 px-4 py-4 text-sm outline-none transition focus:border-teal-500"
-              />
-              <button
-                type="button"
-                className="rounded-2xl bg-slate-950 px-6 py-4 text-sm font-bold text-white transition hover:bg-slate-900"
-              >
-                Send Inquiry
-              </button>
-            </div>
-          </motion.form>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="bg-slate-950 text-white">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
-        <div>
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-500 text-white">
-              <FaBus />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold">Morya Travels</h3>
-              <p className="text-sm text-slate-400">Safe • Fast • Trusted</p>
-            </div>
-          </div>
-          <p className="text-sm leading-7 text-slate-400">
-            Premium and clean travel booking UI for your long-term Morya Travels project.
-          </p>
-        </div>
-
-        <div>
-          <h4 className="mb-4 text-lg font-bold">Quick Links</h4>
-          <ul className="space-y-3 text-sm text-slate-400">
-            {navLinks.map((item) => (
-              <li key={item.name}>
-                <Link href={item.href} className="transition hover:text-white">
-                  {item.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div>
-          <h4 className="mb-4 text-lg font-bold">Support</h4>
-          <ul className="space-y-3 text-sm text-slate-400">
-            <li>Booking Help</li>
-            <li>Route Inquiry</li>
-            <li>Seat Availability</li>
-            <li>Customer Support</li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 className="mb-4 text-lg font-bold">Follow Us</h4>
-          <div className="flex gap-3">
-            {[FaFacebookF, FaInstagram, FaWhatsapp].map((Icon, index) => (
-              <button
-                key={index}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
-              >
-                <Icon />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-white/10 py-5 text-center text-sm text-slate-400">
-        © 2026 Morya Travels. All rights reserved.
-      </div>
-    </footer>
-  );
-}
 
 export default function Page() {
+  const [mobileMenu, setMobileMenu] = useState(false);
+
+  const heroTitleRef = useRef(null);
+  const heroTextRef = useRef(null);
+  const heroButtonsRef = useRef(null);
+  const bookingRef = useRef(null);
+  const rightVisualRef = useRef(null);
+  const busCardRef = useRef(null);
+  const ladyCardRef = useRef(null);
+  const discountRef = useRef(null);
+  const heroTiltRef = useRef(null);
+
+  useEffect(() => {
+    const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+    tl.from(heroTitleRef.current, {
+      y: 60,
+      opacity: 0,
+      duration: 1,
+    })
+      .from(
+        heroTextRef.current,
+        {
+          y: 25,
+          opacity: 0,
+          duration: 0.8,
+        },
+        "-=0.5"
+      )
+      .from(
+        heroButtonsRef.current,
+        {
+          y: 20,
+          opacity: 0,
+          duration: 0.7,
+        },
+        "-=0.4"
+      )
+      .from(
+        bookingRef.current,
+        {
+          y: 35,
+          opacity: 0,
+          scale: 0.96,
+          duration: 0.8,
+        },
+        "-=0.35"
+      )
+      .from(
+        rightVisualRef.current,
+        {
+          x: 70,
+          opacity: 0,
+          duration: 1,
+        },
+        "-=0.7"
+      )
+      .from(
+        ladyCardRef.current,
+        {
+          y: 35,
+          opacity: 0,
+          rotate: -6,
+          duration: 0.7,
+        },
+        "-=0.6"
+      )
+      .from(
+        busCardRef.current,
+        {
+          x: -25,
+          opacity: 0,
+          duration: 0.7,
+        },
+        "-=0.45"
+      )
+      .from(
+        discountRef.current,
+        {
+          scale: 0.7,
+          opacity: 0,
+          duration: 0.5,
+        },
+        "-=0.45"
+      );
+
+    gsap.to(busCardRef.current, {
+      y: -10,
+      duration: 2.2,
+      repeat: -1,
+      yoyo: true,
+      ease: "sine.inOut",
+    });
+
+    gsap.to(discountRef.current, {
+      y: -8,
+      duration: 2,
+      repeat: -1,
+      yoyo: true,
+      ease: "sine.inOut",
+    });
+
+    gsap.to(ladyCardRef.current, {
+      y: -12,
+      duration: 2.6,
+      repeat: -1,
+      yoyo: true,
+      ease: "sine.inOut",
+    });
+  }, []);
+
+  const handleHeroMouseMove = (e) => {
+    const card = heroTiltRef.current;
+    if (!card) return;
+
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const rotateY = ((x / rect.width) - 0.5) * 10;
+    const rotateX = -((y / rect.height) - 0.5) * 10;
+
+    gsap.to(card, {
+      rotateX,
+      rotateY,
+      transformPerspective: 1000,
+      transformOrigin: "center",
+      duration: 0.4,
+      ease: "power2.out",
+    });
+  };
+
+  const resetHeroTilt = () => {
+    const card = heroTiltRef.current;
+    if (!card) return;
+
+    gsap.to(card, {
+      rotateX: 0,
+      rotateY: 0,
+      duration: 0.6,
+      ease: "power3.out",
+    });
+  };
+
   return (
-    <main className="overflow-x-hidden bg-white">
-      <Navbar />
-      <HeroSection />
-      <StatsStrip />
-      <WhyChooseUs />
-      <PopularRoutes />
-      <ServicesSection />
-      <TestimonialSection />
-      <CTASection />
-      <ContactSection />
-      <Footer />
+    <main className="min-h-screen bg-[#f8fbfa] text-[#123b3a] overflow-x-hidden">
+      {/* FLOATING CONTACT BUTTONS */}
+      <div className="fixed bottom-5 right-5 z-[80] flex flex-col gap-3">
+        <a
+          href="https://wa.me/919309940782"
+          target="_blank"
+          className="w-14 h-14 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition"
+        >
+          <FaWhatsapp className="text-2xl" />
+        </a>
+        <a
+          href="tel:+919309940782"
+          className="w-14 h-14 rounded-full bg-[#f4b32c] text-[#123b3a] flex items-center justify-center shadow-2xl hover:scale-110 transition"
+        >
+          <FaPhoneAlt />
+        </a>
+      </div>
+
+      {/* STICKY NAVBAR */}
+      <header className="sticky top-0 z-[70] backdrop-blur-2xl bg-[#0d5b5a]/92 border-b border-white/10 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="h-16 md:h-20 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#f4b32c] flex items-center justify-center shadow-lg">
+                <GiPalmTree className="text-white text-xl" />
+              </div>
+              <div>
+                <h1 className="text-white text-lg sm:text-xl font-bold tracking-wide leading-tight">
+                  Morya Tours & Travels
+                </h1>
+                <p className="text-white/70 text-[11px] sm:text-xs">
+                  Premium Bus & Tour Booking
+                </p>
+              </div>
+            </div>
+
+            <nav className="hidden lg:flex items-center gap-8 text-white/90 text-sm font-medium">
+              <a href="#home" className="hover:text-[#f4b32c] transition">Home</a>
+              <a href="#packages" className="hover:text-[#f4b32c] transition">Packages</a>
+              <a href="#testimonial" className="hover:text-[#f4b32c] transition">Testimonials</a>
+              <a href="#contact" className="hover:text-[#f4b32c] transition">Contact</a>
+              <a href="#blogs" className="hover:text-[#f4b32c] transition">Blogs</a>
+            </nav>
+
+            <div className="hidden md:flex items-center gap-4">
+              <a
+                href="tel:+919309940782"
+                className="hidden xl:flex items-center gap-2 text-white/90 text-sm"
+              >
+                <FaPhoneAlt className="text-[#f4b32c]" />
+                +91 93099 40782
+              </a>
+              <button className="bg-[#f4b32c] text-[#123b3a] px-5 py-2.5 rounded-full font-semibold hover:scale-105 transition shadow-lg">
+                Book Now
+              </button>
+            </div>
+
+            <button
+              className="lg:hidden text-white text-xl"
+              onClick={() => setMobileMenu(!mobileMenu)}
+            >
+              {mobileMenu ? <FaTimes /> : <FaBars />}
+            </button>
+          </div>
+
+          {mobileMenu && (
+            <div className="lg:hidden pb-5">
+              <div className="bg-white rounded-3xl p-4 space-y-3 shadow-2xl">
+                <a href="#home" className="block text-[#123b3a] font-medium">Home</a>
+                <a href="#packages" className="block text-[#123b3a] font-medium">Packages</a>
+                <a href="#testimonial" className="block text-[#123b3a] font-medium">Testimonials</a>
+                <a href="#contact" className="block text-[#123b3a] font-medium">Contact</a>
+                <a href="#blogs" className="block text-[#123b3a] font-medium">Blogs</a>
+                <button className="w-full bg-[#f4b32c] text-[#123b3a] py-3 rounded-full font-semibold mt-2">
+                  Book Now
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* HERO SECTION */}
+      <section
+        id="home"
+        className="relative overflow-hidden bg-[#0d5b5a] pt-4 md:pt-6"
+      >
+        {/* MAIN BG IMAGE - LIGHTER */}
+        <div className="absolute inset-0">
+          <Image
+            src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2200&q=80"
+            alt="Nature background"
+            fill
+            priority
+            unoptimized
+            className="object-cover opacity-45"
+          />
+        </div>
+
+        {/* SECOND BG IMAGE */}
+        <div className="absolute inset-0">
+          <Image
+            src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=2200&q=80"
+            alt="Mountain background"
+            fill
+            unoptimized
+            className="object-cover opacity-18 mix-blend-screen"
+          />
+        </div>
+
+        {/* LIGHTER OVERLAY */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0d5b5a]/70 via-[#0d5b5a]/55 to-[#0d5b5a]/25" />
+
+        {/* DECOR */}
+        <div className="absolute top-16 left-10 w-40 h-40 rounded-full bg-[#f4b32c]/10 blur-3xl" />
+        <div className="absolute bottom-10 right-10 w-56 h-56 rounded-full bg-white/10 blur-3xl" />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20, x: -20 }}
+          animate={{ opacity: 0.22, y: [0, -10, 0], x: [0, 10, 0] }}
+          transition={{ duration: 6, repeat: Infinity }}
+          className="absolute top-28 right-[20%] text-white text-5xl md:text-7xl z-10 hidden md:block"
+        >
+          <GiCommercialAirplane />
+        </motion.div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="grid lg:grid-cols-2 gap-10 xl:gap-14 items-center min-h-[calc(100vh-90px)] py-6 md:py-10 lg:py-12">
+            {/* LEFT CONTENT */}
+            <div className="relative z-20">
+              <div className="inline-flex items-center gap-2 bg-white/10 border border-white/10 backdrop-blur-xl rounded-full px-4 py-2 mb-5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#7ed321]" />
+                <p className="text-[#f4b32c] text-sm sm:text-base font-semibold tracking-wide">
+                  Discover Your Journey
+                </p>
+              </div>
+
+              <div ref={heroTitleRef}>
+                <h2 className="text-white text-4xl sm:text-5xl md:text-4xl xl:text-7xl font-bold leading-[0.95] drop-shadow-[0_8px_30px_rgba(0,0,0,0.2)]">
+                  Explore The World
+                </h2>
+              </div>
+
+              <p
+                ref={heroTextRef}
+                className="text-white/90 mt-5 max-w-xl text-sm sm:text-base md:text-lg leading-7 md:leading-8"
+              >
+                Premium bus booking, custom tour packages, family trips, group tours,
+                and comfortable travel planning with Morya Tours & Travels. Safe rides,
+                best routes, and unforgettable experiences.
+              </p>
+
+              <div ref={heroButtonsRef} className="mt-7 flex flex-wrap gap-4">
+                <button className="bg-[#7ed321] text-[#123b3a] px-6 py-3 rounded-full font-semibold hover:scale-105 transition shadow-xl">
+                  Explore Tours
+                </button>
+                <button className="border border-white/20 bg-white/10 backdrop-blur-xl text-white px-6 py-3 rounded-full font-semibold hover:bg-white/15 transition">
+                  View Bus Routes
+                </button>
+              </div>
+
+              {/* BOOKING FORM */}
+              <div
+                ref={bookingRef}
+                className="mt-8 bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-2xl p-4 md:p-5 max-w-4xl border border-white/50"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div className="bg-[#f7faf9] rounded-2xl px-4 py-3">
+                    <label className="text-xs text-gray-500 block mb-1">Pickup</label>
+                    <div className="flex items-center gap-2 text-sm font-medium text-[#123b3a]">
+                      <FaMapMarkerAlt className="text-[#0d5b5a]" />
+                      <span>Select Pickup</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#f7faf9] rounded-2xl px-4 py-3">
+                    <label className="text-xs text-gray-500 block mb-1">Destination</label>
+                    <div className="flex items-center gap-2 text-sm font-medium text-[#123b3a]">
+                      <FaPlaneDeparture className="text-[#0d5b5a]" />
+                      <span>Select Destination</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#f7faf9] rounded-2xl px-4 py-3">
+                    <label className="text-xs text-gray-500 block mb-1">Travel Date</label>
+                    <div className="flex items-center gap-2 text-sm font-medium text-[#123b3a]">
+                      <FaCalendarAlt className="text-[#0d5b5a]" />
+                      <span>Choose Date</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#f7faf9] rounded-2xl px-4 py-3">
+                    <label className="text-xs text-gray-500 block mb-1">Passengers</label>
+                    <div className="flex items-center gap-2 text-sm font-medium text-[#123b3a]">
+                      <FaUserFriends className="text-[#0d5b5a]" />
+                      <span>1-4 Person</span>
+                    </div>
+                  </div>
+
+                  <button className="bg-[#f4b32c] hover:bg-[#e7a91f] text-[#123b3a] rounded-2xl px-4 py-3 font-semibold flex items-center justify-center gap-2 transition shadow-md">
+                    Search
+                    <FaArrowRight />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT PREMIUM 3D VISUAL */}
+            <div
+              ref={rightVisualRef}
+              className="relative flex justify-center lg:justify-end mt-4 lg:mt-0 perspective-[1200px]"
+            >
+              <div
+                ref={heroTiltRef}
+                onMouseMove={handleHeroMouseMove}
+                onMouseLeave={resetHeroTilt}
+                className="relative w-full max-w-[640px] h-[460px] sm:h-[540px] md:h-[620px] transition-transform duration-300"
+                style={{ transformStyle: "preserve-3d" }}
+              >
+                {/* MAIN IMAGE WITH CURVE CUT SHAPE */}
+                <motion.div
+                  whileHover={{ scale: 1.015 }}
+                  transition={{ duration: 0.4 }}
+                  className="absolute right-0 top-0 w-[88%] h-[88%] rounded-[42px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.28)] border border-white/20"
+                  style={{
+                    clipPath:
+                      "polygon(10% 0%, 100% 0%, 100% 88%, 88% 100%, 0% 100%, 0% 12%)",
+                    transform: "translateZ(0px)",
+                  }}
+                >
+                  <Image
+                    src="https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&w=1400&q=80"
+                    alt="Travel city view"
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d5b5a]/20 via-transparent to-transparent" />
+                </motion.div>
+
+                {/* WHITE CURVE FRAME */}
+                <div
+                  className="absolute right-8 bottom-8 w-[55%] h-[48%] rounded-[32px] border-[5px] border-white/80 z-20 pointer-events-none"
+                  style={{
+                    clipPath:
+                      "polygon(12% 0%, 100% 0%, 100% 88%, 88% 100%, 0% 100%, 0% 14%)",
+                    transform: "translateZ(40px)",
+                  }}
+                />
+
+                {/* LADY CARD */}
+                <div
+                  ref={ladyCardRef}
+                  className="absolute bottom-8 right-8 w-[180px] sm:w-[230px] md:w-[270px] h-[230px] sm:h-[290px] md:h-[340px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.35)] border-4 border-white/75 z-30 rotate-[-4deg]"
+                  style={{ transform: "translateZ(90px)" }}
+                >
+                  <Image
+                    src="https://images.unsplash.com/photo-1502920917128-1aa500764ce7?auto=format&fit=crop&w=1000&q=80"
+                    alt="Lady traveler"
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                </div>
+
+                {/* BUS CARD */}
+                <div
+                  ref={busCardRef}
+                  className="absolute bottom-0 left-0 w-[190px] sm:w-[240px] md:w-[280px] h-[130px] sm:h-[160px] md:h-[180px] rounded-[28px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.35)] border-4 border-white/80 z-30"
+                  style={{ transform: "translateZ(110px)" }}
+                >
+                  <Image
+                    src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80"
+                    alt="Bus travel"
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                </div>
+
+                {/* DISCOUNT */}
+                <div
+                  ref={discountRef}
+                  className="absolute top-6 right-2 sm:right-6 bg-[#f4b32c] text-white px-5 py-4 rounded-[28px] shadow-2xl z-40 rotate-[-6deg]"
+                  style={{ transform: "translateZ(140px)" }}
+                >
+                  <p className="text-2xl sm:text-4xl font-bold leading-none">60%</p>
+                  <p className="text-xs sm:text-sm font-medium mt-1">Discount</p>
+                </div>
+
+                {/* FLOATING BUS PRICE CARD */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: [0, -8, 0] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                  className="absolute top-8 left-1 sm:left-0 bg-white rounded-3xl p-4 shadow-2xl w-[220px] sm:w-[250px] z-30"
+                  style={{ transform: "translateZ(120px)" }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#0d5b5a] text-white flex items-center justify-center">
+                      <FaBus />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Premium Bus</p>
+                      <h4 className="font-bold text-sm sm:text-base">Masur → Pune</h4>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-[#0d5b5a] font-bold">₹499</span>
+                    <button className="text-xs bg-[#7ed321] text-[#123b3a] px-3 py-1.5 rounded-full font-semibold">
+                      Book Seat
+                    </button>
+                  </div>
+                </motion.div>
+
+                {/* GLOW */}
+                <div className="absolute inset-0 bg-white/10 rounded-[50px] blur-3xl -z-10" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CURVE BOTTOM CUT */}
+        <div className="relative -mt-2">
+          <svg viewBox="0 0 1440 140" className="w-full h-20 md:h-28 fill-[#f8fbfa]">
+            <path d="M0,96L80,90.7C160,85,320,75,480,58.7C640,43,800,21,960,26.7C1120,32,1280,64,1360,80L1440,96L1440,140L1360,140C1280,140,1120,140,960,140C800,140,640,140,480,140C320,140,160,140,80,140L0,140Z"></path>
+          </svg>
+        </div>
+      </section>
+
+      {/* EASY STEPS */}
+      <section className="py-16 md:py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <p className="text-[#f4b32c] font-semibold">Easy Steps For Booking</p>
+            <h3 className="text-3xl md:text-4xl font-bold mt-2">Book Your Journey Easily</h3>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {easySteps.map((step) => (
+              <motion.div
+                key={step.id}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                viewport={{ once: true }}
+                className="bg-white rounded-[28px] p-6 shadow-xl border border-[#e8efee] hover:-translate-y-1 transition"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-[#0d5b5a] text-white flex items-center justify-center mb-4 shadow-lg">
+                  {step.icon}
+                </div>
+                <span className="text-xs font-bold text-[#f4b32c]">{step.id}</span>
+                <h4 className="text-xl font-bold mt-2">{step.title}</h4>
+                <p className="text-gray-600 text-sm mt-3 leading-6">{step.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PACKAGES */}
+      <section id="packages" className="py-20 bg-[#edf7f6] relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full">
+          <svg viewBox="0 0 1440 120" className="w-full h-12 fill-[#f8fbfa]">
+            <path d="M0,32L80,42.7C160,53,320,75,480,80C640,85,800,75,960,58.7C1120,43,1280,21,1360,10.7L1440,0L1440,0L1360,0C1280,0,1120,0,960,0C800,0,640,0,480,0C320,0,160,0,80,0L0,0Z"></path>
+          </svg>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+          <div className="text-center mb-12">
+            <p className="text-[#f4b32c] font-semibold">Price For Travel The World</p>
+            <h3 className="text-3xl md:text-4xl font-bold mt-2">Best Travel Packages</h3>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-8">
+            {packages.map((pkg, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: index * 0.15 }}
+                viewport={{ once: true }}
+                whileHover={{ y: -8 }}
+                className="bg-white rounded-[32px] shadow-2xl overflow-hidden border border-white"
+              >
+                <div className="relative h-56">
+                  <Image
+                    src={pkg.image}
+                    alt={pkg.title}
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                </div>
+
+                <div className="p-6">
+                  <div className="flex items-center justify-between gap-4">
+                    <h4 className="text-xl md:text-2xl font-bold">{pkg.title}</h4>
+                    <span className="text-[#0d5b5a] font-bold whitespace-nowrap">{pkg.price}</span>
+                  </div>
+
+                  <ul className="mt-5 space-y-3">
+                    {pkg.features.map((feature, idx) => (
+                      <li key={idx} className="flex items-center gap-3 text-gray-600">
+                        <FaCheckCircle className="text-[#7ed321]" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button className="mt-6 w-full bg-[#7ed321] text-[#123b3a] py-3 rounded-full font-semibold hover:scale-[1.02] transition">
+                    Book Now
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TESTIMONIAL */}
+      <section id="testimonial" className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <p className="text-[#f4b32c] font-semibold">Our Client Says</p>
+            <h3 className="text-3xl md:text-4xl font-bold mt-2">Testimonial</h3>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.7 }}
+            viewport={{ once: true }}
+            className="bg-[#f8faf9] rounded-[36px] p-6 md:p-10 shadow-2xl grid lg:grid-cols-2 gap-10 items-center"
+          >
+            <div className="relative h-[320px] rounded-[28px] overflow-hidden">
+              <Image
+                src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=80"
+                alt="Testimonial"
+                fill
+                unoptimized
+                className="object-cover"
+              />
+            </div>
+
+            <div>
+              <FaQuoteLeft className="text-4xl text-[#f4b32c]" />
+              <p className="text-gray-700 mt-4 leading-8 text-lg">
+                Morya Tours gave us an amazing experience. The booking process was
+                simple, the travel was comfortable, and the service was excellent.
+              </p>
+
+              <div className="mt-6">
+                <h4 className="font-bold text-xl">Happy Traveler</h4>
+                <p className="text-gray-500">Verified Customer</p>
+              </div>
+
+              <div className="flex gap-1 mt-4 text-[#f4b32c]">
+                <FaStar /><FaStar /><FaStar /><FaStar /><FaStar />
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* CONTACT */}
+      <section id="contact" className="py-20 bg-[#fffaf2] relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[280px] h-[280px] bg-[#f4b32c]/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[240px] h-[240px] bg-[#0d5b5a]/10 rounded-full blur-3xl" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            <div
+              className="relative h-[420px] rounded-[38px] overflow-hidden shadow-2xl"
+              style={{
+                clipPath:
+                  "polygon(0% 8%, 8% 0%, 100% 0%, 100% 92%, 92% 100%, 0% 100%)",
+              }}
+            >
+              <Image
+                src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80"
+                alt="Contact Banner"
+                fill
+                unoptimized
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-[#0d5b5a]/25" />
+              <div className="absolute bottom-8 left-8 text-white">
+                <p className="text-[#f4b32c] font-semibold">Adventure Awaits</p>
+                <h3 className="text-3xl md:text-4xl font-bold mt-2">
+                  Whatever You Want <br /> We Plan It For You
+                </h3>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[36px] shadow-2xl p-6 md:p-8">
+              <p className="text-[#f4b32c] font-semibold">Book & Get In Touch With Us</p>
+              <h3 className="text-3xl font-bold mt-2">Contact Us</h3>
+
+              <form className="mt-8 space-y-4">
+                <input
+                  type="text"
+                  placeholder="Your Name"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-[#0d5b5a]"
+                />
+                <input
+                  type="email"
+                  placeholder="Your Email"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-[#0d5b5a]"
+                />
+                <input
+                  type="text"
+                  placeholder="Phone Number"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-[#0d5b5a]"
+                />
+                <textarea
+                  rows="4"
+                  placeholder="Your Message"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-[#0d5b5a]"
+                />
+                <button
+                  type="submit"
+                  className="w-full bg-[#7ed321] text-[#123b3a] py-3 rounded-full font-semibold hover:scale-[1.02] transition"
+                >
+                  Submit Now
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* BLOGS */}
+      <section id="blogs" className="py-20 bg-[#0d5b5a]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10">
+            <div>
+              <p className="text-[#f4b32c] font-semibold">Explore Latest News</p>
+              <h3 className="text-3xl md:text-4xl font-bold text-white mt-2">
+                Travel Stories & Blogs
+              </h3>
+            </div>
+            <button className="bg-[#f4b32c] text-[#123b3a] px-5 py-2.5 rounded-full font-semibold w-fit">
+              View All
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {blogs.map((blog, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 25 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: index * 0.12 }}
+                viewport={{ once: true }}
+                className={`rounded-[28px] overflow-hidden border shadow-xl ${blog.whiteCard
+                    ? "bg-white border-white"
+                    : "bg-white/10 border-white/10"
+                  }`}
+              >
+                <div className="relative h-56">
+                  <Image
+                    src={blog.image}
+                    alt={blog.title}
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                </div>
+                <div className="p-5">
+                  <h4
+                    className={`text-xl font-semibold leading-8 ${blog.whiteCard ? "text-[#123b3a]" : "text-white"
+                      }`}
+                  >
+                    {blog.title}
+                  </h4>
+                  <button className="mt-4 text-[#f4b32c] font-semibold">
+                    Read More →
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="bg-[#0b4c4b] text-white pt-16 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-10">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-full bg-[#f4b32c] flex items-center justify-center">
+                  <GiPalmTree className="text-white text-xl" />
+                </div>
+                <div>
+                  <h4 className="text-xl font-bold">Morya Tours</h4>
+                  <p className="text-white/70 text-sm">Travel With Comfort</p>
+                </div>
+              </div>
+              <p className="text-white/70 mt-4 text-sm leading-7">
+                Premium bus booking, tour packages, and reliable transport for memorable journeys.
+              </p>
+
+              <div className="flex gap-3 mt-5">
+                {[FaFacebookF, FaInstagram, FaTwitter, FaYoutube].map((Icon, i) => (
+                  <div
+                    key={i}
+                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-[#f4b32c] hover:text-[#123b3a] flex items-center justify-center transition cursor-pointer"
+                  >
+                    <Icon />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-lg font-bold mb-4">Destinations</h4>
+              <ul className="space-y-3 text-white/70 text-sm">
+                <li>Goa Tour</li>
+                <li>Kashmir Package</li>
+                <li>Manali Tour</li>
+                <li>Kerala Package</li>
+                <li>Rajasthan Trip</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-lg font-bold mb-4">Quick Links</h4>
+              <ul className="space-y-3 text-white/70 text-sm">
+                <li>About Us</li>
+                <li>Tour Packages</li>
+                <li>Bus Booking</li>
+                <li>Contact Us</li>
+                <li>Privacy Policy</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-lg font-bold mb-4">Contact</h4>
+              <ul className="space-y-3 text-white/70 text-sm">
+                <li>Masur / Satara, Maharashtra</li>
+                <li>+91 93099 40782</li>
+                <li>moryatours@gmail.com</li>
+                <li>Mon - Sun: 24/7 Support</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-white/10 mt-10 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-white/60 text-sm">
+            <p>© 2026 Morya Tours & Travels. All Rights Reserved.</p>
+            <p>Designed for Premium Travel Experience</p>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
