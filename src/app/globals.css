@@ -6,9 +6,16 @@
     --font-kaushan: "Kaushan Script", cursive;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
+    overflow-x: hidden;
+    background: #f8fbfa;
     font-family: var(--font-poppins);
 }
+
 
 .font-script {
     font-family: var(--font-kaushan);

@@ -80,24 +80,22 @@ const blogs = [
     title: "Top Hill Stations To Visit This Year",
     image:
       "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80",
-    whiteCard: false,
   },
   {
     title: "Best Family Tour Packages In India",
     image:
       "https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&w=1200&q=80",
-    whiteCard: false,
   },
   {
     title: "Travel Smart With Morya Tours",
     image:
       "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
-    whiteCard: true,
   },
 ];
 
 export default function Page() {
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const heroTitleRef = useRef(null);
   const heroTextRef = useRef(null);
@@ -110,102 +108,112 @@ export default function Page() {
   const heroTiltRef = useRef(null);
 
   useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+
     const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
     tl.from(heroTitleRef.current, {
-      y: 60,
+      y: 50,
       opacity: 0,
-      duration: 1,
+      duration: 0.9,
     })
       .from(
         heroTextRef.current,
-        {
-          y: 25,
-          opacity: 0,
-          duration: 0.8,
-        },
-        "-=0.5"
-      )
-      .from(
-        heroButtonsRef.current,
         {
           y: 20,
           opacity: 0,
           duration: 0.7,
         },
-        "-=0.4"
+        "-=0.45"
       )
       .from(
-        bookingRef.current,
+        heroButtonsRef.current,
         {
-          y: 35,
+          y: 18,
           opacity: 0,
-          scale: 0.96,
-          duration: 0.8,
+          duration: 0.6,
         },
         "-=0.35"
       )
       .from(
+        bookingRef.current,
+        {
+          y: 25,
+          opacity: 0,
+          scale: 0.97,
+          duration: 0.7,
+        },
+        "-=0.25"
+      )
+      .from(
         rightVisualRef.current,
         {
-          x: 70,
+          x: 50,
           opacity: 0,
-          duration: 1,
+          duration: 0.9,
         },
-        "-=0.7"
+        "-=0.55"
       )
       .from(
         ladyCardRef.current,
         {
-          y: 35,
+          y: 25,
           opacity: 0,
           rotate: -6,
-          duration: 0.7,
+          duration: 0.6,
         },
-        "-=0.6"
+        "-=0.45"
       )
       .from(
         busCardRef.current,
         {
-          x: -25,
+          x: -20,
           opacity: 0,
-          duration: 0.7,
+          duration: 0.6,
         },
-        "-=0.45"
+        "-=0.35"
       )
       .from(
         discountRef.current,
         {
-          scale: 0.7,
+          scale: 0.8,
           opacity: 0,
-          duration: 0.5,
+          duration: 0.45,
         },
-        "-=0.45"
+        "-=0.35"
       );
 
     gsap.to(busCardRef.current, {
       y: -10,
-      duration: 2.2,
+      duration: 2.4,
       repeat: -1,
       yoyo: true,
       ease: "sine.inOut",
     });
 
     gsap.to(discountRef.current, {
-      y: -8,
-      duration: 2,
+      y: -7,
+      duration: 2.2,
       repeat: -1,
       yoyo: true,
       ease: "sine.inOut",
     });
 
     gsap.to(ladyCardRef.current, {
-      y: -12,
-      duration: 2.6,
+      y: -10,
+      duration: 2.8,
       repeat: -1,
       yoyo: true,
       ease: "sine.inOut",
     });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   const handleHeroMouseMove = (e) => {
@@ -216,15 +224,15 @@ export default function Page() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const rotateY = ((x / rect.width) - 0.5) * 10;
-    const rotateX = -((y / rect.height) - 0.5) * 10;
+    const rotateY = ((x / rect.width) - 0.5) * 8;
+    const rotateX = -((y / rect.height) - 0.5) * 8;
 
     gsap.to(card, {
       rotateX,
       rotateY,
-      transformPerspective: 1000,
+      transformPerspective: 1200,
       transformOrigin: "center",
-      duration: 0.4,
+      duration: 0.35,
       ease: "power2.out",
     });
   };
@@ -236,7 +244,7 @@ export default function Page() {
     gsap.to(card, {
       rotateX: 0,
       rotateY: 0,
-      duration: 0.6,
+      duration: 0.5,
       ease: "power3.out",
     });
   };
@@ -244,41 +252,47 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-[#f8fbfa] text-[#123b3a] overflow-x-hidden">
       {/* FLOATING CONTACT BUTTONS */}
-      <div className="fixed bottom-5 right-5 z-[80] flex flex-col gap-3">
+      <div className="fixed bottom-5 right-5 z-[90] flex flex-col gap-3">
         <a
           href="https://wa.me/919309940782"
           target="_blank"
-          className="w-14 h-14 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition"
+          rel="noreferrer"
+          className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition"
         >
-          <FaWhatsapp className="text-2xl" />
+          <FaWhatsapp className="text-xl md:text-2xl" />
         </a>
         <a
           href="tel:+919309940782"
-          className="w-14 h-14 rounded-full bg-[#f4b32c] text-[#123b3a] flex items-center justify-center shadow-2xl hover:scale-110 transition"
+          className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#f4b32c] text-[#123b3a] flex items-center justify-center shadow-2xl hover:scale-110 transition"
         >
           <FaPhoneAlt />
         </a>
       </div>
 
-      {/* STICKY NAVBAR */}
-      <header className="sticky top-0 z-[70] backdrop-blur-2xl bg-[#0d5b5a]/92 border-b border-white/10 shadow-lg">
+      {/* FIXED NAVBAR */}
+      <header
+        className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${isScrolled
+            ? "bg-[#0d5b5a]/95 shadow-2xl border-b border-white/10 backdrop-blur-xl"
+            : "bg-[#0d5b5a]/88 backdrop-blur-md border-b border-white/5"
+          }`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="h-16 md:h-20 flex items-center justify-between">
+          <div className="h-16 md:h-[78px] flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#f4b32c] flex items-center justify-center shadow-lg">
-                <GiPalmTree className="text-white text-xl" />
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#f4b32c] flex items-center justify-center shadow-lg shrink-0">
+                <GiPalmTree className="text-white text-lg md:text-xl" />
               </div>
               <div>
-                <h1 className="text-white text-lg sm:text-xl font-bold tracking-wide leading-tight">
+                <h1 className="text-white text-base sm:text-lg md:text-xl font-bold tracking-wide leading-tight">
                   Morya Tours & Travels
                 </h1>
-                <p className="text-white/70 text-[11px] sm:text-xs">
+                <p className="text-white/70 text-[10px] sm:text-[11px] md:text-xs">
                   Premium Bus & Tour Booking
                 </p>
               </div>
             </div>
 
-            <nav className="hidden lg:flex items-center gap-8 text-white/90 text-sm font-medium">
+            <nav className="hidden lg:flex items-center gap-7 text-white/90 text-sm font-medium">
               <a href="#home" className="hover:text-[#f4b32c] transition">Home</a>
               <a href="#packages" className="hover:text-[#f4b32c] transition">Packages</a>
               <a href="#testimonial" className="hover:text-[#f4b32c] transition">Testimonials</a>
@@ -294,7 +308,7 @@ export default function Page() {
                 <FaPhoneAlt className="text-[#f4b32c]" />
                 +91 93099 40782
               </a>
-              <button className="bg-[#f4b32c] text-[#123b3a] px-5 py-2.5 rounded-full font-semibold hover:scale-105 transition shadow-lg">
+              <button className="bg-[#f4b32c] text-[#123b3a] px-4 md:px-5 py-2.5 rounded-full font-semibold hover:scale-105 transition shadow-lg">
                 Book Now
               </button>
             </div>
@@ -308,7 +322,7 @@ export default function Page() {
           </div>
 
           {mobileMenu && (
-            <div className="lg:hidden pb-5">
+            <div className="lg:hidden pb-4">
               <div className="bg-white rounded-3xl p-4 space-y-3 shadow-2xl">
                 <a href="#home" className="block text-[#123b3a] font-medium">Home</a>
                 <a href="#packages" className="block text-[#123b3a] font-medium">Packages</a>
@@ -327,9 +341,9 @@ export default function Page() {
       {/* HERO SECTION */}
       <section
         id="home"
-        className="relative overflow-hidden bg-[#0d5b5a] pt-4 md:pt-6"
+        className="relative overflow-hidden bg-[#0d5b5a] pt-[90px] md:pt-[110px] pb-10 md:pb-14"
       >
-        {/* MAIN BG IMAGE - LIGHTER */}
+        {/* MAIN BG IMAGE */}
         <div className="absolute inset-0">
           <Image
             src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2200&q=80"
@@ -337,7 +351,7 @@ export default function Page() {
             fill
             priority
             unoptimized
-            className="object-cover opacity-45"
+            className="object-cover opacity-38"
           />
         </div>
 
@@ -352,27 +366,27 @@ export default function Page() {
           />
         </div>
 
-        {/* LIGHTER OVERLAY */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0d5b5a]/70 via-[#0d5b5a]/55 to-[#0d5b5a]/25" />
+        {/* OVERLAY */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0d5b5a]/78 via-[#0d5b5a]/58 to-[#0d5b5a]/28" />
 
         {/* DECOR */}
-        <div className="absolute top-16 left-10 w-40 h-40 rounded-full bg-[#f4b32c]/10 blur-3xl" />
-        <div className="absolute bottom-10 right-10 w-56 h-56 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute top-16 left-8 w-32 h-32 rounded-full bg-[#f4b32c]/10 blur-3xl" />
+        <div className="absolute bottom-8 right-8 w-44 h-44 rounded-full bg-white/10 blur-3xl" />
 
         <motion.div
           initial={{ opacity: 0, y: 20, x: -20 }}
-          animate={{ opacity: 0.22, y: [0, -10, 0], x: [0, 10, 0] }}
+          animate={{ opacity: 0.15, y: [0, -10, 0], x: [0, 10, 0] }}
           transition={{ duration: 6, repeat: Infinity }}
-          className="absolute top-28 right-[20%] text-white text-5xl md:text-7xl z-10 hidden md:block"
+          className="absolute top-28 right-[18%] text-white text-5xl md:text-7xl z-10 hidden md:block"
         >
           <GiCommercialAirplane />
         </motion.div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-10 xl:gap-14 items-center min-h-[calc(100vh-90px)] py-6 md:py-10 lg:py-12">
+          <div className="grid lg:grid-cols-2 gap-8 xl:gap-12 items-center min-h-[calc(88vh-78px)] lg:min-h-[calc(92vh-78px)]">
             {/* LEFT CONTENT */}
             <div className="relative z-20">
-              <div className="inline-flex items-center gap-2 bg-white/10 border border-white/10 backdrop-blur-xl rounded-full px-4 py-2 mb-5">
+              <div className="inline-flex items-center gap-2 bg-white/10 border border-white/10 backdrop-blur-xl rounded-full px-4 py-2 mb-4">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#7ed321]" />
                 <p className="text-[#f4b32c] text-sm sm:text-base font-semibold tracking-wide">
                   Discover Your Journey
@@ -380,25 +394,25 @@ export default function Page() {
               </div>
 
               <div ref={heroTitleRef}>
-                <h2 className="text-white text-4xl sm:text-5xl md:text-4xl xl:text-7xl font-bold leading-[0.95] drop-shadow-[0_8px_30px_rgba(0,0,0,0.2)]">
+                <h2 className="text-white text-3xl sm:text-4xl md:text-5xl xl:text-6xl font-bold leading-[0.95] drop-shadow-[0_8px_30px_rgba(0,0,0,0.2)]">
                   Explore The World
                 </h2>
               </div>
 
               <p
                 ref={heroTextRef}
-                className="text-white/90 mt-5 max-w-xl text-sm sm:text-base md:text-lg leading-7 md:leading-8"
+                className="text-white/90 mt-4 max-w-xl text-sm sm:text-base md:text-lg leading-7 md:leading-8"
               >
                 Premium bus booking, custom tour packages, family trips, group tours,
                 and comfortable travel planning with Morya Tours & Travels. Safe rides,
                 best routes, and unforgettable experiences.
               </p>
 
-              <div ref={heroButtonsRef} className="mt-7 flex flex-wrap gap-4">
-                <button className="bg-[#7ed321] text-[#123b3a] px-6 py-3 rounded-full font-semibold hover:scale-105 transition shadow-xl">
+              <div ref={heroButtonsRef} className="mt-5 flex flex-wrap gap-3">
+                <button className="bg-[#7ed321] text-[#123b3a] px-5 md:px-6 py-3 rounded-full font-semibold hover:scale-105 transition shadow-xl">
                   Explore Tours
                 </button>
-                <button className="border border-white/20 bg-white/10 backdrop-blur-xl text-white px-6 py-3 rounded-full font-semibold hover:bg-white/15 transition">
+                <button className="border border-white/20 bg-white/10 backdrop-blur-xl text-white px-5 md:px-6 py-3 rounded-full font-semibold hover:bg-white/15 transition">
                   View Bus Routes
                 </button>
               </div>
@@ -406,7 +420,7 @@ export default function Page() {
               {/* BOOKING FORM */}
               <div
                 ref={bookingRef}
-                className="mt-8 bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-2xl p-4 md:p-5 max-w-4xl border border-white/50"
+                className="mt-6 md:mt-7 bg-white/95 backdrop-blur-2xl rounded-[24px] md:rounded-[30px] shadow-2xl p-3 md:p-4 max-w-4xl border border-white/50"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   <div className="bg-[#f7faf9] rounded-2xl px-4 py-3">
@@ -441,7 +455,7 @@ export default function Page() {
                     </div>
                   </div>
 
-                  <button className="bg-[#f4b32c] hover:bg-[#e7a91f] text-[#123b3a] rounded-2xl px-4 py-3 font-semibold flex items-center justify-center gap-2 transition shadow-md">
+                  <button className="bg-[#f4b32c] hover:bg-[#e7a91f] text-[#123b3a] rounded-2xl px-4 py-3 font-semibold flex items-center justify-center gap-2 transition shadow-md min-h-[56px]">
                     Search
                     <FaArrowRight />
                   </button>
@@ -449,7 +463,7 @@ export default function Page() {
               </div>
             </div>
 
-            {/* RIGHT PREMIUM 3D VISUAL */}
+            {/* RIGHT PREMIUM VISUAL */}
             <div
               ref={rightVisualRef}
               className="relative flex justify-center lg:justify-end mt-4 lg:mt-0 perspective-[1200px]"
@@ -458,14 +472,14 @@ export default function Page() {
                 ref={heroTiltRef}
                 onMouseMove={handleHeroMouseMove}
                 onMouseLeave={resetHeroTilt}
-                className="relative w-full max-w-[640px] h-[460px] sm:h-[540px] md:h-[620px] transition-transform duration-300"
+                className="relative w-full max-w-[600px] h-[360px] sm:h-[470px] md:h-[560px] transition-transform duration-300"
                 style={{ transformStyle: "preserve-3d" }}
               >
-                {/* MAIN IMAGE WITH CURVE CUT SHAPE */}
+                {/* MAIN IMAGE */}
                 <motion.div
                   whileHover={{ scale: 1.015 }}
                   transition={{ duration: 0.4 }}
-                  className="absolute right-0 top-0 w-[88%] h-[88%] rounded-[42px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.28)] border border-white/20"
+                  className="absolute right-0 top-0 w-[86%] h-[84%] rounded-[34px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.28)] border border-white/20"
                   style={{
                     clipPath:
                       "polygon(10% 0%, 100% 0%, 100% 88%, 88% 100%, 0% 100%, 0% 12%)",
@@ -479,12 +493,12 @@ export default function Page() {
                     unoptimized
                     className="object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d5b5a]/20 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d5b5a]/10 via-transparent to-transparent" />
                 </motion.div>
 
-                {/* WHITE CURVE FRAME */}
+                {/* CURVE BORDER FRAME */}
                 <div
-                  className="absolute right-8 bottom-8 w-[55%] h-[48%] rounded-[32px] border-[5px] border-white/80 z-20 pointer-events-none"
+                  className="absolute right-7 bottom-6 w-[52%] h-[44%] rounded-[26px] border-[4px] border-white/75 z-20 pointer-events-none"
                   style={{
                     clipPath:
                       "polygon(12% 0%, 100% 0%, 100% 88%, 88% 100%, 0% 100%, 0% 14%)",
@@ -492,14 +506,14 @@ export default function Page() {
                   }}
                 />
 
-                {/* LADY CARD */}
+                {/* LADY IMAGE - MORE VISIBLE */}
                 <div
                   ref={ladyCardRef}
-                  className="absolute bottom-8 right-8 w-[180px] sm:w-[230px] md:w-[270px] h-[230px] sm:h-[290px] md:h-[340px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.35)] border-4 border-white/75 z-30 rotate-[-4deg]"
-                  style={{ transform: "translateZ(90px)" }}
+                  className="absolute bottom-8 right-5 w-[145px] sm:w-[190px] md:w-[220px] h-[195px] sm:h-[250px] md:h-[290px] rounded-[24px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.35)] border-4 border-white/80 z-30 rotate-[-4deg]"
+                  style={{ transform: "translateZ(95px)" }}
                 >
                   <Image
-                    src="https://images.unsplash.com/photo-1502920917128-1aa500764ce7?auto=format&fit=crop&w=1000&q=80"
+                    src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1000&q=80"
                     alt="Lady traveler"
                     fill
                     unoptimized
@@ -507,66 +521,65 @@ export default function Page() {
                   />
                 </div>
 
-                {/* BUS CARD */}
+                {/* BUS IMAGE - MOVED UP SO VISIBLE */}
                 <div
                   ref={busCardRef}
-                  className="absolute bottom-0 left-0 w-[190px] sm:w-[240px] md:w-[280px] h-[130px] sm:h-[160px] md:h-[180px] rounded-[28px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.35)] border-4 border-white/80 z-30"
+                  className="absolute bottom-6 left-0 w-[160px] sm:w-[210px] md:w-[250px] h-[110px] sm:h-[135px] md:h-[155px] rounded-[22px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.35)] border-4 border-white/80 z-30"
                   style={{ transform: "translateZ(110px)" }}
                 >
                   <Image
-                    src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80"
-                    alt="Bus travel"
+                    src="https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&w=1200&q=80"
+                    alt="Luxury bus travel"
                     fill
                     unoptimized
                     className="object-cover"
                   />
                 </div>
 
-                {/* DISCOUNT */}
+                {/* DISCOUNT BADGE - FIXED INSIDE */}
                 <div
                   ref={discountRef}
-                  className="absolute top-6 right-2 sm:right-6 bg-[#f4b32c] text-white px-5 py-4 rounded-[28px] shadow-2xl z-40 rotate-[-6deg]"
+                  className="absolute top-5 right-3 sm:right-5 bg-[#f4b32c] text-white w-[100px] sm:w-[125px] h-[90px] sm:h-[110px] rounded-[28px] shadow-2xl z-40 rotate-[-6deg] flex flex-col items-center justify-center"
                   style={{ transform: "translateZ(140px)" }}
                 >
                   <p className="text-2xl sm:text-4xl font-bold leading-none">60%</p>
-                  <p className="text-xs sm:text-sm font-medium mt-1">Discount</p>
+                  <p className="text-[11px] sm:text-sm font-medium mt-1">Discount</p>
                 </div>
 
-                {/* FLOATING BUS PRICE CARD */}
+                {/* TOP BUS CARD - MORE VISIBLE */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: [0, -8, 0] }}
                   transition={{ duration: 3, repeat: Infinity }}
-                  className="absolute top-8 left-1 sm:left-0 bg-white rounded-3xl p-4 shadow-2xl w-[220px] sm:w-[250px] z-30"
+                  className="absolute top-10 left-0 sm:left-2 bg-white rounded-3xl p-3 sm:p-4 shadow-2xl w-[190px] sm:w-[230px] z-30"
                   style={{ transform: "translateZ(120px)" }}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#0d5b5a] text-white flex items-center justify-center">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#0d5b5a] text-white flex items-center justify-center">
                       <FaBus />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Premium Bus</p>
+                      <p className="text-[11px] sm:text-xs text-gray-500">Premium Bus</p>
                       <h4 className="font-bold text-sm sm:text-base">Masur → Pune</h4>
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-[#0d5b5a] font-bold">₹499</span>
-                    <button className="text-xs bg-[#7ed321] text-[#123b3a] px-3 py-1.5 rounded-full font-semibold">
+                    <button className="text-[11px] bg-[#7ed321] text-[#123b3a] px-3 py-1.5 rounded-full font-semibold">
                       Book Seat
                     </button>
                   </div>
                 </motion.div>
 
-                {/* GLOW */}
                 <div className="absolute inset-0 bg-white/10 rounded-[50px] blur-3xl -z-10" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* CURVE BOTTOM CUT */}
+        {/* BOTTOM CURVE */}
         <div className="relative -mt-2">
-          <svg viewBox="0 0 1440 140" className="w-full h-20 md:h-28 fill-[#f8fbfa]">
+          <svg viewBox="0 0 1440 140" className="w-full h-16 md:h-24 fill-[#f8fbfa]">
             <path d="M0,96L80,90.7C160,85,320,75,480,58.7C640,43,800,21,960,26.7C1120,32,1280,64,1360,80L1440,96L1440,140L1360,140C1280,140,1120,140,960,140C800,140,640,140,480,140C320,140,160,140,80,140L0,140Z"></path>
           </svg>
         </div>
@@ -775,12 +788,12 @@ export default function Page() {
       </section>
 
       {/* BLOGS */}
-      <section id="blogs" className="py-20 bg-[#0d5b5a]">
+      <section id="blogs" className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10">
             <div>
               <p className="text-[#f4b32c] font-semibold">Explore Latest News</p>
-              <h3 className="text-3xl md:text-4xl font-bold text-white mt-2">
+              <h3 className="text-3xl md:text-4xl font-bold text-[#123b3a] mt-2">
                 Travel Stories & Blogs
               </h3>
             </div>
@@ -797,10 +810,7 @@ export default function Page() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.12 }}
                 viewport={{ once: true }}
-                className={`rounded-[28px] overflow-hidden border shadow-xl ${blog.whiteCard
-                    ? "bg-white border-white"
-                    : "bg-white/10 border-white/10"
-                  }`}
+                className="rounded-[28px] overflow-hidden border border-[#e8efee] shadow-xl bg-white"
               >
                 <div className="relative h-56">
                   <Image
@@ -812,10 +822,7 @@ export default function Page() {
                   />
                 </div>
                 <div className="p-5">
-                  <h4
-                    className={`text-xl font-semibold leading-8 ${blog.whiteCard ? "text-[#123b3a]" : "text-white"
-                      }`}
-                  >
+                  <h4 className="text-xl font-semibold leading-8 text-[#123b3a]">
                     {blog.title}
                   </h4>
                   <button className="mt-4 text-[#f4b32c] font-semibold">
