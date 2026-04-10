@@ -62,7 +62,7 @@ export default function HeroSection({
             {/* FLOATING BUS ICON */}
             <motion.div
                 initial={{ opacity: 0, y: 20, x: -20 }}
-                animate={{ opacity: 0.12, y: [0, -6, 0], x: [0, 10, 0] }}
+                animate={{ opacity: 0.22, y: [0, -6, 0], x: [0, 10, 0] }}
                 transition={{ duration: 5, repeat: Infinity }}
                 className="absolute top-24 left-[40%] lg:left-[42%] text-white text-4xl md:text-5xl z-20 hidden md:block"
             >

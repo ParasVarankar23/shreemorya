@@ -129,7 +129,7 @@ export default function Footer() {
                                     placeholder="Email address..."
                                     className="flex-1 bg-transparent px-4 py-2.5 outline-none text-[#123b3a] placeholder:text-[#6b7b76] text-sm sm:text-base"
                                 />
-                                <button className="w-12 h-12 rounded-full bg-[#0E6B68] text-white flex items-center justify-center hover:scale-105 transition">
+                                <button className="w-12 h-12 rounded-full bg-[#0A4F4D]/96 text-white flex items-center justify-center hover:scale-105 transition">
                                     <FaSearch />
                                 </button>
                             </div>
@@ -141,7 +141,7 @@ export default function Footer() {
             {/* ========================= */}
             {/* MAIN FOOTER */}
             {/* ========================= */}
-            <section className="relative bg-[#0E6B68] text-white py-5 md:py-10 overflow-hidden">
+            <section className="relative bg-[#0A4F4D]/96 text-white py-5 md:py-10 overflow-hidden">
                 {/* BACKGROUND DECOR */}
                 <div className="absolute inset-0 opacity-[0.08] pointer-events-none">
                     <div className="absolute bottom-0 left-0 w-full h-[280px] bg-gradient-to-t from-black/30 to-transparent" />
