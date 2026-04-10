@@ -40,54 +40,59 @@ const routeCards = [
 
 export default function RouteScheduleGrid() {
     return (
-        <section className="py-16 md:py-20 bg-[#f8fbfa]">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="text-center mb-12">
-                    <p className="text-[#f5ad1b] font-semibold">Daily Timings</p>
-                    <h2 className="text-3xl md:text-4xl font-bold text-[#0E6B68] mt-2">
+        <section className="py-8 md:py-10 bg-[#f8fbfa]">
+            <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-5">
+                {/* HEADING */}
+                <div className="text-center mb-6 md:mb-8">
+                    <p className="text-[#f5ad1b] font-semibold text-xs sm:text-sm">
+                        Daily Timings
+                    </p>
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#0E6B68] mt-1">
                         Route Schedule Details
                     </h2>
-                    <p className="text-gray-600 mt-4 max-w-3xl mx-auto">
-                        Check all available regular route timings for forward and return
-                        journeys. Choose the best suitable time for your comfortable travel.
+                    <p className="text-gray-600 mt-2 max-w-xl mx-auto text-xs sm:text-sm md:text-base leading-6">
+                        Check all available regular route timings for forward and return journeys.
                     </p>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-6">
+                {/* GRID */}
+                <div className="grid md:grid-cols-2 gap-4 lg:gap-5">
                     {routeCards.map((card, index) => (
                         <motion.div
                             key={card.id}
-                            initial={{ opacity: 0, y: 25 }}
+                            initial={{ opacity: 0, y: 12 }}
                             whileInView={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.55, delay: index * 0.08 }}
+                            transition={{ duration: 0.35, delay: index * 0.05 }}
                             viewport={{ once: true }}
-                            className="bg-white rounded-[30px] p-5 sm:p-6 md:p-8 shadow-xl border border-[#e7efee]"
+                            className="bg-white rounded-[18px] p-3 sm:p-4 shadow-md border border-[#e7efee]"
                         >
                             {/* TOP */}
-                            <div className="flex items-center gap-4 mb-5">
-                                <div className="w-16 h-16 rounded-[22px] bg-[#0E6B68] text-white flex items-center justify-center shrink-0">
-                                    <FaBusAlt className="text-3xl" />
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-[14px] bg-[#0E6B68] text-white flex items-center justify-center shrink-0">
+                                    <FaBusAlt className="text-lg sm:text-xl" />
                                 </div>
 
                                 <div>
-                                    <h3 className="text-2xl md:text-3xl font-bold text-[#123b3a] leading-tight">
+                                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-[#123b3a] leading-tight">
                                         {card.title}
                                     </h3>
-                                    <p className="text-gray-500 text-sm md:text-base">{card.subtitle}</p>
+                                    <p className="text-gray-500 text-[11px] sm:text-xs md:text-sm leading-tight">
+                                        {card.subtitle}
+                                    </p>
                                 </div>
                             </div>
 
                             {/* ROUTE BOX */}
-                            <div className="rounded-[24px] bg-[#f8fbfa] border border-[#e7efee] p-5 sm:p-6">
-                                <p className="text-[#0E6B68] font-semibold text-lg md:text-xl">
+                            <div className="rounded-[16px] bg-[#f8fbfa] border border-[#e7efee] p-3 sm:p-4">
+                                <p className="text-[#0E6B68] font-semibold text-sm sm:text-base">
                                     {card.label}
                                 </p>
 
-                                <h4 className="mt-4 text-2xl md:text-3xl font-bold text-[#123b3a] leading-snug">
+                                <h4 className="mt-2 text-lg sm:text-xl md:text-2xl font-bold text-[#123b3a] leading-snug break-words">
                                     {card.route}
                                 </h4>
 
-                                <p className="mt-5 text-[#f5ad1b] text-3xl md:text-4xl font-extrabold">
+                                <p className="mt-3 text-[#f5ad1b] text-lg sm:text-xl md:text-2xl font-extrabold leading-none">
                                     {card.time}
                                 </p>
                             </div>
