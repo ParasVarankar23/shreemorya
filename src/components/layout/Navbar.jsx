@@ -38,19 +38,19 @@ export default function Navbar({ mobileMenu, setMobileMenu, isScrolled }) {
 
                     {/* DESKTOP MENU */}
                     <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-white/90 text-sm xl:text-base font-medium">
-                        <a href="#home" className="hover:text-[#E8A317] transition duration-200">
+                        <a href="/" className="hover:text-[#E8A317] transition duration-200">
                             Home
                         </a>
-                        <a href="#routes" className="hover:text-[#E8A317] transition duration-200">
+                        <a href="/routes" className="hover:text-[#E8A317] transition duration-200">
                             Routes
                         </a>
-                        <a href="#services" className="hover:text-[#E8A317] transition duration-200">
+                        <a href="/services" className="hover:text-[#E8A317] transition duration-200">
                             Services
                         </a>
-                        <a href="#testimonial" className="hover:text-[#E8A317] transition duration-200">
+                        <a href="/testimonials" className="hover:text-[#E8A317] transition duration-200">
                             Testimonials
                         </a>
-                        <a href="#contact" className="hover:text-[#E8A317] transition duration-200">
+                        <a href="/contact" className="hover:text-[#E8A317] transition duration-200">
                             Contact
                         </a>
                     </nav>
@@ -65,7 +65,7 @@ export default function Navbar({ mobileMenu, setMobileMenu, isScrolled }) {
                             +91 88881 57744
                         </a>
 
-                        <button className="bg-[#E8A317] text-[#16302B] px-4 md:px-6 py-2.5 md:py-3 rounded-full font-bold hover:bg-[#D48F0C] hover:scale-105 transition shadow-lg">
+                        <button className="bg-[#E8A317] text-white/90 px-4 md:px-6 py-2.5 md:py-3 rounded-full font-semibold hover:bg-[#D48F0C] hover:scale-105 transition shadow-lg">
                             Book Now
                         </button>
                     </div>
@@ -84,19 +84,19 @@ export default function Navbar({ mobileMenu, setMobileMenu, isScrolled }) {
                 {mobileMenu && (
                     <div className="lg:hidden pb-4">
                         <div className="bg-white rounded-3xl p-4 space-y-3 shadow-2xl border border-[#F2E7C9]">
-                            <a href="#home" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
+                            <a href="/" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
                                 Home
                             </a>
-                            <a href="#routes" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
+                            <a href="/routes" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
                                 Routes
                             </a>
-                            <a href="#services" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
+                            <a href="/services" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
                                 Services
                             </a>
-                            <a href="#testimonial" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
+                            <a href="/testimonials" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
                                 Testimonials
                             </a>
-                            <a href="#contact" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
+                            <a href="/contact" className="block text-[#16302B] font-medium hover:text-[#0E6B68] transition">
                                 Contact
                             </a>
 

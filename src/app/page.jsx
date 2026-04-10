@@ -1,21 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import gsap from "gsap";
 
-import Navbar from "@/components/layout/Navbar";
 import HeroSection from "@/components/home/HeroSection";
 import BlogsSection from "@/components/home/BlogsSection";
 import EasySteps from "@/components/home/EasySteps";
 import PackagesSection from "@/components/home/PackagesSection";
 import TestimonialSection from "@/components/home/TestimonalsSection";
-import Footer from "@/components/layout/Footer";
-import FloatingButtons from "@/components/home/FloatingButtons";
 import ContactSection from "@/components/home/ContactSection";
-export default function page() {
-  const [mobileMenu, setMobileMenu] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
+import NewsSection from "@/components/home/NewsSection";
+import CallUsSection from "@/components/home/CallUsSection";
+import ExperienceSection from "@/components/home/ExperienceSection";
 
+export default function Page() {
   const heroTitleRef = useRef(null);
   const heroTextRef = useRef(null);
   const heroButtonsRef = useRef(null);
@@ -27,12 +25,6 @@ export default function page() {
   const heroTiltRef = useRef(null);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-
     const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
     tl.from(heroTitleRef.current, {
@@ -106,33 +98,35 @@ export default function page() {
         "-=0.35"
       );
 
-    gsap.to(busCardRef.current, {
-      y: -10,
-      duration: 2.4,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
+    if (busCardRef.current) {
+      gsap.to(busCardRef.current, {
+        y: -10,
+        duration: 2.4,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+      });
+    }
 
-    gsap.to(discountRef.current, {
-      y: -7,
-      duration: 2.2,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
+    if (discountRef.current) {
+      gsap.to(discountRef.current, {
+        y: -7,
+        duration: 2.2,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+      });
+    }
 
-    gsap.to(ladyCardRef.current, {
-      y: -10,
-      duration: 2.8,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
+    if (ladyCardRef.current) {
+      gsap.to(ladyCardRef.current, {
+        y: -10,
+        duration: 2.8,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+      });
+    }
   }, []);
 
   const handleHeroMouseMove = (e) => {
@@ -143,8 +137,8 @@ export default function page() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const rotateY = ((x / rect.width) - 0.5) * 8;
-    const rotateX = -((y / rect.height) - 0.5) * 8;
+    const rotateY = (x / rect.width - 0.5) * 8;
+    const rotateX = -((y / rect.height - 0.5) * 8);
 
     gsap.to(card, {
       rotateX,
@@ -182,14 +176,6 @@ export default function page() {
 
   return (
     <main className="min-h-screen bg-[#f8fbfa] text-[#123b3a] overflow-x-hidden">
-      <FloatingButtons />
-
-      <Navbar
-        mobileMenu={mobileMenu}
-        setMobileMenu={setMobileMenu}
-        isScrolled={isScrolled}
-      />
-
       <HeroSection
         refs={refs}
         handleHeroMouseMove={handleHeroMouseMove}
@@ -198,10 +184,12 @@ export default function page() {
 
       <EasySteps />
       <PackagesSection />
+      <CallUsSection />
       <TestimonialSection />
+      <ExperienceSection />
       <ContactSection />
       <BlogsSection />
-      <Footer />
+      <NewsSection />
     </main>
   );
 }

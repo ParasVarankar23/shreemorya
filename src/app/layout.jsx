@@ -1,5 +1,8 @@
 import "./globals.css";
 import { Poppins, Kaushan_Script } from "next/font/google";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import FloatingButtons from "@/components/home/FloatingButtons";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -22,7 +25,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${poppins.variable} ${kaushan.variable} font-sans`}>
+        <Navbar />
+        <FloatingButtons />
         {children}
+        <Footer />
       </body>
     </html>
   );
