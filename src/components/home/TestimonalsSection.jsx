@@ -1,273 +1,254 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    FaQuoteLeft,
+    FaQuoteRight,
     FaStar,
-    FaCheckCircle,
     FaArrowLeft,
     FaArrowRight,
 } from "react-icons/fa";
+import { Playfair_Display, Dancing_Script } from "next/font/google";
+
+const playfair = Playfair_Display({
+    subsets: ["latin"],
+    weight: ["700", "800", "900"],
+});
+
+const dancing = Dancing_Script({
+    subsets: ["latin"],
+    weight: ["700"],
+});
 
 const testimonials = [
     {
-        name: "Siddhi Patil",
+        name: "Kevin Martin",
+        role: "Daily Traveler",
+        image:
+            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80",
         message:
-            "Morya Travels provides a very smooth and comfortable journey. The booking process was simple, and the service was reliable and on time.",
+            "Morya Travels gives a smooth and comfortable travel experience. The booking process is very easy, the routes are reliable, and the service is always on time.",
     },
     {
-        name: "Sanvi Varankar",
+        name: "Sophia Wilson",
+        role: "Regular Passenger",
+        image:
+            "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=800&q=80",
         message:
-            "Very good daily route service. Seat booking was easy, the bus was clean, and the overall travel experience was safe and comfortable.",
+            "Very professional service and safe journey every time. Seat booking is simple, staff is helpful, and the bus quality feels premium and comfortable.",
     },
     {
-        name: "Rohini Gaikar",
+        name: "Aarav Mehta",
+        role: "Verified Customer",
+        image:
+            "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=800&q=80",
         message:
-            "I had a great travel experience with Morya Travels. The online booking was easy, and the staff was helpful throughout the journey.",
-    },
-    {
-        name: "Jai Khot",
-        message:
-            "The route details were clear, the seat selection was simple, and payment was secure. I really liked the overall booking experience.",
-    },
-    {
-        name: "Riddhi Rikame",
-        message:
-            "Pickup was on time, and the journey was smooth. Morya Travels is a very good option for regular and family travel.",
-    },
-    {
-        name: "Mayuresh Narvankar",
-        message:
-            "Very trustworthy service for regular routes. The bus was comfortable, and the travel process from booking to boarding was easy.",
-    },
-    {
-        name: "Tushar Adav",
-        message:
-            "The online booking system is user-friendly and fast. Route selection and seat booking were very easy. Highly recommended service.",
-    },
-    {
-        name: "Sarthak Pilankar",
-        message:
-            "Excellent service for regular travel. Comfortable seating, proper timing, and a clean bus made the trip enjoyable and stress-free.",
-    },
-    {
-        name: "Satish Raut",
-        message:
-            "Ticket booking was quick, and I received confirmation immediately. Morya Travels is dependable and perfect for daily route travel.",
-    },
-    {
-        name: "Runal Satnak",
-        message:
-            "Very smooth and professional travel service. Booking, payment, and route details were clear, and the journey felt safe and premium.",
+            "I really liked the clean buses, proper timing, and easy route selection. Morya Travels is one of the best choices for regular and family travel.",
     },
 ];
 
 export default function TestimonialSection() {
-    const [cardsPerView, setCardsPerView] = useState(3);
-    const [currentGroup, setCurrentGroup] = useState(0);
+    const [activeIndex, setActiveIndex] = useState(0);
 
-    // RESPONSIVE CARDS PER VIEW
-    useEffect(() => {
-        const updateCardsPerView = () => {
-            if (window.innerWidth < 640) {
-                setCardsPerView(1); // mobile
-            } else if (window.innerWidth < 1024) {
-                setCardsPerView(2); // tablet
-            } else {
-                setCardsPerView(3); // desktop
-            }
-        };
-
-        updateCardsPerView();
-        window.addEventListener("resize", updateCardsPerView);
-
-        return () => window.removeEventListener("resize", updateCardsPerView);
-    }, []);
-
-    // TOTAL GROUPS
-    const totalGroups = useMemo(() => {
-        return Math.ceil(testimonials.length / cardsPerView);
-    }, [cardsPerView]);
-
-    // RESET GROUP IF SCREEN CHANGES
-    useEffect(() => {
-        if (currentGroup > totalGroups - 1) {
-            setCurrentGroup(0);
-        }
-    }, [cardsPerView, totalGroups, currentGroup]);
-
-    const startIndex = currentGroup * cardsPerView;
-    const visibleTestimonials = testimonials.slice(
-        startIndex,
-        startIndex + cardsPerView
-    );
+    const active = testimonials[activeIndex];
 
     const handlePrev = () => {
-        setCurrentGroup((prev) => (prev === 0 ? totalGroups - 1 : prev - 1));
+        setActiveIndex((prev) => (prev === 0 ? testimonials.length - 1 : prev - 1));
     };
 
     const handleNext = () => {
-        setCurrentGroup((prev) => (prev === totalGroups - 1 ? 0 : prev + 1));
+        setActiveIndex((prev) => (prev === testimonials.length - 1 ? 0 : prev + 1));
     };
 
     return (
         <section
             id="testimonial"
-            className="relative py-16 md:py-20 lg:py-24 bg-white overflow-hidden"
+            className="relative py-20 md:py-24 lg:py-28 bg-[#f8fbfa] overflow-hidden"
         >
-            {/* DECOR */}
-            <div className="absolute top-10 left-0 w-48 h-48 bg-[#0d5b5a]/5 rounded-full blur-3xl" />
-            <div className="absolute bottom-10 right-0 w-56 h-56 bg-[#f4b32c]/8 rounded-full blur-3xl" />
+            {/* DECOR BLOBS */}
+            <div className="absolute top-16 left-0 w-72 h-72 bg-[#0E6B68]/5 rounded-full blur-3xl" />
+            <div className="absolute bottom-10 right-0 w-72 h-72 bg-[#f5ad1b]/10 rounded-full blur-3xl" />
 
-            <div className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14">
+            {/* BIG BACKGROUND TEXT */}
+            <div className="pointer-events-none absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 hidden lg:block z-0">
+                <h2
+                    className={`${dancing.className} text-[130px] xl:text-[170px] leading-none font-bold tracking-wide bg-gradient-to-b from-[#0E6B68] to-[#f5ad1b] bg-clip-text text-transparent opacity-[0.18] whitespace-nowrap`}
+                >
+                    TESTIMONIAL
+                </h2>
+            </div>
+
+            <div className="relative z-10 max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
                 {/* HEADER */}
-                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10 lg:mb-14">
-                    <div>
-                        <p className="text-[#f4b32c] font-semibold tracking-wide text-sm sm:text-base">
-                            What Our Customers Say
-                        </p>
-                        <h3 className="text-3xl md:text-4xl lg:text-5xl font-bold mt-2 text-[#123b3a]">
-                            Trusted by Happy Travelers
-                        </h3>
-                        <p className="text-gray-600 max-w-3xl mt-4 text-sm sm:text-base md:text-lg leading-7">
-                            Real feedback from customers who trust Morya Travels for safe,
-                            comfortable, and reliable journeys.
-                        </p>
-                    </div>
+                <motion.div
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.65 }}
+                    viewport={{ once: true }}
+                    className="text-center mb-12 lg:mb-16"
+                >
+                    <p className="text-[#f5ad1b] font-semibold tracking-[0.18em] uppercase text-xs sm:text-sm">
+                        Our Client Says
+                    </p>
 
-                    {/* ARROWS */}
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={handlePrev}
-                            className="w-12 h-12 rounded-full border border-[#dfe9e7] bg-white text-[#123b3a] flex items-center justify-center shadow-sm hover:bg-[#0d5b5a] hover:text-white transition"
-                            aria-label="Previous testimonials"
+                    <h2 className="mt-3 text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-[#123b3a] leading-tight">
+                        <span className={playfair.className}>Trusted</span>{" "}
+                        <span
+                            className={`${dancing.className} text-[#0E6B68] text-4xl md:text-5xl lg:text-6xl xl:text-7xl inline-block`}
                         >
-                            <FaArrowLeft />
-                        </button>
+                            Testimonials
+                        </span>
+                    </h2>
 
-                        <button
-                            onClick={handleNext}
-                            className="w-12 h-12 rounded-full bg-[#0d5b5a] text-white flex items-center justify-center shadow-lg hover:bg-[#094847] transition"
-                            aria-label="Next testimonials"
-                        >
-                            <FaArrowRight />
-                        </button>
-                    </div>
-                </div>
+                    <p className="text-[#5f6f6a] max-w-2xl mx-auto mt-4 text-sm md:text-base leading-7">
+                        Real reviews from passengers who trust Morya Travels for safe,
+                        comfortable, and reliable daily journeys.
+                    </p>
+                </motion.div>
 
-                {/* TOP STATS */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 lg:mb-10">
-                    <div className="bg-[#f8fbfa] border border-[#e8efee] rounded-[24px] p-5 text-center shadow-sm">
-                        <h4 className="text-2xl md:text-3xl font-bold text-[#123b3a]">10+</h4>
-                        <p className="text-gray-500 text-sm mt-1">Happy Customers</p>
-                    </div>
-                    <div className="bg-[#f8fbfa] border border-[#e8efee] rounded-[24px] p-5 text-center shadow-sm">
-                        <h4 className="text-2xl md:text-3xl font-bold text-[#123b3a]">4.9★</h4>
-                        <p className="text-gray-500 text-sm mt-1">Average Rating</p>
-                    </div>
-                    <div className="bg-[#f8fbfa] border border-[#e8efee] rounded-[24px] p-5 text-center shadow-sm">
-                        <h4 className="text-2xl md:text-3xl font-bold text-[#123b3a]">Safe</h4>
-                        <p className="text-gray-500 text-sm mt-1">Trusted Service</p>
-                    </div>
-                    <div className="bg-[#f8fbfa] border border-[#e8efee] rounded-[24px] p-5 text-center shadow-sm">
-                        <h4 className="text-2xl md:text-3xl font-bold text-[#123b3a]">Daily</h4>
-                        <p className="text-gray-500 text-sm mt-1">Regular Routes</p>
-                    </div>
-                </div>
+                {/* MAIN CONTENT */}
+                <div className="grid lg:grid-cols-[1.05fr_1.2fr] gap-10 xl:gap-16 items-center">
+                    {/* LEFT IMAGE SIDE */}
+                    <motion.div
+                        initial={{ opacity: 0, x: -30 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.7 }}
+                        viewport={{ once: true }}
+                        className="relative flex items-center gap-4 md:gap-6"
+                    >
+                        {/* MAIN IMAGE */}
+                        <div className="relative">
+                            <div className="absolute inset-0 translate-x-4 translate-y-4 bg-[#f5ad1b]/18 rounded-[28px] blur-sm" />
 
-                {/* CAROUSEL - ONLY VISIBLE CARDS */}
-                <div className="relative overflow-hidden">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={currentGroup}
-                            initial={{ opacity: 0, x: 40 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -40 }}
-                            transition={{ duration: 0.45 }}
-                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8"
-                        >
-                            {visibleTestimonials.map((item, index) => (
-                                <motion.div
-                                    key={`${item.name}-${index}`}
-                                    initial={{ opacity: 0, y: 25 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.45, delay: index * 0.08 }}
-                                    className="bg-[#f8fbfa] rounded-[26px] lg:rounded-[30px] p-6 lg:p-7 shadow-[0_16px_40px_rgba(0,0,0,0.05)] border border-[#e8efee] hover:shadow-[0_22px_50px_rgba(0,0,0,0.08)] transition-all duration-300 h-full"
-                                >
-                                    {/* TOP */}
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="w-12 h-12 rounded-2xl bg-[#0d5b5a] text-white flex items-center justify-center shadow-lg">
-                                            <FaQuoteLeft className="text-lg" />
-                                        </div>
-
-                                        <div className="flex gap-1 text-[#f4b32c] text-sm">
-                                            <FaStar />
-                                            <FaStar />
-                                            <FaStar />
-                                            <FaStar />
-                                            <FaStar />
-                                        </div>
-                                    </div>
-
-                                    {/* MESSAGE */}
-                                    <p className="text-gray-700 mt-5 text-sm sm:text-base leading-7 min-h-[170px]">
-                                        {item.message}
-                                    </p>
-
-                                    {/* FOOTER */}
-                                    <div className="mt-6 pt-5 border-t border-[#e5eeec] flex items-center justify-between gap-3">
-                                        <div>
-                                            <h4 className="font-bold text-lg text-[#123b3a]">{item.name}</h4>
-                                            <p className="text-gray-500 text-sm">Verified Traveler</p>
-                                        </div>
-
-                                        <div className="flex items-center gap-2 text-[#0d5b5a] text-sm font-semibold bg-white px-3 py-2 rounded-full border border-[#dfe9e7] whitespace-nowrap">
-                                            <FaCheckCircle className="text-[#7ed321]" />
-                                            Verified
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-
-                {/* DOTS */}
-                <div className="flex justify-center items-center gap-2 mt-8">
-                    {Array.from({ length: totalGroups }).map((_, index) => (
-                        <button
-                            key={index}
-                            onClick={() => setCurrentGroup(index)}
-                            className={`transition-all duration-300 rounded-full ${currentGroup === index
-                                    ? "w-8 h-3 bg-[#0d5b5a]"
-                                    : "w-3 h-3 bg-[#d7e5e3]"
-                                }`}
-                            aria-label={`Go to testimonial group ${index + 1}`}
-                        />
-                    ))}
-                </div>
-
-                {/* BOTTOM CTA */}
-                <div className="mt-12 lg:mt-16 bg-gradient-to-r from-[#0d5b5a] to-[#136b69] rounded-[28px] lg:rounded-[34px] p-6 sm:p-8 lg:p-10 text-white shadow-2xl">
-                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
-                        <div>
-                            <p className="text-[#f4b32c] font-semibold text-sm sm:text-base">
-                                Trusted By Daily Travelers
-                            </p>
-                            <h4 className="text-2xl md:text-3xl lg:text-4xl font-bold mt-2">
-                                Join hundreds of happy Morya Travels passengers
-                            </h4>
-                            <p className="text-white/85 mt-3 text-sm sm:text-base leading-7 max-w-2xl">
-                                Comfortable rides, reliable routes, secure booking, and smooth
-                                journeys — trusted by travelers for daily and regular bus service.
-                            </p>
+                            <div className="relative w-[240px] h-[320px] sm:w-[280px] sm:h-[360px] md:w-[320px] md:h-[400px] rounded-[26px] md:rounded-[30px] overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.14)] border border-white">
+                                <AnimatePresence mode="wait">
+                                    <motion.div
+                                        key={active.image}
+                                        initial={{ opacity: 0, scale: 1.05 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.98 }}
+                                        transition={{ duration: 0.45 }}
+                                        className="absolute inset-0"
+                                    >
+                                        <Image
+                                            src={active.image}
+                                            alt={active.name}
+                                            fill
+                                            unoptimized
+                                            className="object-cover"
+                                        />
+                                    </motion.div>
+                                </AnimatePresence>
+                            </div>
                         </div>
 
-                        <button className="bg-[#f4b32c] hover:bg-[#e7a91f] text-[#123b3a] px-6 sm:px-8 py-3 rounded-full font-semibold transition shadow-lg whitespace-nowrap">
-                            Book Your Seat
-                        </button>
-                    </div>
+                        {/* SIDE THUMBNAILS */}
+                        <div className="flex flex-col gap-4 sm:gap-5">
+                            {testimonials.map((item, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setActiveIndex(index)}
+                                    className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 transition-all duration-300 shadow-lg ${activeIndex === index
+                                            ? "border-[#f5ad1b] scale-105 ring-4 ring-[#f5ad1b]/20"
+                                            : "border-white/80 hover:scale-105"
+                                        }`}
+                                    aria-label={`Show testimonial of ${item.name}`}
+                                >
+                                    <Image
+                                        src={item.image}
+                                        alt={item.name}
+                                        fill
+                                        unoptimized
+                                        className="object-cover"
+                                    />
+                                </button>
+                            ))}
+                        </div>
+                    </motion.div>
+
+                    {/* RIGHT CONTENT SIDE */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 30 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.7 }}
+                        viewport={{ once: true }}
+                        className="relative"
+                    >
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeIndex}
+                                initial={{ opacity: 0, y: 18 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -18 }}
+                                transition={{ duration: 0.4 }}
+                            >
+                                {/* TOP NAME */}
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <h3
+                                            className={`${dancing.className} text-[#0E6B68] text-3xl sm:text-4xl md:text-5xl leading-none`}
+                                        >
+                                            {active.name}
+                                        </h3>
+                                        <p className="text-[#f5ad1b] font-semibold text-sm sm:text-base mt-2">
+                                            {active.role}
+                                        </p>
+                                    </div>
+
+                                    <FaQuoteRight className="text-[#123b3a]/20 text-4xl sm:text-5xl md:text-6xl shrink-0" />
+                                </div>
+
+                                {/* MESSAGE */}
+                                <p className="mt-8 text-[#4f625d] text-base sm:text-lg md:text-xl leading-8 md:leading-9 max-w-2xl">
+                                    {active.message}
+                                </p>
+
+                                {/* STARS */}
+                                <div className="flex items-center gap-1 text-[#f5ad1b] text-lg mt-8">
+                                    <FaStar />
+                                    <FaStar />
+                                    <FaStar />
+                                    <FaStar />
+                                    <FaStar />
+                                </div>
+
+                                {/* ARROWS */}
+                                <div className="flex items-center gap-3 mt-8">
+                                    <button
+                                        onClick={handlePrev}
+                                        className="w-12 h-12 rounded-full bg-[#f5ad1b] text-white flex items-center justify-center shadow-[0_10px_25px_rgba(245,173,27,0.28)] hover:scale-105 transition"
+                                        aria-label="Previous testimonial"
+                                    >
+                                        <FaArrowLeft />
+                                    </button>
+
+                                    <button
+                                        onClick={handleNext}
+                                        className="w-12 h-12 rounded-full bg-[#f5ad1b] text-white flex items-center justify-center shadow-[0_10px_25px_rgba(245,173,27,0.28)] hover:scale-105 transition"
+                                        aria-label="Next testimonial"
+                                    >
+                                        <FaArrowRight />
+                                    </button>
+                                </div>
+
+                                {/* DOTS */}
+                                <div className="flex items-center gap-2 mt-8">
+                                    {testimonials.map((_, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => setActiveIndex(index)}
+                                            className={`rounded-full transition-all duration-300 ${activeIndex === index
+                                                    ? "w-8 h-3 bg-[#0E6B68]"
+                                                    : "w-3 h-3 bg-[#d8e8e5]"
+                                                }`}
+                                            aria-label={`Go to testimonial ${index + 1}`}
+                                        />
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </AnimatePresence>
+                    </motion.div>
                 </div>
             </div>
         </section>

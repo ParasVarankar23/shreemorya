@@ -60,7 +60,7 @@ export default function Footer() {
                         <h4 className="text-lg font-bold mb-4">Contact</h4>
                         <ul className="space-y-3 text-white/70 text-sm">
                             <li>Masur / Satara, Maharashtra</li>
-                            <li>+91 93099 40782</li>
+                            <li>+91 88881 57744</li>
                             <li>moryatours@gmail.com</li>
                             <li>Mon - Sun: 24/7 Support</li>
                         </ul>
