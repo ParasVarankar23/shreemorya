@@ -50,13 +50,13 @@ export default function HeroSection({
                 />
             </div>
 
-            {/* MAIN OVERLAY - SOFTER */}
+            {/* MAIN OVERLAY */}
             <div className="absolute inset-0 bg-[#0E6B68]/68" />
 
-            {/* PREMIUM GRADIENT - RIGHT SIDE MORE VISIBLE */}
+            {/* PREMIUM GRADIENT */}
             <div className="absolute inset-0 bg-gradient-to-r from-[#0A4F4D]/88 via-[#0E6B68]/58 to-transparent" />
 
-            {/* SOFT GLOW DECOR */}
+            {/* SOFT GLOW */}
             <div className="absolute bottom-20 right-8 sm:right-14 w-40 sm:w-56 h-40 sm:h-56 rounded-full bg-white/8 blur-3xl z-[1]" />
 
             {/* FLOATING BUS ICON */}
@@ -71,7 +71,7 @@ export default function HeroSection({
 
             {/* MAIN CONTAINER */}
             <div className="relative z-10 max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14">
-                <div className="grid lg:grid-cols-2 gap-8 xl:gap-14 items-center min-h-[calc(84vh-78px)] sm:min-h-[calc(86vh-86px)] md:min-h-[calc(88vh-96px)] lg:min-h-[calc(90vh-104px)] pb-12 sm:pb-14 md:pb-16 lg:pb-18">
+                <div className="grid lg:grid-cols-2 gap-8 xl:gap-14 items-center min-h-[calc(100vh-78px)] sm:min-h-[calc(100vh-86px)] md:min-h-[calc(100vh-96px)] lg:min-h-[calc(100vh-104px)] pb-10 sm:pb-12 md:pb-14">
 
                     {/* LEFT CONTENT */}
                     <div className="relative z-20 max-w-[760px]">
@@ -94,9 +94,9 @@ export default function HeroSection({
                             ref={heroTextRef}
                             className="text-white/95 mt-4 sm:mt-5 max-w-xl xl:max-w-2xl text-sm sm:text-base md:text-lg xl:text-[20px] leading-7 md:leading-8 xl:leading-9"
                         >
-                            Regular service provider for comfortable, safe and reliable bus travel.
-                            Book your seats easily for daily routes with Morya Travels and enjoy a
-                            smooth journey with trusted service and timely travel.
+                            Regular service provider for comfortable, safe and reliable bus
+                            travel. Book your seats easily for daily routes with Morya Travels
+                            and enjoy a smooth journey with trusted service and timely travel.
                         </p>
 
                         {/* BUTTONS */}
@@ -120,7 +120,9 @@ export default function HeroSection({
                         >
                             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                                 <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
-                                    <label className="text-[11px] text-[#7A6D57] block mb-1">Pickup</label>
+                                    <label className="text-[11px] text-[#7A6D57] block mb-1">
+                                        Pickup
+                                    </label>
                                     <div className="flex items-center gap-2 text-sm font-medium text-[#16302B]">
                                         <FaMapMarkerAlt className="text-[#0E6B68] shrink-0" />
                                         <span>Select Pickup</span>
@@ -128,7 +130,9 @@ export default function HeroSection({
                                 </div>
 
                                 <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
-                                    <label className="text-[11px] text-[#7A6D57] block mb-1">Destination</label>
+                                    <label className="text-[11px] text-[#7A6D57] block mb-1">
+                                        Destination
+                                    </label>
                                     <div className="flex items-center gap-2 text-sm font-medium text-[#16302B]">
                                         <FaRoute className="text-[#0E6B68] shrink-0" />
                                         <span>Select Destination</span>
@@ -136,7 +140,9 @@ export default function HeroSection({
                                 </div>
 
                                 <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
-                                    <label className="text-[11px] text-[#7A6D57] block mb-1">Travel Date</label>
+                                    <label className="text-[11px] text-[#7A6D57] block mb-1">
+                                        Travel Date
+                                    </label>
                                     <div className="flex items-center gap-2 text-sm font-medium text-[#16302B]">
                                         <FaCalendarAlt className="text-[#0E6B68] shrink-0" />
                                         <span>Choose Date</span>
@@ -154,7 +160,7 @@ export default function HeroSection({
                     {/* RIGHT VISUAL */}
                     <div
                         ref={rightVisualRef}
-                        className="relative flex justify-center lg:justify-end mt-2 lg:mt-0"
+                        className="relative flex justify-center lg:justify-end mt-6 lg:mt-0"
                     >
                         <div
                             ref={heroTiltRef}
@@ -163,7 +169,6 @@ export default function HeroSection({
                             className="relative w-full max-w-[340px] sm:max-w-[470px] md:max-w-[540px] xl:max-w-[600px] h-[280px] sm:h-[350px] md:h-[420px] xl:h-[480px] transition-transform duration-300"
                             style={{ transformStyle: "preserve-3d" }}
                         >
-                            {/* PREMIUM DISCOUNT BADGE - STATIC */}
                             <motion.div
                                 initial={{ opacity: 0, y: 16 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -188,7 +193,6 @@ export default function HeroSection({
                                 </div>
                             </motion.div>
 
-                            {/* TOP ROUTE CARD - MOVED LEFT */}
                             <motion.div
                                 initial={{ opacity: 0, y: 18 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -202,7 +206,9 @@ export default function HeroSection({
                                     </div>
 
                                     <div className="min-w-0">
-                                        <p className="text-[10px] sm:text-xs text-[#7A6D57]">Daily Service Route</p>
+                                        <p className="text-[10px] sm:text-xs text-[#7A6D57]">
+                                            Daily Service Route
+                                        </p>
                                         <h4 className="font-bold text-xs sm:text-sm md:text-base text-[#16302B] leading-snug">
                                             Shrivardhan - Borli - Borivali
                                         </h4>
@@ -210,7 +216,6 @@ export default function HeroSection({
                                 </div>
                             </motion.div>
 
-                            {/* MAIN HERO PNG - NO WHITE BG */}
                             <motion.div
                                 whileHover={{ scale: 1.02 }}
                                 transition={{ duration: 0.4 }}
@@ -226,7 +231,6 @@ export default function HeroSection({
                                 />
                             </motion.div>
 
-                            {/* BOTTOM ROUTE CARD */}
                             <div
                                 ref={busCardRef}
                                 className="absolute bottom-[2%] left-[0%] bg-white/95 backdrop-blur-md rounded-2xl p-3 sm:p-4 shadow-[0_20px_45px_rgba(0,0,0,0.14)] w-[210px] sm:w-[250px] md:w-[300px] z-30 border border-white/70"
@@ -237,7 +241,9 @@ export default function HeroSection({
                                         <FaRoute className="text-sm sm:text-base" />
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="text-[10px] sm:text-xs text-[#7A6D57]">Regular Route</p>
+                                        <p className="text-[10px] sm:text-xs text-[#7A6D57]">
+                                            Regular Route
+                                        </p>
                                         <h4 className="font-bold text-xs sm:text-sm md:text-base text-[#16302B] leading-snug">
                                             Borli - Mangaon - Virar
                                         </h4>
@@ -245,7 +251,6 @@ export default function HeroSection({
                                 </div>
                             </div>
 
-                            {/* SOFT SHADOW UNDER IMAGE */}
                             <div className="absolute right-[16%] bottom-[6%] w-[42%] h-[14%] bg-black/18 rounded-full blur-2xl z-10" />
                         </div>
                     </div>
@@ -261,11 +266,11 @@ export default function HeroSection({
                 >
                     <path
                         d="M0,120 
-                        C120,100 240,110 360,96 
-                        C480,84 600,80 720,86
-                        C840,94 960,114 1080,106
-                        C1200,98 1320,80 1440,94
-                        L1440,180 L0,180 Z"
+            C120,100 240,110 360,96 
+            C480,84 600,80 720,86
+            C840,94 960,114 1080,106
+            C1200,98 1320,80 1440,94
+            L1440,180 L0,180 Z"
                     />
                 </svg>
             </div>

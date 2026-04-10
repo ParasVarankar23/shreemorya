@@ -65,11 +65,16 @@ export default function BlogsSection() {
     return (
         <section
             id="blogs"
-            className={`relative py-20 md:py-24 lg:py-28 bg-[#f8fbfa] overflow-hidden ${poppins.className}`}
+            className={`relative overflow-hidden bg-white py-20 md:py-24 lg:py-28 ${poppins.className}`}
         >
-            {/* PREMIUM TOP PATTERN */}
+            {/* Soft premium background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white via-[#f8fbfa] to-[#fefaf1]" />
+            <div className="absolute top-12 left-0 w-72 h-72 bg-[#0E6B68]/6 rounded-full blur-3xl" />
+            <div className="absolute bottom-10 right-0 w-72 h-72 bg-[#f5ad1b]/10 rounded-full blur-3xl" />
+
+            {/* Light decorative top accent */}
             <div className="absolute top-0 inset-x-0 h-24 pointer-events-none z-0">
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#0E6B68]/6 via-[#f5ad1b]/4 to-transparent" />
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#0E6B68]/5 via-[#f5ad1b]/4 to-transparent" />
 
                 <div className="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-3">
                     <div className="w-20 sm:w-28 h-[2px] rounded-full bg-gradient-to-r from-transparent via-[#0E6B68]/40 to-[#0E6B68]/10" />
@@ -78,14 +83,10 @@ export default function BlogsSection() {
                 </div>
             </div>
 
-            {/* BACKGROUND BLOBS */}
-            <div className="absolute top-20 left-0 w-72 h-72 bg-[#0E6B68]/6 rounded-full blur-3xl" />
-            <div className="absolute bottom-10 right-0 w-72 h-72 bg-[#f5ad1b]/10 rounded-full blur-3xl" />
-
-            {/* LIGHT BIG BG TEXT */}
+            {/* Light background script text */}
             <div className="pointer-events-none absolute left-1/2 top-[24%] -translate-x-1/2 hidden xl:block z-0">
                 <h2
-                    className={`${dancing.className} text-[120px] leading-none font-bold tracking-wide bg-gradient-to-b from-[#0E6B68] to-[#f5ad1b] bg-clip-text text-transparent opacity-[0.08] whitespace-nowrap`}
+                    className={`${dancing.className} text-[120px] leading-none font-bold tracking-wide bg-gradient-to-b from-[#0E6B68] to-[#f5ad1b] bg-clip-text text-transparent opacity-[0.06] whitespace-nowrap`}
                 >
                     Travel Stories
                 </h2>
@@ -102,10 +103,10 @@ export default function BlogsSection() {
                 >
                     <div>
                         <p className="text-[#f5ad1b] font-semibold tracking-[0.18em] uppercase text-xs sm:text-sm">
-                            Explore Latest News
+                            Explore Latest Blogs
                         </p>
 
-                        <h2 className="mt-3 text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-[#123b3a] leading-tight">
+                        <h2 className="mt-3 text-4xl md:text-5xl lg:text-6xl font-bold text-[#111827] leading-tight">
                             <span className={playfair.className}>Travel Stories</span>{" "}
                             <span
                                 className={`${dancing.className} text-[#0E6B68] text-4xl md:text-5xl lg:text-6xl xl:text-7xl inline-block`}
@@ -114,16 +115,16 @@ export default function BlogsSection() {
                             </span>
                         </h2>
 
-                        <p className="text-[#5f6f6a] max-w-2xl mt-4 text-sm md:text-base leading-7">
+                        <p className="text-gray-600 max-w-2xl mt-5 text-base md:text-lg leading-8">
                             Discover route updates, travel tips, journey stories, and premium
-                            travel insights for a better experience with Morya Travels.
+                            travel insights for a better experience with Shree Morya Travels.
                         </p>
                     </div>
 
                     <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.97 }}
-                        className="bg-[#f5ad1b] hover:bg-[#e9a315] text-[#123b3a] px-6 py-3 rounded-full font-bold shadow-[0_12px_30px_rgba(245,173,27,0.28)] w-fit flex items-center gap-2 transition"
+                        className="bg-[#0E6B68] hover:bg-[#0b5956] text-white px-6 py-3.5 rounded-full font-semibold shadow-xl w-fit flex items-center gap-2 transition"
                     >
                         View All
                         <FaArrowRight />
@@ -139,7 +140,7 @@ export default function BlogsSection() {
                             whileInView={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.65, delay: index * 0.12 }}
                             viewport={{ once: true }}
-                            className="group rounded-[28px] bg-white border border-[#e8efee] overflow-hidden shadow-[0_18px_50px_rgba(0,0,0,0.08)] hover:shadow-[0_24px_70px_rgba(0,0,0,0.12)] transition-all duration-500"
+                            className="group rounded-[30px] bg-white border border-[#e8efee] overflow-hidden shadow-[0_18px_50px_rgba(0,0,0,0.08)] hover:shadow-[0_24px_70px_rgba(0,0,0,0.12)] transition-all duration-500"
                         >
                             {/* IMAGE */}
                             <div className="relative h-[280px] sm:h-[320px] overflow-hidden">
@@ -152,7 +153,7 @@ export default function BlogsSection() {
                                 />
 
                                 {/* OVERLAY */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#0E6B68]/45 via-transparent to-transparent" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#0E6B68]/40 via-transparent to-transparent" />
 
                                 {/* BADGE */}
                                 <div className="absolute top-5 left-5">
@@ -163,7 +164,7 @@ export default function BlogsSection() {
                             </div>
 
                             {/* CONTENT */}
-                            <div className="p-5 sm:p-6 md:p-7">
+                            <div className="p-6 sm:p-7">
                                 {/* META */}
                                 <div className="flex flex-wrap items-center gap-4 text-[#6b7b76] text-xs sm:text-sm mb-4">
                                     <span className="flex items-center gap-2">
@@ -177,15 +178,17 @@ export default function BlogsSection() {
                                     </span>
                                 </div>
 
-                                <h3 className="text-[#123b3a] text-xl sm:text-2xl font-bold leading-8 sm:leading-9">
+                                <h3
+                                    className={`${playfair.className} text-[#111827] text-2xl sm:text-3xl font-bold leading-8 sm:leading-10`}
+                                >
                                     {blog.title}
                                 </h3>
 
-                                <p className="text-[#5f6f6a] mt-4 text-sm sm:text-base leading-7">
+                                <p className="text-gray-600 mt-4 text-sm sm:text-base leading-7">
                                     {blog.description}
                                 </p>
 
-                                <div className="mt-5 flex items-center justify-between gap-4">
+                                <div className="mt-6 flex items-center justify-between gap-4 flex-wrap">
                                     <span className="flex items-center gap-2 text-[#6b7b76] text-sm">
                                         <FaMapMarkerAlt className="text-[#f5ad1b]" />
                                         {blog.location}
@@ -193,9 +196,9 @@ export default function BlogsSection() {
 
                                     <motion.button
                                         whileHover={{ x: 4 }}
-                                        className="text-[#f5ad1b] font-bold flex items-center gap-2"
+                                        className="text-[#0E6B68] font-semibold flex items-center gap-2"
                                     >
-                                        Blogs
+                                        Read Blog
                                         <FaArrowRight />
                                     </motion.button>
                                 </div>
@@ -212,27 +215,10 @@ export default function BlogsSection() {
                     viewport={{ once: true }}
                     className="mt-12 lg:mt-16"
                 >
-                    <div className="relative overflow-hidden rounded-[24px] sm:rounded-[28px] bg-[#f5ad1b] shadow-[0_18px_50px_rgba(245,173,27,0.28)] px-5 sm:px-7 md:px-8 py-5 sm:py-6">
-                        {/* SOFT GLOW */}
+                    <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-r from-[#0E6B68] to-[#0b5956] shadow-[0_18px_50px_rgba(14,107,104,0.22)] px-5 sm:px-7 md:px-8 py-6 sm:py-7">
+                        {/* Soft glow */}
                         <div className="absolute -top-8 left-16 w-40 h-20 bg-white/10 blur-2xl rounded-full" />
-                        <div className="absolute -top-6 right-20 w-32 h-16 bg-white/10 blur-2xl rounded-full" />
-
-                        {/* CLOUD DECOR */}
-                        <div className="absolute bottom-0 left-0 right-0 h-10 sm:h-12 pointer-events-none opacity-25">
-                            <div className="absolute left-0 bottom-0 w-16 h-8 bg-white rounded-full" />
-                            <div className="absolute left-8 bottom-0 w-12 h-6 bg-white rounded-full" />
-                            <div className="absolute left-20 bottom-0 w-20 h-9 bg-white rounded-full" />
-                            <div className="absolute left-36 bottom-0 w-14 h-7 bg-white rounded-full" />
-                            <div className="absolute left-56 bottom-0 w-16 h-8 bg-white rounded-full" />
-                            <div className="absolute left-72 bottom-0 w-12 h-6 bg-white rounded-full" />
-                            <div className="absolute left-96 bottom-0 w-20 h-9 bg-white rounded-full" />
-                            <div className="absolute left-[48%] bottom-0 w-14 h-7 bg-white rounded-full" />
-                            <div className="absolute left-[56%] bottom-0 w-16 h-8 bg-white rounded-full" />
-                            <div className="absolute left-[64%] bottom-0 w-12 h-6 bg-white rounded-full" />
-                            <div className="absolute right-40 bottom-0 w-16 h-8 bg-white rounded-full" />
-                            <div className="absolute right-24 bottom-0 w-12 h-6 bg-white rounded-full" />
-                            <div className="absolute right-0 bottom-0 w-20 h-9 bg-white rounded-full" />
-                        </div>
+                        <div className="absolute -top-6 right-20 w-32 h-16 bg-[#f5ad1b]/20 blur-2xl rounded-full" />
 
                         {/* CONTENT */}
                         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
@@ -242,7 +228,7 @@ export default function BlogsSection() {
                                         24
                                     </span>
 
-                                    <div className="pb-1 sm:pb-2">
+                                    <div className="py-1">
                                         <p className="text-white/90 text-[11px] sm:text-xs font-semibold leading-none">
                                             % OFF
                                         </p>
@@ -255,7 +241,7 @@ export default function BlogsSection() {
                                     </p>
 
                                     <h4
-                                        className={`${dancing.className} text-[#0E6B68] text-xl sm:text-2xl md:text-3xl lg:text-4xl leading-tight font-bold`}
+                                        className={`${dancing.className} text-[#f5ad1b] text-2xl sm:text-3xl md:text-4xl leading-tight font-bold`}
                                     >
                                         New Routes & Travel Stories, Weekly
                                     </h4>
@@ -266,7 +252,7 @@ export default function BlogsSection() {
                                 whileHover={{ scale: 1.06 }}
                                 whileTap={{ scale: 0.97 }}
                                 transition={{ duration: 0.25 }}
-                                className="bg-white text-[#123b3a] px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-semibold shadow-[0_8px_20px_rgba(255,255,255,0.28)] hover:shadow-[0_12px_24px_rgba(255,255,255,0.36)] transition flex items-center gap-2"
+                                className="bg-white text-[#123b3a] px-5 sm:px-6 py-3 rounded-full font-semibold shadow-[0_8px_20px_rgba(255,255,255,0.18)] hover:shadow-[0_12px_24px_rgba(255,255,255,0.26)] transition flex items-center gap-2"
                             >
                                 Discover More
                                 <FaArrowRight className="text-sm" />

@@ -7,7 +7,7 @@ import { Playfair_Display, Poppins } from "next/font/google";
 
 const playfair = Playfair_Display({
     subsets: ["latin"],
-    weight: ["700", "800"],
+    weight: ["700", "800", "900"],
 });
 
 const poppins = Poppins({
@@ -46,43 +46,36 @@ export default function NewsSection() {
     return (
         <section
             id="news"
-            className={`relative py-20 md:py-24 overflow-hidden bg-[#0E6B68] ${poppins.className}`}
+            className={`relative overflow-hidden bg-white py-20 md:py-24 ${poppins.className}`}
         >
-            {/* BACKGROUND PATTERN */}
-            <div className="absolute inset-0 opacity-[0.06] pointer-events-none">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:28px_28px]" />
-            </div>
-
-            {/* EXTRA DECORATIVE ICON STYLE PATTERN */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.04]">
-                <div className="absolute top-10 left-10 w-24 h-24 border border-white rounded-full" />
-                <div className="absolute top-32 right-20 w-20 h-20 border border-white rounded-full" />
-                <div className="absolute bottom-20 left-1/4 w-16 h-16 border border-white rounded-full" />
-                <div className="absolute bottom-16 right-1/3 w-28 h-28 border border-white rounded-full" />
-            </div>
-
-            {/* GLOW BLOBS */}
-            <div className="absolute -top-16 left-0 w-72 h-72 bg-[#f5ad1b]/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 right-0 w-72 h-72 bg-[#7ed321]/10 rounded-full blur-3xl" />
+            {/* Soft premium background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white via-[#f8fbfa] to-[#fefaf1]" />
+            <div className="absolute top-12 right-12 w-40 h-40 bg-[#0E6B68]/5 rounded-full blur-3xl" />
+            <div className="absolute bottom-10 left-10 w-56 h-56 bg-[#f5ad1b]/10 rounded-full blur-3xl" />
 
             <div className="relative z-10 max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
                 {/* HEADER */}
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-10 md:mb-12">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-12 md:mb-14">
                     <motion.div
                         initial={{ opacity: 0, y: 22 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.65 }}
                         viewport={{ once: true }}
-                        className="max-w-2xl"
+                        className="max-w-3xl"
                     >
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight">
-                            <span className={playfair.className}>Explore</span>{" "}
-                            <span className="text-[#f5ad1b]">Latest News</span>
+                        <p className="text-[#f5ad1b] font-semibold tracking-wide text-sm md:text-base">
+                            Latest Updates
+                        </p>
+
+                        <h2
+                            className={`${playfair.className} text-4xl md:text-5xl lg:text-6xl font-bold text-[#111827] mt-3 leading-tight`}
+                        >
+                            Explore <span className="text-[#0E6B68]">Latest News</span>
                         </h2>
 
-                        <p className="text-white/75 text-sm md:text-base leading-7 mt-4 max-w-xl">
+                        <p className="text-gray-600 text-base md:text-lg leading-8 mt-5 max-w-2xl">
                             Stay updated with the latest travel stories, destination guides,
-                            route insights, and premium journey experiences from Morya
+                            route insights, and premium journey experiences from Shree Morya
                             Travels.
                         </p>
                     </motion.div>
@@ -92,9 +85,9 @@ export default function NewsSection() {
                         whileInView={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.65, delay: 0.1 }}
                         viewport={{ once: true }}
-                        whileHover={{ scale: 1.05 }}
+                        whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.97 }}
-                        className="bg-[#8fd400] hover:bg-[#7ec000] text-[#123b3a] px-6 py-3 rounded-full font-bold shadow-[0_12px_30px_rgba(143,212,0,0.25)] transition w-fit flex items-center gap-2"
+                        className="bg-[#0E6B68] hover:bg-[#0b5956] text-white px-6 py-3.5 rounded-full font-semibold shadow-xl transition w-fit flex items-center gap-2"
                     >
                         See More Articles
                         <FaArrowRight className="text-sm" />
@@ -102,7 +95,7 @@ export default function NewsSection() {
                 </div>
 
                 {/* NEWS CARDS */}
-                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-7">
+                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-7 lg:gap-8">
                     {newsData.map((item, index) => (
                         <motion.div
                             key={index}
@@ -111,7 +104,7 @@ export default function NewsSection() {
                             transition={{ duration: 0.65, delay: index * 0.12 }}
                             viewport={{ once: true }}
                             whileHover={{ y: -6 }}
-                            className="group relative rounded-[24px] md:rounded-[28px] overflow-hidden shadow-[0_18px_45px_rgba(0,0,0,0.22)] min-h-[420px] bg-white/5"
+                            className="group relative rounded-[28px] overflow-hidden shadow-[0_20px_70px_rgba(0,0,0,0.08)] min-h-[430px] bg-white border border-[#eef3f2]"
                         >
                             {/* IMAGE */}
                             <div className="absolute inset-0">
@@ -124,11 +117,11 @@ export default function NewsSection() {
                                 />
                             </div>
 
-                            {/* DARK OVERLAY */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/5" />
+                            {/* Premium overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0b1111]/85 via-[#0b1111]/35 to-transparent" />
 
                             {/* DATE BADGE */}
-                            <div className="absolute top-4 right-4 z-20 bg-white rounded-[14px] px-3 py-2 shadow-lg min-w-[64px] text-center">
+                            <div className="absolute top-5 right-5 z-20 bg-white rounded-2xl px-3.5 py-3 shadow-xl min-w-[72px] text-center border border-[#eef3f2]">
                                 <p className="text-[#0E6B68] text-2xl font-extrabold leading-none">
                                     {item.day}
                                 </p>
@@ -138,26 +131,28 @@ export default function NewsSection() {
                             </div>
 
                             {/* CONTENT */}
-                            <div className="absolute inset-x-0 bottom-0 z-10 p-5 md:p-6">
-                                <p className="text-[#f5ad1b] text-xs sm:text-sm font-medium mb-3">
+                            <div className="absolute inset-x-0 bottom-0 z-10 p-6 md:p-7">
+                                <p className="text-[#f5ad1b] text-sm font-medium mb-3">
                                     {item.author}
                                 </p>
 
-                                <h3 className="text-white text-xl md:text-2xl font-semibold leading-8 md:leading-9 pr-4">
+                                <h3
+                                    className={`${playfair.className} text-white text-2xl md:text-3xl font-bold leading-8 md:leading-10 pr-4`}
+                                >
                                     {item.title}
                                 </h3>
 
                                 <motion.button
                                     whileHover={{ x: 4 }}
-                                    className="mt-5 inline-flex items-center gap-2 text-[#8fd400] font-semibold"
+                                    className="mt-6 inline-flex items-center gap-2 text-white bg-[#0E6B68]/90 hover:bg-[#0E6B68] px-5 py-2.5 rounded-full font-semibold transition"
                                 >
                                     Read More
                                     <FaArrowRight className="text-sm" />
                                 </motion.button>
                             </div>
 
-                            {/* BORDER GLOW */}
-                            <div className="absolute inset-0 rounded-[24px] md:rounded-[28px] border border-white/10 group-hover:border-white/20 transition pointer-events-none" />
+                            {/* Border glow */}
+                            <div className="absolute inset-0 rounded-[28px] border border-white/10 group-hover:border-white/20 transition pointer-events-none" />
                         </motion.div>
                     ))}
                 </div>

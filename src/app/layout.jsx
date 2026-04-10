@@ -1,8 +1,6 @@
 import "./globals.css";
 import { Poppins, Kaushan_Script } from "next/font/google";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
-import FloatingButtons from "@/components/home/FloatingButtons";
+import ClientLayout from "./ClietLayout";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -19,7 +17,8 @@ const kaushan = Kaushan_Script({
 export const metadata = {
   metadataBase: new URL("https://shreemorya.vercel.app"),
   title: {
-    default: "Shree Morya Travels | Safe, Comfortable & Reliable Bus Travel in Maharashtra",
+    default:
+      "Shree Morya Travels | Safe, Comfortable & Reliable Bus Travel in Maharashtra",
     template: "%s | Shree Morya Travels",
   },
   description:
@@ -46,7 +45,8 @@ export const metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: "Shree Morya Travels | Safe, Comfortable & Reliable Bus Travel in Maharashtra",
+    title:
+      "Shree Morya Travels | Safe, Comfortable & Reliable Bus Travel in Maharashtra",
     description:
       "Travel across Maharashtra with Shree Morya Travels. Safe, comfortable, and reliable bus services with trusted routes and support.",
     url: "https://shreemorya.vercel.app",
@@ -99,10 +99,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${poppins.variable} ${kaushan.variable} font-sans`}>
-        <Navbar />
-        <FloatingButtons />
-        {children}
-        <Footer />
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

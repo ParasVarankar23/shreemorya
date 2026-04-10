@@ -49,7 +49,7 @@ export default function Footer() {
             {/* ========================= */}
             {/* TOP INSTAGRAM STRIP */}
             {/* ========================= */}
-            <section className="relative bg-[#f9f5e8] pt-10 md:pt-12 pb-8 border-t border-[#0E6B68]/10">
+            <section className="relative bg-[#f9f5e8] py-10 md:py-20 border-t border-[#0E6B68]/10">
                 <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
                     <div className="text-center mb-6">
                         <h3 className="text-[#0E6B68] text-xl sm:text-2xl md:text-3xl font-bold">
@@ -141,7 +141,7 @@ export default function Footer() {
             {/* ========================= */}
             {/* MAIN FOOTER */}
             {/* ========================= */}
-            <section className="relative bg-[#0E6B68] text-white pt-14 md:pt-16 pb-8 overflow-hidden">
+            <section className="relative bg-[#0E6B68] text-white py-5 md:py-10 overflow-hidden">
                 {/* BACKGROUND DECOR */}
                 <div className="absolute inset-0 opacity-[0.08] pointer-events-none">
                     <div className="absolute bottom-0 left-0 w-full h-[280px] bg-gradient-to-t from-black/30 to-transparent" />
