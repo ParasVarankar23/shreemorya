@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Head from "next/head";
 import gsap from "gsap";
 
 import HeroSection from "@/components/home/HeroSection";
@@ -174,22 +175,166 @@ export default function Page() {
     heroTiltRef,
   };
 
-  return (
-    <main className="min-h-screen bg-[#f8fbfa] text-[#123b3a] overflow-x-hidden">
-      <HeroSection
-        refs={refs}
-        handleHeroMouseMove={handleHeroMouseMove}
-        resetHeroTilt={resetHeroTilt}
-      />
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Shree Morya Travels",
+    url: "https://shreemorya.vercel.app",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: "https://shreemorya.vercel.app/search?q={search_term_string}",
+      "query-input": "required name=search_term_string",
+    },
+  };
 
-      <EasySteps />
-      <PackagesSection />
-      <CallUsSection />
-      <TestimonialSection />
-      <ExperienceSection />
-      <ContactSection />
-      <BlogsSection />
-      <NewsSection />
-    </main>
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "TravelAgency",
+    name: "Shree Morya Travels",
+    url: "https://shreemorya.vercel.app",
+    logo: "https://shreemorya.vercel.app/og-image.jpg",
+    image: "https://shreemorya.vercel.app/og-image.jpg",
+    telephone: "+91 8888157744",
+    contactPoint: {
+      "@type": "ContactPoint",
+      telephone: "+91 8888157744",
+      contactType: "customer support",
+      areaServed: "IN",
+      availableLanguage: ["English", "Hindi", "Marathi"],
+    },
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "Mumbai",
+      addressRegion: "Maharashtra",
+      addressCountry: "IN",
+    },
+    areaServed: [
+      "Shrivardhan",
+      "Borli",
+      "Borivali",
+      "Virar",
+      "Mumbai",
+      "Maharashtra",
+    ],
+    sameAs: [
+      "https://wa.me/918888157744",
+      "https://www.instagram.com/shree-morya",
+      "https://www.facebook.com/shree-morya",
+      "https://www.youtube.com/@shree-morya",
+    ],
+  };
+
+  const localBusinessSchema = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: "Shree Morya Travels",
+    url: "https://shreemorya.vercel.app",
+    image: "https://shreemorya.vercel.app/og-image.jpg",
+    telephone: "+91 8888157744",
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "Mumbai",
+      addressRegion: "Maharashtra",
+      addressCountry: "IN",
+    },
+    areaServed: [
+      "Shrivardhan",
+      "Borli",
+      "Borivali",
+      "Virar",
+      "Mumbai",
+      "Maharashtra",
+    ],
+    priceRange: "₹₹",
+  };
+
+  return (
+    <>
+      <Head>
+        <title>
+          Shree Morya Travels | Safe, Comfortable & Reliable Bus Travel in Maharashtra
+        </title>
+        <meta
+          name="description"
+          content="Shree Morya Travels offers safe, comfortable, and reliable bus travel services across Maharashtra including Shrivardhan, Borli, Borivali, and Virar. Book your journey with trusted travel support."
+        />
+        <meta
+          name="keywords"
+          content="Shree Morya Travels, Morya Travels, bus service Maharashtra, Shrivardhan to Borivali bus, Borli to Virar bus, Maharashtra travel service, comfortable bus travel, safe bus booking Maharashtra, travel agency Maharashtra, bus booking Shree Morya Travels"
+        />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://shreemorya.vercel.app/" />
+
+        {/* Open Graph */}
+        <meta
+          property="og:title"
+          content="Shree Morya Travels | Safe, Comfortable & Reliable Bus Travel"
+        />
+        <meta
+          property="og:description"
+          content="Travel across Maharashtra with Shree Morya Travels. Safe, comfortable, and reliable bus services with trusted routes and support."
+        />
+        <meta property="og:url" content="https://shreemorya.vercel.app/" />
+        <meta property="og:site_name" content="Shree Morya Travels" />
+        <meta property="og:locale" content="en_IN" />
+        <meta property="og:type" content="website" />
+        <meta
+          property="og:image"
+          content="https://shreemorya.vercel.app/og-image.jpg"
+        />
+
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+          name="twitter:title"
+          content="Shree Morya Travels | Safe, Comfortable & Reliable Bus Travel"
+        />
+        <meta
+          name="twitter:description"
+          content="Book your journey with Shree Morya Travels for trusted bus travel services across Maharashtra."
+        />
+        <meta
+          name="twitter:image"
+          content="https://shreemorya.vercel.app/og-image.jpg"
+        />
+
+        {/* JSON-LD */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(websiteSchema),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationSchema),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(localBusinessSchema),
+          }}
+        />
+      </Head>
+
+      <main className="min-h-screen bg-[#f8fbfa] text-[#123b3a] overflow-x-hidden">
+        <HeroSection
+          refs={refs}
+          handleHeroMouseMove={handleHeroMouseMove}
+          resetHeroTilt={resetHeroTilt}
+        />
+
+        <EasySteps />
+        <PackagesSection />
+        <CallUsSection />
+        <TestimonialSection />
+        <ExperienceSection />
+        <ContactSection />
+        <BlogsSection />
+        <NewsSection />
+      </main>
+    </>
   );
 }

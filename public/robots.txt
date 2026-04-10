@@ -1,0 +1,14 @@
+# robots.txt 
+
+# Allow all user-agents (bots) to access all content
+User-agent: *
+Disallow:
+
+# Block specific paths (for example, if you have private areas you don't want crawled)
+# Disallow: /private/
+
+# Allow bots to access specific files or directories
+# Allow: /public/
+
+# Sitemap location
+Sitemap: https://visionacademy-iota.vercel.app/sitemap.xml
