@@ -100,6 +100,14 @@ export default function Navbar({ mobileMenu, setMobileMenu, isScrolled }) {
                 return;
             }
 
+            if (window.__gsiPromptInProgress) {
+                showAppToast(
+                    "error",
+                    "Google sign-in is already in progress. Please close it or try again in a moment."
+                );
+                return;
+            }
+
             window.google.accounts.id.initialize({
                 client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
                 callback: handleGoogleCredential,
@@ -108,13 +116,18 @@ export default function Navbar({ mobileMenu, setMobileMenu, isScrolled }) {
             });
 
             // Shows Google account chooser / one tap prompt
+            window.__gsiPromptInProgress = true;
             window.google.accounts.id.prompt((notification) => {
-                // If prompt not shown, fallback to login page
+                window.__gsiPromptInProgress = false;
+
+                // If prompt not shown or skipped (e.g. FedCM blocked), fallback to normal login
                 if (
                     notification.isNotDisplayed?.() ||
                     notification.isSkippedMoment?.()
                 ) {
-                    showAppToast("warning", "Redirecting to login page");
+                    const errorMessage =
+                        "Google sign-in is blocked or cancelled in your browser. Redirecting to normal login.";
+                    showAppToast("error", errorMessage);
                     router.push("/login");
                 }
             });

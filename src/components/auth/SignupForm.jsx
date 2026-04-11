@@ -240,8 +240,31 @@ export default function SignupForm() {
             return;
         }
 
+        if (window.__gsiPromptInProgress) {
+            const errorMessage =
+                "Google sign-in is already in progress. Please close it or try again in a moment.";
+            setSuccess(false);
+            setMessage(errorMessage);
+            showAppToast("error", errorMessage);
+            return;
+        }
+
         setMessage("");
-        window.google.accounts.id.prompt();
+        window.__gsiPromptInProgress = true;
+        window.google.accounts.id.prompt((notification) => {
+            window.__gsiPromptInProgress = false;
+
+            if (
+                notification.isNotDisplayed?.() ||
+                notification.isSkippedMoment?.()
+            ) {
+                const errorMessage =
+                    "Google sign-in is blocked in your browser. Please use email or phone signup instead.";
+                setSuccess(false);
+                setMessage(errorMessage);
+                showAppToast("error", errorMessage);
+            }
+        });
     };
 
     const features = [
