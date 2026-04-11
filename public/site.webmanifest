@@ -1,0 +1,11 @@
+{
+    "name": "Shree Morya Travels",
+    "short_name": "Morya Travels",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#0f766e",
+    "theme_color": "#0f766e",
+    "description": "Shree Morya Travels offers safe, comfortable, and reliable bus travel services across Maharashtra including Shrivardhan, Borli, Borivali, and Virar. Book your journey with trusted travel support.",
+    "lang": "en-IN"
+}
