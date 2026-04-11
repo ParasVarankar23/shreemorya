@@ -1,6 +1,6 @@
 import "./globals.css";
 import { Poppins, Kaushan_Script } from "next/font/google";
-import ClientLayout from "./ClietLayout";
+import ClientLayout from "./ClientLayout";
 
 const poppins = Poppins({
   subsets: ["latin"],

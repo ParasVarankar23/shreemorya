@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
 import FloatingButtons from "@/components/home/FloatingButtons";
+import AppToaster from "@/components/layout/AppToaster";
+import Footer from "@/components/layout/Footer";
+import Navbar from "@/components/layout/Navbar";
+import Script from "next/script";
+import { useEffect, useState } from "react";
 
 export default function ClientLayout({ children }) {
     const [mobileMenu, setMobileMenu] = useState(false);
@@ -34,6 +36,13 @@ export default function ClientLayout({ children }) {
 
     return (
         <>
+            <AppToaster />
+            {/* Google Identity Services Script */}
+            <Script
+                src="https://accounts.google.com/gsi/client"
+                strategy="afterInteractive"
+            />
+
             <Navbar
                 mobileMenu={mobileMenu}
                 setMobileMenu={setMobileMenu}

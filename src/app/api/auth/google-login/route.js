@@ -29,9 +29,9 @@ export async function POST(req) {
         }
 
         const googleId = payload.sub;
-        const email = payload.email?.toLowerCase()?.trim();
+        const email = String(payload.email || "").toLowerCase().trim();
         const fullName = payload.name || "Google User";
-        const profilePicture = payload.picture || "";
+        const profileImage = payload.picture || "";
         const emailVerified = payload.email_verified || false;
 
         if (!email) {
@@ -50,7 +50,7 @@ export async function POST(req) {
                 password: "",
                 authProvider: "google",
                 googleId,
-                profilePicture,
+                profileImage,
                 role: "user",
                 isGuest: false,
                 isVerified: emailVerified,
@@ -68,8 +68,8 @@ export async function POST(req) {
                 needsUpdate = true;
             }
 
-            if (!user.profilePicture && profilePicture) {
-                user.profilePicture = profilePicture;
+            if (!user.profileImage && profileImage) {
+                user.profileImage = profileImage;
                 needsUpdate = true;
             }
 
@@ -96,7 +96,7 @@ export async function POST(req) {
                     role: user.role,
                     isGuest: user.isGuest,
                     authProvider: user.authProvider,
-                    profilePicture: user.profilePicture,
+                    profileImage: user.profileImage,
                 },
                 accessToken,
                 refreshToken,
