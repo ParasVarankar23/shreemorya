@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-    throw new Error("Please define the MONGO_URI environment variable in .env.local");
+    throw new Error("Please define the MONGO_URI environment variable");
 }
 
 let cached = global.mongoose;
@@ -21,21 +21,17 @@ export async function connectDB() {
     }
 
     if (!cached.promise) {
-        const opts = {
-            bufferCommands: false,
-        };
-
-        cached.promise = mongoose.connect(MONGO_URI, opts).then((mongooseInstance) => {
-            console.log("✅ MongoDB connected");
-            return mongooseInstance;
+        cached.promise = mongoose.connect(MONGO_URI, {
+            dbName: "moryatravels",
         });
     }
 
     try {
         cached.conn = await cached.promise;
+        console.log("✅ MongoDB Connected Successfully");
     } catch (error) {
         cached.promise = null;
-        console.error("❌ MongoDB connection error:", error);
+        console.error("❌ MongoDB Connection Error:", error);
         throw error;
     }
 
