@@ -42,7 +42,9 @@ export default function ClientLayout({ children }) {
 
             <FloatingButtons />
 
-            <main>{children}</main>
+            <main className="pt-[20px] sm:pt-[96px] lg:pt-[20px]">
+                {children}
+            </main>
 
             <Footer />
         </>

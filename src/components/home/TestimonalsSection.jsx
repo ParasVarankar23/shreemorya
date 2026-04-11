@@ -64,7 +64,7 @@ export default function TestimonialSection() {
     return (
         <section
             id="testimonial"
-            className="relative py-20 md:py-24 lg:py-28 bg-[#f8fbfa] overflow-hidden"
+            className="relative py-15 md:py-25 lg:py-25 bg-[#f8fbfa] overflow-hidden"
         >
             {/* DECOR BLOBS */}
             <div className="absolute top-16 left-0 w-72 h-72 bg-[#0E6B68]/5 rounded-full blur-3xl" />

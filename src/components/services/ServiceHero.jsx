@@ -11,7 +11,7 @@ const playfair = Playfair_Display({
 
 export default function ServiceHero() {
     return (
-        <section className="relative overflow-hidden bg-white text-black py-20 md:py-24">
+        <section className="relative overflow-hidden bg-white text-black py-20 md:py-20">
             {/* Soft premium background */}
             <div
                 className="absolute inset-0 bg-cover bg-center opacity-[0.03]"

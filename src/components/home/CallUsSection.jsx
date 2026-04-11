@@ -62,7 +62,7 @@ const highlights = [
 
 export default function CallUsSection() {
     return (
-        <section className="relative py-16 md:py-20 lg:py-24 bg-[#f8fbfa] overflow-hidden">
+        <section className="relative py-10 md:py-20 lg:py-20 bg-[#f8fbfa] overflow-hidden">
             {/* DECOR */}
             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#f4efe1] to-transparent" />
             <div className="absolute -top-8 left-0 w-52 h-52 rounded-full bg-[#f4b32c]/10 blur-3xl" />

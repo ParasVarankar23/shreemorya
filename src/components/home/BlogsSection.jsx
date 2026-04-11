@@ -65,7 +65,7 @@ export default function BlogsSection() {
     return (
         <section
             id="blogs"
-            className={`relative overflow-hidden bg-white py-20 md:py-24 lg:py-28 ${poppins.className}`}
+            className={`relative overflow-hidden bg-white py-10 md:py-20 lg:py-20 ${poppins.className}`}
         >
             {/* Soft premium background */}
             <div className="absolute inset-0 bg-gradient-to-br from-white via-[#f8fbfa] to-[#fefaf1]" />

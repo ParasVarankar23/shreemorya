@@ -75,7 +75,7 @@ const bookingSteps = [
 
 export default function EasySteps() {
     return (
-        <section className="relative py-16 md:py-20 lg:py-24 bg-[#f8fbfa] overflow-hidden">
+        <section className="relative py-15 md:py-20 lg:py-20 bg-[#f8fbfa] overflow-hidden">
             {/* TOP PREMIUM LINE */}
             <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-[#0E6B68] via-[#157A74] to-[#f5ad1b]" />
 

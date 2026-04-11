@@ -34,7 +34,7 @@ const routes = [
 
 export default function RouteSchedule() {
     return (
-        <section className="relative overflow-hidden bg-white py-20 md:py-24">
+        <section className="relative overflow-hidden bg-white py-10 md:py-20">
             {/* Soft premium background */}
             <div className="absolute inset-0 bg-gradient-to-br from-white via-[#f8fbfa] to-[#fefaf1]" />
             <div className="absolute top-16 right-12 w-40 h-40 bg-[#0E6B68]/5 rounded-full blur-3xl" />

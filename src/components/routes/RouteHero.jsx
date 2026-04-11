@@ -11,7 +11,7 @@ const playfair = Playfair_Display({
 
 export default function RouteHero() {
     return (
-        <section className="relative overflow-hidden bg-white py-20 md:py-24 text-black">
+        <section className="relative overflow-hidden bg-white py-20 md:py-20 text-black">
             {/* Soft Premium Background */}
             <div
                 className="absolute inset-0 bg-cover bg-center opacity-[0.03]"

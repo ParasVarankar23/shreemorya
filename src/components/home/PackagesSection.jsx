@@ -100,7 +100,7 @@ export default function PackagesSection() {
     return (
         <section
             id="packages"
-            className="relative py-20 md:py-24 lg:py-28 bg-[#f7fbfa] overflow-hidden"
+            className="relative py-20 md:py-20 lg:py-28 bg-[#f7fbfa] overflow-hidden"
         >
             {/* TOP PREMIUM LINE */}
             <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-[#0E6B68] via-[#157A74] to-[#f5ad1b]" />
