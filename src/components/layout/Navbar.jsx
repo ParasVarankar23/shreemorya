@@ -11,7 +11,7 @@ const playfair = Playfair_Display({
     weight: ["700", "800", "900"],
 });
 
-export default function Navbar({ mobileMenu, setMobileMenu, isScrolled }) {
+export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) {
     const pathname = usePathname();
     const router = useRouter();
 
