@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { generateBookingCode } from "@/lib/bookingCode";
+import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
-import Schedule from "@/models/schedule.model";
 import Fare from "@/models/fare.model";
 import Payment from "@/models/payment.model";
-import createAuditLog from "@/lib/createAuditLog";
+import Schedule from "@/models/schedule.model";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
-import { generateBookingCode } from "@/lib/bookingCode";
+import { NextResponse } from "next/server";
 
 /* ------------------------------------------
    Helper: get exact fare for pickup -> drop
@@ -50,10 +50,13 @@ async function getBookedSeats(scheduleId) {
     const bookings = await Booking.find({
         scheduleId,
         isActive: true,
-        bookingStatus: { $in: ["CONFIRMED", "PARTIAL"] },
-    }).select("seatNumbers");
+        // Treat pending + confirmed admin bookings as occupying seats
+        bookingStatus: { $in: ["PENDING", "CONFIRMED"] },
+    }).select("passengers");
 
-    return bookings.flatMap((b) => b.seatNumbers || []);
+    return bookings.flatMap((b) =>
+        (b.passengers || []).map((p) => Number(p.seatNumber))
+    );
 }
 
 /* ------------------------------------------
@@ -119,11 +122,19 @@ export async function GET(request) {
         if (search) {
             query.$or = [
                 { bookingCode: { $regex: search, $options: "i" } },
-                { customerName: { $regex: search, $options: "i" } },
-                { customerPhone: { $regex: search, $options: "i" } },
-                { customerEmail: { $regex: search, $options: "i" } },
-                { busNumber: { $regex: search, $options: "i" } },
-                { routeName: { $regex: search, $options: "i" } },
+                { "contactDetails.fullName": { $regex: search, $options: "i" } },
+                {
+                    "contactDetails.phoneNumber": {
+                        $regex: search,
+                        $options: "i",
+                    },
+                },
+                {
+                    "contactDetails.email": {
+                        $regex: search,
+                        $options: "i",
+                    },
+                },
             ];
         }
 
@@ -188,31 +199,62 @@ export async function POST(request) {
             scheduleId,
             pickupPointOrder,
             dropPointOrder,
-            seatNumbers = [],
+            contactDetails: rawContactDetails,
+            passengers: rawPassengers = [], // [{ seatNumber, fullName, age, gender, isPrimary? }]
+            // legacy fields support
+            seatNumbers: legacySeatNumbers = [],
             customerName,
             customerPhone,
             customerEmail = "",
             customerGender = "other",
             bookingSource = "ADMIN",
-            paymentMethod = "OFFLINE",
-            paymentStatus = "UNPAID",
+            paymentMethod = "CASH", // CASH | UPI | BANK_TRANSFER | RAZORPAY | NONE
             amountPaid = 0,
             notes = "",
         } = body;
+
+        // Normalize contactDetails (support both new and legacy body)
+        const contactDetails = rawContactDetails ||
+            (customerName && customerPhone
+                ? {
+                    fullName: customerName,
+                    phoneNumber: customerPhone,
+                    email: customerEmail || "",
+                }
+                : null);
+
+        // Normalize passengers (support both new and legacy body)
+        let passengers = Array.isArray(rawPassengers) ? rawPassengers : [];
+
+        if (
+            !passengers.length &&
+            Array.isArray(legacySeatNumbers) &&
+            legacySeatNumbers.length
+        ) {
+            passengers = legacySeatNumbers.map((seat, index) => ({
+                seatNumber: seat,
+                fullName: customerName || `Passenger ${index + 1}`,
+                age: 30,
+                gender: customerGender || "other",
+                isPrimary: index === 0,
+            }));
+        }
 
         if (
             !scheduleId ||
             !pickupPointOrder ||
             !dropPointOrder ||
-            !seatNumbers.length ||
-            !customerName ||
-            !customerPhone
+            !Array.isArray(passengers) ||
+            passengers.length === 0 ||
+            !contactDetails ||
+            !contactDetails.fullName ||
+            !contactDetails.phoneNumber
         ) {
             return NextResponse.json(
                 {
                     success: false,
                     message:
-                        "scheduleId, pickupPointOrder, dropPointOrder, seatNumbers, customerName, customerPhone are required",
+                        "scheduleId, pickupPointOrder, dropPointOrder, passengers, contactDetails.fullName and contactDetails.phoneNumber are required",
                 },
                 { status: 400 }
             );
@@ -244,7 +286,29 @@ export async function POST(request) {
             );
         }
 
-        // Validate seat numbers
+        const seatNumbers = passengers.map((p) => Number(p.seatNumber));
+
+        // Validate passengers + seat numbers
+        const missingPassenger = passengers.find(
+            (p) =>
+                !p.seatNumber ||
+                !p.fullName ||
+                p.age == null ||
+                p.age === "" ||
+                !p.gender
+        );
+
+        if (missingPassenger) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message:
+                        "Each passenger must have seatNumber, fullName, age and gender",
+                },
+                { status: 400 }
+            );
+        }
+
         const invalidSeat = seatNumbers.find(
             (seat) => seat < 1 || seat > schedule.seatLayout
         );
@@ -254,6 +318,17 @@ export async function POST(request) {
                 {
                     success: false,
                     message: `Invalid seat number: ${invalidSeat}`,
+                },
+                { status: 400 }
+            );
+        }
+
+        const uniqueSeatSet = new Set(seatNumbers);
+        if (uniqueSeatSet.size !== seatNumbers.length) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Duplicate seat numbers are not allowed",
                 },
                 { status: 400 }
             );
@@ -324,24 +399,38 @@ export async function POST(request) {
             pickupPointOrder: Number(pickupPointOrder),
             dropPointOrder: Number(dropPointOrder),
         });
-
-        const totalFare = Number(fareAmount) * seatNumbers.length;
+        const passengerCount = passengers.length;
+        const totalAmount = Number(fareAmount) * passengerCount;
         const finalAmountPaid = Number(amountPaid || 0);
 
-        let resolvedPaymentStatus = paymentStatus;
+        // Normalize enums
+        const allowedSources = ["ONLINE", "OFFLINE", "ADMIN", "STAFF"];
+        const resolvedBookingSource = allowedSources.includes(bookingSource)
+            ? bookingSource
+            : "ADMIN";
 
+        const allowedPaymentMethods = [
+            "RAZORPAY",
+            "CASH",
+            "UPI",
+            "BANK_TRANSFER",
+            "NONE",
+        ];
+        const resolvedPaymentMethod = allowedPaymentMethods.includes(paymentMethod)
+            ? paymentMethod
+            : "CASH";
+
+        let resolvedPaymentStatus = "UNPAID";
         if (finalAmountPaid <= 0) {
             resolvedPaymentStatus = "UNPAID";
-        } else if (finalAmountPaid > 0 && finalAmountPaid < totalFare) {
+        } else if (finalAmountPaid > 0 && finalAmountPaid < totalAmount) {
             resolvedPaymentStatus = "PARTIAL";
-        } else if (finalAmountPaid >= totalFare) {
+        } else if (finalAmountPaid >= totalAmount) {
             resolvedPaymentStatus = "PAID";
         }
 
-        let resolvedBookingStatus = "CONFIRMED";
-        if (resolvedPaymentStatus === "UNPAID" && paymentMethod === "OFFLINE") {
-            resolvedBookingStatus = "PARTIAL";
-        }
+        let resolvedBookingStatus =
+            resolvedPaymentStatus === "PAID" ? "CONFIRMED" : "PENDING";
 
         const bookingCode = await generateBookingCode(schedule.travelDate);
 
@@ -352,51 +441,48 @@ export async function POST(request) {
             scheduleId: schedule._id,
 
             busId: schedule.busId,
-            busNumber: schedule.busNumber,
-            busName: schedule.busName,
-
-            routeName: schedule.routeName,
             tripDirection: schedule.tripDirection,
             travelDate: schedule.travelDate,
 
-            startPoint: schedule.startPoint,
-            startTime: schedule.startTime,
-            endPoint: schedule.endPoint,
-            endTime: schedule.endTime,
+            boardingPoint: pickupPoint.name,
+            droppingPoint: dropPoint.name,
 
-            pickupPointName: pickupPoint.name,
-            pickupPointOrder: pickupPoint.order,
-            pickupPointTime: pickupPoint.time || "",
+            contactDetails: {
+                fullName: contactDetails.fullName,
+                phoneNumber: contactDetails.phoneNumber,
+                email: contactDetails.email || "",
+            },
 
-            dropPointName: dropPoint.name,
-            dropPointOrder: dropPoint.order,
-            dropPointTime: dropPoint.time || "",
-
-            seatNumbers,
-            totalSeats: seatNumbers.length,
-
-            customerName,
-            customerPhone,
-            customerEmail,
-            customerGender,
+            passengers: passengers.map((p, index) => ({
+                seatNumber: Number(p.seatNumber),
+                fullName: p.fullName,
+                age: Number(p.age),
+                gender: p.gender,
+                isPrimary:
+                    typeof p.isPrimary === "boolean" ? p.isPrimary : index === 0,
+            })),
 
             farePerSeat: fareAmount,
-            totalFare,
+            totalAmount,
+            voucherAppliedAmount: 0,
+            couponAppliedAmount: 0,
+            finalPayableAmount: totalAmount,
 
-            discountAmount: 0,
-            couponDiscountAmount: 0,
-            voucherDiscountAmount: 0,
+            appliedVoucherId: null,
+            appliedCouponId: null,
 
-            finalPayableAmount: totalFare,
-            amountPaid: finalAmountPaid,
-            amountDue: Math.max(totalFare - finalAmountPaid, 0),
-
-            fareRuleId,
-
+            bookingSource: resolvedBookingSource,
             bookingStatus: resolvedBookingStatus,
             paymentStatus: resolvedPaymentStatus,
-            paymentMethod,
-            bookingSource,
+            paymentMethod: resolvedPaymentMethod,
+
+            expiresAt: null,
+            confirmedAt:
+                resolvedBookingStatus === "CONFIRMED" ? new Date() : null,
+            completedAt: null,
+
+            seatChangeHistory: [],
+            cancellation: {},
 
             notes,
 
@@ -407,20 +493,41 @@ export async function POST(request) {
 
         // Optional payment record
         if (finalAmountPaid > 0) {
+            const getProviderAndMethod = (method) => {
+                switch (method) {
+                    case "RAZORPAY":
+                        return { provider: "RAZORPAY", method: "ONLINE" };
+                    case "CASH":
+                        return { provider: "CASH", method: "OFFLINE" };
+                    case "UPI":
+                        return { provider: "UPI", method: "OFFLINE" };
+                    case "BANK_TRANSFER":
+                        return { provider: "BANK_TRANSFER", method: "OFFLINE" };
+                    default:
+                        return { provider: "MANUAL", method: "OFFLINE" };
+                }
+            };
+
+            const { provider, method } = getProviderAndMethod(
+                resolvedPaymentMethod
+            );
+
             await Payment.create({
                 bookingId: booking._id,
-                scheduleId: schedule._id,
-                userId: null,
+                userId: booking.userId || null,
+                provider,
+                method,
+                paymentStatus:
+                    resolvedPaymentStatus === "PAID" ? "PAID" : "PARTIAL",
                 amount: finalAmountPaid,
                 currency: "INR",
-                paymentMethod,
-                paymentGateway: paymentMethod === "RAZORPAY" ? "RAZORPAY" : "OFFLINE",
-                paymentStatus: resolvedPaymentStatus === "PAID" ? "CAPTURED" : "PENDING",
-                transactionType: "BOOKING",
-                referenceType: "BOOKING",
-                referenceId: booking._id,
+                totalAmount: booking.totalAmount,
+                voucherAppliedAmount: booking.voucherAppliedAmount,
+                couponAppliedAmount: booking.couponAppliedAmount,
+                finalPayableAmount: booking.finalPayableAmount,
                 createdBy: authUser.userId,
                 updatedBy: authUser.userId,
+                notes,
                 isActive: true,
             });
         }

@@ -414,14 +414,12 @@ BookingSchema.index({ expiresAt: 1 }, { sparse: true });
    - if userId exists => not guest
    - if no userId => guest
 ------------------------------------------- */
-BookingSchema.pre("save", function (next) {
+BookingSchema.pre("save", function () {
     if (this.userId) {
         this.isGuestBooking = false;
     } else {
         this.isGuestBooking = true;
     }
-
-    next();
 });
 
 export default mongoose.models.Booking || mongoose.model("Booking", BookingSchema);

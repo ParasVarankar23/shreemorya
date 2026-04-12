@@ -131,17 +131,15 @@ SeatHoldSchema.index({ guestEmail: 1, status: 1 });
 SeatHoldSchema.index({ convertedBookingId: 1 }, { sparse: true });
 
 /* ------------------------------------------
-   Auto-calculate expiresAt before validation
-   if not explicitly passed
+    Auto-calculate expiresAt before validation
+    if not explicitly passed
 ------------------------------------------- */
-SeatHoldSchema.pre("validate", function (next) {
+SeatHoldSchema.pre("validate", function () {
     if (!this.expiresAt) {
         const expiry = new Date();
         expiry.setMinutes(expiry.getMinutes() + (this.holdDurationMinutes || 5));
         this.expiresAt = expiry;
     }
-
-    next();
 });
 
 export default mongoose.models.SeatHold || mongoose.model("SeatHold", SeatHoldSchema);

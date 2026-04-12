@@ -159,11 +159,11 @@ VoucherSchema.index({ sourceBookingId: 1 }, { unique: true });
 VoucherSchema.index({ status: 1, expiresAt: 1 });
 
 /* ------------------------------------------
-   Pre-save:
-   Ensure status is auto-adjusted based on
-   remainingAmount and expiry
+    Pre-save:
+    Ensure status is auto-adjusted based on
+    remainingAmount and expiry
 ------------------------------------------- */
-VoucherSchema.pre("save", function (next) {
+VoucherSchema.pre("save", function () {
     const now = new Date();
 
     if (this.expiresAt && this.expiresAt <= now && this.status !== "USED") {
@@ -176,8 +176,6 @@ VoucherSchema.pre("save", function (next) {
     } else if (this.remainingAmount === this.originalAmount) {
         this.status = "ACTIVE";
     }
-
-    next();
 });
 
 export default mongoose.models.Voucher || mongoose.model("Voucher", VoucherSchema);

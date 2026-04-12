@@ -206,14 +206,12 @@ FareSchema.index({
 });
 
 // Optional auto-expire flag update before save
-FareSchema.pre("save", function (next) {
+FareSchema.pre("save", function () {
     const now = new Date();
 
     if (this.validTill && this.validTill < now && this.status !== "INACTIVE") {
         this.status = "EXPIRED";
     }
-
-    next();
 });
 
 export default mongoose.models.Fare || mongoose.model("Fare", FareSchema);

@@ -221,16 +221,14 @@ CouponSchema.index({ status: 1, validFrom: 1, validTill: 1 });
 CouponSchema.index({ discountType: 1, status: 1 });
 
 /* ------------------------------------------
-   Auto-expire status based on validTill
+    Auto-expire status based on validTill
 ------------------------------------------- */
-CouponSchema.pre("save", function (next) {
+CouponSchema.pre("save", function () {
     const now = new Date();
 
     if (this.validTill && this.validTill < now && this.status !== "DISABLED") {
         this.status = "EXPIRED";
     }
-
-    next();
 });
 
 export default mongoose.models.Coupon || mongoose.model("Coupon", CouponSchema);

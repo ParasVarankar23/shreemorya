@@ -175,11 +175,10 @@ const CouponSchema = new mongoose.Schema(
 );
 
 // Ensure percentage discounts do not exceed 100
-CouponSchema.pre("validate", function (next) {
+CouponSchema.pre("validate", function () {
     if (this.discountType === "PERCENTAGE" && this.discountValue > 100) {
         this.invalidate("discountValue", "Percentage discount cannot exceed 100%");
     }
-    next();
 });
 
 export default mongoose.models.Coupon || mongoose.model("Coupon", CouponSchema);
