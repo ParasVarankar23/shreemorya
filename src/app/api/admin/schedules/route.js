@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Bus from "@/models/bus.model";
 import Fare from "@/models/fare.model";
 import Schedule from "@/models/schedule.model";
-import createAuditLog from "@/lib/createAuditLog";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import { NextResponse } from "next/server";
 
 /* ------------------------------------------
    Helper: get effective base fare from fare rules
@@ -90,6 +90,8 @@ export async function GET(request) {
 
         const search = searchParams.get("search") || "";
         const travelDate = searchParams.get("travelDate") || "";
+        const startDate = searchParams.get("startDate") || "";
+        const endDate = searchParams.get("endDate") || "";
         const status = searchParams.get("status") || "";
         const tripDirection = searchParams.get("tripDirection") || "";
         const busId = searchParams.get("busId") || "";
@@ -114,15 +116,29 @@ export async function GET(request) {
             query.busId = busId;
         }
 
-        if (travelDate) {
+        // Filter by a single travelDate or a startDate/endDate range
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+
+            if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+                query.travelDate = {
+                    $gte: start,
+                    $lte: end,
+                };
+            }
+        } else if (travelDate) {
             const start = new Date(travelDate);
             const end = new Date(travelDate);
             end.setHours(23, 59, 59, 999);
 
-            query.travelDate = {
-                $gte: start,
-                $lte: end,
-            };
+            if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+                query.travelDate = {
+                    $gte: start,
+                    $lte: end,
+                };
+            }
         }
 
         if (status) {
@@ -193,6 +209,8 @@ export async function POST(request) {
         const {
             busId,
             travelDate,
+            startDate,
+            endDate,
             createMode = "FORWARD", // FORWARD | RETURN | BOTH
             seatRules = [],
             notes = "",
@@ -200,11 +218,12 @@ export async function POST(request) {
             isBookingOpen = true,
         } = body;
 
-        if (!busId || !travelDate) {
+        if (!busId || (!travelDate && (!startDate || !endDate))) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "busId and travelDate are required",
+                    message:
+                        "busId and (travelDate or startDate/endDate) are required",
                 },
                 { status: 400 }
             );
@@ -230,16 +249,53 @@ export async function POST(request) {
             );
         }
 
-        const travelDateObj = new Date(travelDate);
+        const travelDates = [];
 
-        if (Number.isNaN(travelDateObj.getTime())) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid travelDate",
-                },
-                { status: 400 }
-            );
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Invalid startDate or endDate",
+                    },
+                    { status: 400 }
+                );
+            }
+
+            if (end < start) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "endDate must be on or after startDate",
+                    },
+                    { status: 400 }
+                );
+            }
+
+            for (
+                let dt = new Date(start);
+                dt <= end;
+                dt.setDate(dt.getDate() + 1)
+            ) {
+                travelDates.push(new Date(dt));
+            }
+        } else if (travelDate) {
+            const single = new Date(travelDate);
+
+            if (Number.isNaN(single.getTime())) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Invalid travelDate",
+                    },
+                    { status: 400 }
+                );
+            }
+
+            travelDates.push(single);
         }
 
         const directionsToCreate =
@@ -247,111 +303,131 @@ export async function POST(request) {
 
         const createdSchedules = [];
 
-        for (const direction of directionsToCreate) {
-            const tripData = getTripSnapshot(bus, direction);
+        for (const travelDateObj of travelDates) {
+            for (const direction of directionsToCreate) {
+                const tripData = getTripSnapshot(bus, direction);
 
-            if (!tripData) {
-                if (direction === "RETURN") {
+                if (!tripData) {
+                    if (direction === "RETURN") {
+                        return NextResponse.json(
+                            {
+                                success: false,
+                                message:
+                                    "Return trip is not configured for this bus, so RETURN/BOTH cannot be created",
+                            },
+                            { status: 400 }
+                        );
+                    }
+
                     return NextResponse.json(
                         {
                             success: false,
-                            message:
-                                "Return trip is not configured for this bus, so RETURN/BOTH cannot be created",
+                            message: `Trip data not found for ${direction}`,
                         },
                         { status: 400 }
                     );
                 }
 
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: `Trip data not found for ${direction}`,
-                    },
-                    { status: 400 }
-                );
-            }
-
-            const existingSchedule = await Schedule.findOne({
-                busId: bus._id,
-                tripDirection: direction,
-                travelDate: travelDateObj,
-                isActive: true,
-            });
-
-            if (existingSchedule) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: `${direction} schedule already exists for this bus on this date`,
-                    },
-                    { status: 409 }
-                );
-            }
-
-            const fareSnapshot = await getScheduleFare({
-                busId: bus._id,
-                tripDirection: direction,
-                travelDate: travelDateObj,
-                busTripBaseFare: tripData.baseFare,
-            });
-
-            const schedule = await Schedule.create({
-                busId: bus._id,
-                busNumber: bus.busNumber,
-                busName: bus.busName,
-                busType: bus.busType,
-                seatLayout: bus.seatLayout,
-                routeName: bus.routeName,
-                tripDirection: direction,
-                travelDate: travelDateObj,
-                startPoint: tripData.startPoint,
-                startTime: tripData.startTime,
-                endPoint: tripData.endPoint,
-                endTime: tripData.endTime,
-                pickupPoints: (tripData.pickupPoints || []).map((p, index) => ({
-                    name: p.name,
-                    time: p.time || "",
-                    order: p.order || index + 1,
-                })),
-                dropPoints: (tripData.dropPoints || []).map((d, index) => ({
-                    name: d.name,
-                    time: d.time || "",
-                    order: d.order || index + 1,
-                })),
-                baseFare: fareSnapshot.baseFare,
-                effectiveFare: fareSnapshot.effectiveFare,
-                fareType: fareSnapshot.fareType,
-                seatRules,
-                status,
-                isBookingOpen,
-                notes,
-                isActive: true,
-                createdBy: authUser.userId,
-                updatedBy: authUser.userId,
-            });
-
-            createdSchedules.push(schedule);
-
-            try {
-                await createAuditLog({
-                    userId: authUser.userId,
-                    userRole: authUser.role,
-                    action: "CREATE_SCHEDULE",
-                    entityType: "SCHEDULE",
-                    entityId: schedule._id,
-                    entityCode: `${schedule.busNumber} | ${direction}`,
-                    message: `Created ${direction} schedule for ${schedule.busNumber}`,
-                    metadata: {
-                        busId: String(bus._id),
-                        tripDirection: direction,
-                        fareRuleId: fareSnapshot.fareRuleId,
-                    },
-                    newValues: schedule.toObject(),
-                    status: "SUCCESS",
+                const existingSchedule = await Schedule.findOne({
+                    busId: bus._id,
+                    tripDirection: direction,
+                    travelDate: travelDateObj,
+                    isActive: true,
                 });
-            } catch (auditError) {
-                console.error("Audit log create schedule error:", auditError);
+
+                // Skip if schedule already exists for this date/direction
+                if (existingSchedule) {
+                    continue;
+                }
+
+                const fareSnapshot = await getScheduleFare({
+                    busId: bus._id,
+                    tripDirection: direction,
+                    travelDate: travelDateObj,
+                    busTripBaseFare: tripData.baseFare,
+                });
+
+                const schedule = await Schedule.create({
+                    busId: bus._id,
+                    busNumber: bus.busNumber,
+                    busName: bus.busName,
+                    busType: bus.busType,
+                    seatLayout: bus.seatLayout,
+                    routeName:
+                        tripData.routeName ||
+                        `${tripData.startPoint} - ${tripData.endPoint}`,
+                    tripDirection: direction,
+                    travelDate: travelDateObj,
+                    startPoint: tripData.startPoint,
+                    startTime: tripData.startTime,
+                    endPoint: tripData.endPoint,
+                    endTime: tripData.endTime,
+                    pickupPoints: (tripData.pickupPoints || []).map(
+                        (p, index) => ({
+                            name: p.name,
+                            time: p.time || "",
+                            order: p.order || index + 1,
+                        })
+                    ),
+                    dropPoints: (tripData.dropPoints || []).map(
+                        (d, index) => ({
+                            name: d.name,
+                            time: d.time || "",
+                            order: d.order || index + 1,
+                        })
+                    ),
+                    baseFare: fareSnapshot.baseFare,
+                    effectiveFare: fareSnapshot.effectiveFare,
+                    fareType: fareSnapshot.fareType,
+                    seatRules,
+                    status,
+                    isBookingOpen,
+                    notes,
+                    isActive: true,
+                    createdBy: authUser.userId,
+                    updatedBy: authUser.userId,
+                });
+
+                createdSchedules.push(schedule);
+
+                try {
+                    await createAuditLog({
+                        userId: authUser.userId,
+                        userRole: authUser.role,
+                        action: "CREATE_SCHEDULE",
+                        entityType: "SCHEDULE",
+                        entityId: schedule._id,
+                        entityCode: `${schedule.busNumber} | ${direction}`,
+                        message: `Created ${direction} schedule for ${schedule.busNumber} on ${travelDateObj
+                            .toISOString()
+                            .slice(0, 10)}`,
+                        metadata: {
+                            busId: String(bus._id),
+                            tripDirection: direction,
+                            fareRuleId: fareSnapshot.fareRuleId,
+                            travelDate: travelDateObj,
+                        },
+                        newValues: schedule.toObject(),
+                        status: "SUCCESS",
+                    });
+                } catch (auditError) {
+                    console.error(
+                        "Audit log create schedule error:",
+                        auditError
+                    );
+                }
             }
+        }
+
+        if (createdSchedules.length === 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message:
+                        "No new schedules created (all dates already had schedules)",
+                },
+                { status: 409 }
+            );
         }
 
         return NextResponse.json(

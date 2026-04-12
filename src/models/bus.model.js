@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 /* ------------------------------------------
-   Point Schema (pickup / drop points)
+   Pickup / Drop Point Schema
 ------------------------------------------- */
 const RoutePointSchema = new mongoose.Schema(
     {
@@ -10,127 +10,97 @@ const RoutePointSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
-
         time: {
             type: String,
             default: "",
             trim: true,
         },
-
-        fareOffset: {
-            type: Number,
-            default: 0,
-            min: 0,
+        landmark: {
+            type: String,
+            default: "",
+            trim: true,
         },
-
         order: {
             type: Number,
             required: true,
             min: 1,
         },
-    },
-    { _id: false }
-);
-
-/* ------------------------------------------
-   Seat Rule Schema
-   For ladies only / senior / blocked seats
-------------------------------------------- */
-const SeatRuleSchema = new mongoose.Schema(
-    {
-        seatNumber: {
-            type: Number,
-            required: true,
-            min: 1,
-        },
-
-        type: {
-            type: String,
-            enum: ["NORMAL", "LADIES_ONLY", "SENIOR_ONLY", "BLOCKED"],
-            default: "NORMAL",
-            index: true,
-        },
-
         isActive: {
             type: Boolean,
             default: true,
         },
+    },
+    { _id: false }
+);
 
-        reason: {
+/* ------------------------------------------
+   Trip Definition (forward / return)
+------------------------------------------- */
+const TripSchema = new mongoose.Schema(
+    {
+        routeName: {
             type: String,
-            default: "",
+            required: true,
             trim: true,
+        },
+        startPoint: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        startTime: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        endPoint: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        endTime: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        pickupPoints: {
+            type: [RoutePointSchema],
+            default: [],
+            validate: {
+                validator: function (value) {
+                    return !value || value.length <= 150;
+                },
+                message: "pickupPoints cannot exceed 150 entries",
+            },
+        },
+        dropPoints: {
+            type: [RoutePointSchema],
+            default: [],
+            validate: {
+                validator: function (value) {
+                    return !value || value.length <= 150;
+                },
+                message: "dropPoints cannot exceed 150 entries",
+            },
+        },
+        baseFare: {
+            type: Number,
+            required: true,
+            min: 0,
         },
     },
     { _id: false }
 );
 
 /* ------------------------------------------
-   Bus Replacement History
+   Bus Master Schema
 ------------------------------------------- */
-const BusReplacementHistorySchema = new mongoose.Schema(
+const BusSchema = new mongoose.Schema(
     {
-        oldBusId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Bus",
-            required: true,
-        },
-
-        newBusId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Bus",
-            required: true,
-        },
-
-        oldSeatLayout: {
-            type: Number,
-            required: true,
-            min: 1,
-        },
-
-        newSeatLayout: {
-            type: Number,
-            required: true,
-            min: 1,
-        },
-
-        replacedAt: {
-            type: Date,
-            default: Date.now,
-        },
-
-        reason: {
-            type: String,
-            default: "",
-            trim: true,
-        },
-
-        replacedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: null,
-        },
-    },
-    { _id: false }
-);
-
-/* ------------------------------------------
-   Main Schedule Schema
-------------------------------------------- */
-const ScheduleSchema = new mongoose.Schema(
-    {
-        // Which bus template is assigned for this date
-        busId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Bus",
-            required: true,
-            index: true,
-        },
-
-        // Helpful snapshot fields (avoid too many joins)
         busNumber: {
             type: String,
             required: true,
+            unique: true,
             trim: true,
             uppercase: true,
         },
@@ -145,146 +115,76 @@ const ScheduleSchema = new mongoose.Schema(
             type: String,
             enum: ["AC", "NON_AC"],
             required: true,
-            index: true,
         },
 
         seatLayout: {
             type: Number,
+            enum: [21, 22, 31, 35, 39],
             required: true,
-            enum: [21, 31, 35, 39],
         },
 
-        // Route / direction
-        routeName: {
-            type: String,
-            required: true,
-            trim: true,
-            index: true,
-        },
-
-        tripDirection: {
-            type: String,
-            enum: ["FORWARD", "RETURN"],
-            default: "FORWARD",
-            index: true,
-        },
-
-        // Date of travel
-        travelDate: {
-            type: Date,
-            required: true,
-            index: true,
-        },
-
-        // Actual start/end snapshot for this date
-        startPoint: {
-            type: String,
-            required: true,
-            trim: true,
-            index: true,
-        },
-
-        startTime: {
-            type: String,
-            required: true,
-            trim: true, // "06:00"
-        },
-
-        endPoint: {
-            type: String,
-            required: true,
-            trim: true,
-            index: true,
-        },
-
-        endTime: {
-            type: String,
-            required: true,
-            trim: true, // "10:30"
-        },
-
-        // Date-wise actual pickup/drop points
-        pickupPoints: {
-            type: [RoutePointSchema],
-            default: [],
-        },
-
-        dropPoints: {
-            type: [RoutePointSchema],
-            default: [],
-        },
-
-        // Fare snapshot for this schedule
-        baseFare: {
+        totalSeats: {
             type: Number,
             required: true,
-            min: 0,
+            min: 1,
         },
 
-        effectiveFare: {
+        cabinSeatCount: {
             type: Number,
-            required: true,
+            default: 0,
             min: 0,
+            max: 10,
         },
 
-        // Whether season fare applied
-        fareType: {
-            type: String,
-            enum: ["REGULAR", "SEASONAL", "SPECIAL"],
-            default: "REGULAR",
-            index: true,
-        },
-
-        // Seat rules for this date
-        seatRules: {
-            type: [SeatRuleSchema],
+        cabinSeats: {
+            type: [Number],
             default: [],
+            validate: {
+                validator: function (value) {
+                    return !value || value.length <= 10;
+                },
+                message: "cabinSeats cannot exceed 10 seats",
+            },
         },
 
-        // Schedule status
-        status: {
+        tripType: {
             type: String,
-            enum: [
-                "SCHEDULED", // available for booking
-                "ACTIVE",    // journey started / running
-                "COMPLETED", // trip finished
-                "CANCELLED", // cancelled trip
-                "CLOSED",    // booking closed manually
-            ],
-            default: "SCHEDULED",
-            index: true,
+            enum: ["ONE_WAY", "RETURN"],
+            default: "ONE_WAY",
         },
 
-        // Booking open/close control
-        isBookingOpen: {
-            type: Boolean,
-            default: true,
-            index: true,
+        forwardTrip: {
+            type: TripSchema,
+            required: true,
         },
 
-        bookingClosedAt: {
-            type: Date,
+        returnTrip: {
+            type: TripSchema,
             default: null,
         },
 
-        // If bus replaced later
-        busReplacementHistory: {
-            type: [BusReplacementHistorySchema],
+        amenities: {
+            type: [String],
             default: [],
         },
 
-        // Optional notes
-        notes: {
+        operatorNotes: {
             type: String,
             default: "",
             trim: true,
         },
 
-        // Audit fields
+        status: {
+            type: String,
+            enum: ["ACTIVE", "INACTIVE", "MAINTENANCE"],
+            default: "ACTIVE",
+            index: true,
+        },
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            default: null,
+            required: true,
         },
 
         updatedBy: {
@@ -293,7 +193,6 @@ const ScheduleSchema = new mongoose.Schema(
             default: null,
         },
 
-        // Soft active
         isActive: {
             type: Boolean,
             default: true,
@@ -305,20 +204,18 @@ const ScheduleSchema = new mongoose.Schema(
     }
 );
 
-/* ------------------------------------------
-   Prevent duplicate same bus + same direction + same date
-------------------------------------------- */
-ScheduleSchema.index(
-    { busId: 1, travelDate: 1, tripDirection: 1 },
-    { unique: true }
-);
+// Keep totalSeats in sync with seatLayout & handle ONE_WAY
+BusSchema.pre("validate", function () {
+    if (this.seatLayout && (!this.totalSeats || this.totalSeats !== this.seatLayout)) {
+        this.totalSeats = this.seatLayout;
+    }
 
-/* ------------------------------------------
-   Search / listing indexes
-------------------------------------------- */
-ScheduleSchema.index({ travelDate: 1, startPoint: 1, endPoint: 1 });
-ScheduleSchema.index({ routeName: 1, travelDate: 1, tripDirection: 1 });
-ScheduleSchema.index({ status: 1, isBookingOpen: 1, travelDate: 1 });
+    if (this.tripType === "ONE_WAY") {
+        this.returnTrip = null;
+    }
+});
 
-export default mongoose.models.Schedule ||
-    mongoose.model("Schedule", ScheduleSchema);
+BusSchema.index({ busNumber: 1 }, { unique: true });
+BusSchema.index({ status: 1, busType: 1 });
+
+export default mongoose.models.Bus || mongoose.model("Bus", BusSchema);
