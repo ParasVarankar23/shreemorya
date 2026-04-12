@@ -37,3 +37,6 @@ export async function connectDB() {
 
     return cached.conn;
 }
+
+// Allow both named and default imports
+export default connectDB;

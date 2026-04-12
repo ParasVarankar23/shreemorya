@@ -52,3 +52,40 @@ export function generateRefreshToken(user) {
         }
     );
 }
+
+// Extract authenticated user payload from Bearer token in Next.js Request
+// Returns null if missing/invalid. Does NOT hit the database; relies on JWT payload.
+export function getAuthUserFromRequest(request) {
+    try {
+        const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return null;
+        }
+
+        const token = authHeader.split(" ")[1];
+
+        if (!token) {
+            return null;
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        if (!decoded || !decoded.userId) {
+            return null;
+        }
+
+        return decoded;
+    } catch (error) {
+        return null;
+    }
+}
+
+// Check if user role is in allowed roles
+export function hasRole(user, allowedRoles = []) {
+    if (!user || !user.role || !Array.isArray(allowedRoles) || allowedRoles.length === 0) {
+        return false;
+    }
+
+    return allowedRoles.includes(user.role);
+}
