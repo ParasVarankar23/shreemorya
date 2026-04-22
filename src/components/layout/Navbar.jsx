@@ -16,6 +16,24 @@ export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) 
     const router = useRouter();
 
     const [googleReady, setGoogleReady] = useState(false);
+    const [internalMobileMenu, setInternalMobileMenu] = useState(false);
+
+    const isMobileMenuOpen =
+        typeof mobileMenu === "boolean" ? mobileMenu : internalMobileMenu;
+
+    const updateMobileMenu = (nextState) => {
+        const resolvedState =
+            typeof nextState === "function"
+                ? nextState(isMobileMenuOpen)
+                : nextState;
+
+        if (typeof setMobileMenu === "function") {
+            setMobileMenu(resolvedState);
+            return;
+        }
+
+        setInternalMobileMenu(resolvedState);
+    };
 
     const navLinks = [
         { name: "Home", href: "/" },
@@ -236,15 +254,15 @@ export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) 
                     {/* MOBILE TOGGLE */}
                     <button
                         className="lg:hidden text-white text-xl sm:text-2xl"
-                        onClick={() => setMobileMenu(!mobileMenu)}
+                        onClick={() => updateMobileMenu(!isMobileMenuOpen)}
                         aria-label="Toggle Menu"
                     >
-                        {mobileMenu ? <FaTimes /> : <FaBars />}
+                        {isMobileMenuOpen ? <FaTimes /> : <FaBars />}
                     </button>
                 </div>
 
                 {/* MOBILE MENU */}
-                {mobileMenu && (
+                {isMobileMenuOpen && (
                     <div className="lg:hidden pb-4">
                         <div className="bg-white rounded-3xl p-4 space-y-3 shadow-2xl border border-[#F2E7C9]">
                             {navLinks.map((link) => {
@@ -254,7 +272,7 @@ export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) 
                                     <a
                                         key={link.href}
                                         href={link.href}
-                                        onClick={() => setMobileMenu(false)}
+                                        onClick={() => updateMobileMenu(false)}
                                         className={`block font-medium transition relative w-fit ${isActive
                                             ? "text-[#0E6B68] after:w-full"
                                             : "text-[#16302B] hover:text-[#0E6B68] after:w-0 hover:after:w-full"
@@ -267,7 +285,7 @@ export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) 
 
                             <button
                                 onClick={() => {
-                                    setMobileMenu(false);
+                                    updateMobileMenu(false);
                                     handleBookNow();
                                 }}
                                 className="w-full bg-[#E8A317] text-[#16302B] py-3 rounded-full font-bold mt-2 hover:bg-[#D48F0C] transition"
