@@ -63,6 +63,18 @@ export default function DashboardNavbar({
         }
     };
 
+    const getStoredUser = () => {
+        try {
+            const rawUser = localStorage.getItem("user");
+
+            if (!rawUser) return null;
+
+            return JSON.parse(rawUser);
+        } catch {
+            return null;
+        }
+    };
+
     async function refreshAccessToken() {
         try {
             const refreshToken = getRefreshToken();
@@ -94,10 +106,11 @@ export default function DashboardNavbar({
         let token = getAccessToken();
 
         const doFetch = async (accessToken) => {
-            const headers = {
-                ...(options.headers || {}),
-                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-            };
+            const headers = new Headers(options.headers || undefined);
+
+            if (accessToken) {
+                headers.set("Authorization", `Bearer ${accessToken}`);
+            }
 
             return fetch(url, {
                 ...options,
@@ -174,6 +187,13 @@ export default function DashboardNavbar({
     useEffect(() => {
         let active = true;
 
+        const storedUser = getStoredUser();
+
+        if (storedUser) {
+            setFullName(String(storedUser.fullName || storedUser.name || "").trim());
+            setProfileImage(String(storedUser.profileImage || storedUser.photoUrl || "").trim());
+        }
+
         async function loadProfile() {
             try {
                 const res = await fetchWithAutoRefresh("/api/auth/profile", {
@@ -184,11 +204,11 @@ export default function DashboardNavbar({
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) return;
 
-                const p = data?.profile || {};
+                const p = data?.user || data?.profile || {};
 
                 if (active) {
-                    setFullName(String(p.name || "").trim());
-                    setProfileImage(String(p.photoUrl || "").trim());
+                    setFullName(String(p.fullName || p.name || storedUser?.fullName || storedUser?.name || "").trim());
+                    setProfileImage(String(p.profileImage || p.photoUrl || storedUser?.profileImage || storedUser?.photoUrl || "").trim());
                 }
             } catch {
                 // ignore
