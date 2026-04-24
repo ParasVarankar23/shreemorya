@@ -110,11 +110,11 @@ export default function SignupForm() {
     };
 
     const saveAuthData = (data) => {
-        const { accessToken, refreshToken, user } = data || {};
+        const { accessToken, refreshToken } = data || {};
 
         if (accessToken) localStorage.setItem("accessToken", accessToken);
         if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
-        if (user) localStorage.setItem("user", JSON.stringify(user));
+        localStorage.removeItem("user");
     };
 
     const handleSubmit = async (e) => {

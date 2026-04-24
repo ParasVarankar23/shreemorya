@@ -1,17 +1,12 @@
-import { NextResponse } from "next/server";
+import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Bus from "@/models/bus.model";
 import Fare from "@/models/fare.model";
-import createAuditLog from "@/lib/createAuditLog";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import { NextResponse } from "next/server";
 
 /* ------------------------------------------
    Helper: build fare combinations
-   Supports:
-   - exact pair
-   - same pickup -> next drops
-   - same drop -> next pickups
-   - matrix (both)
 ------------------------------------------- */
 function buildFareCombinations({
     pickupPoints,
@@ -22,23 +17,15 @@ function buildFareCombinations({
     applyNextPickups,
     applyNextDrops,
 }) {
-    // Default = exact pair only
-    let pickupCandidates = pickupPoints.filter(
-        (p) => p.order === selectedPickupOrder
-    );
+    let pickupCandidates = pickupPoints.filter((p) => p.order === selectedPickupOrder);
+    let dropCandidates = dropPoints.filter((d) => d.order === selectedDropOrder);
 
-    let dropCandidates = dropPoints.filter(
-        (d) => d.order === selectedDropOrder
-    );
-
-    // Apply same fare to selected drop and all next pickup points
     if (applyNextPickups) {
         pickupCandidates = pickupPoints.filter(
             (p) => p.order >= selectedPickupOrder && p.order < selectedDropOrder
         );
     }
 
-    // Apply same fare to selected pickup and all next drop points
     if (applyNextDrops) {
         dropCandidates = dropPoints.filter(
             (d) => d.order >= selectedDropOrder && d.order > selectedPickupOrder
@@ -49,7 +36,6 @@ function buildFareCombinations({
 
     for (const pickup of pickupCandidates) {
         for (const drop of dropCandidates) {
-            // Valid only if pickup comes before drop
             if (pickup.order < drop.order) {
                 combinations.push({
                     pickupPointName: pickup.name,
@@ -69,26 +55,19 @@ function buildFareCombinations({
 
 /* ------------------------------------------
    GET /api/admin/fare
-   Admin: list fare rules
 ------------------------------------------- */
 export async function GET(request) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
         }
 
         if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json(
-                { success: false, message: "Forbidden: Admin only" },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
         }
 
         const { searchParams } = new URL(request.url);
@@ -109,37 +88,14 @@ export async function GET(request) {
             isActive: true,
         };
 
-        if (busId) {
-            query.busId = busId;
-        }
-
-        if (routeName) {
-            query.routeName = { $regex: routeName, $options: "i" };
-        }
-
-        if (tripDirection) {
-            query.tripDirection = tripDirection;
-        }
-
-        if (fareType) {
-            query.fareType = fareType;
-        }
-
-        if (status) {
-            query.status = status;
-        }
-
-        if (pickupPointName) {
-            query.pickupPointName = { $regex: pickupPointName, $options: "i" };
-        }
-
-        if (dropPointName) {
-            query.dropPointName = { $regex: dropPointName, $options: "i" };
-        }
-
-        if (parentRuleGroupId) {
-            query.parentRuleGroupId = parentRuleGroupId;
-        }
+        if (busId) query.busId = busId;
+        if (routeName) query.routeName = { $regex: routeName, $options: "i" };
+        if (tripDirection) query.tripDirection = tripDirection;
+        if (fareType) query.fareType = fareType;
+        if (status) query.status = status;
+        if (pickupPointName) query.pickupPointName = { $regex: pickupPointName, $options: "i" };
+        if (dropPointName) query.dropPointName = { $regex: dropPointName, $options: "i" };
+        if (parentRuleGroupId) query.parentRuleGroupId = parentRuleGroupId;
 
         if (date) {
             const dateObj = new Date(date);
@@ -177,35 +133,25 @@ export async function GET(request) {
     } catch (error) {
         console.error("GET /api/admin/fare error:", error);
 
-        return NextResponse.json(
-            { success: false, message: "Failed to fetch fare rules" },
-            { status: 500 }
-        );
+        return NextResponse.json({ success: false, message: "Failed to fetch fare rules" }, { status: 500 });
     }
 }
 
 /* ------------------------------------------
    POST /api/admin/fare
-   Admin: create fare rule(s)
 ------------------------------------------- */
 export async function POST(request) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
         }
 
         if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json(
-                { success: false, message: "Forbidden: Admin only" },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
         }
 
         const body = await request.json();
@@ -279,13 +225,9 @@ export async function POST(request) {
         const bus = await Bus.findById(busId);
 
         if (!bus || !bus.isActive) {
-            return NextResponse.json(
-                { success: false, message: "Bus not found" },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Bus not found" }, { status: 404 });
         }
 
-        // Pick correct trip data based on direction
         let tripData = null;
 
         if (tripDirection === "FORWARD") {
@@ -305,52 +247,17 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "tripDirection must be FORWARD or RETURN",
+                    message: "Invalid tripDirection. Allowed: FORWARD, RETURN",
                 },
                 { status: 400 }
             );
         }
 
-        if (!tripData) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Trip data not found for selected direction",
-                },
-                { status: 400 }
-            );
-        }
+        const pickupPoints = Array.isArray(tripData?.pickupPoints) ? tripData.pickupPoints : [];
+        const dropPoints = Array.isArray(tripData?.dropPoints) ? tripData.dropPoints : [];
 
-        // Build points with fallback order
-        const pickupPoints = (tripData.pickupPoints || []).map((p, index) => ({
-            name: p.name,
-            time: p.time || "",
-            order: p.order || index + 1,
-        }));
-
-        const dropPoints = (tripData.dropPoints || []).map((d, index) => ({
-            name: d.name,
-            time: d.time || "",
-            order: d.order || index + 1,
-        }));
-
-        if (!pickupPoints.length || !dropPoints.length) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Pickup points or drop points not configured for this bus",
-                },
-                { status: 400 }
-            );
-        }
-
-        const selectedPickup = pickupPoints.find(
-            (p) => p.order === Number(pickupPointOrder)
-        );
-
-        const selectedDrop = dropPoints.find(
-            (d) => d.order === Number(dropPointOrder)
-        );
+        const selectedPickup = pickupPoints.find((p) => p.order === Number(pickupPointOrder));
+        const selectedDrop = dropPoints.find((d) => d.order === Number(dropPointOrder));
 
         if (!selectedPickup) {
             return NextResponse.json(
@@ -386,7 +293,6 @@ export async function POST(request) {
             );
         }
 
-        // Optional duplicate check for exact same range + same pair + same direction
         const duplicateConditions = combinations.map((item) => ({
             busId: bus._id,
             tripDirection,

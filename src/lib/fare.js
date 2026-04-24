@@ -6,9 +6,17 @@ export const ROUTES = {
 export const BUS_TYPES = {
     NON_AC: "NON_AC",
     AC: "AC",
+    AC_SLEEPER: "AC_SLEEPER",
+    NON_AC_SLEEPER: "NON_AC_SLEEPER",
 };
 
+/* -------------------------------------------------------
+   SURCHARGES
+   Keep AC = 0 if your business rule says no extra charge
+------------------------------------------------------- */
 export const AC_SURCHARGE = 0;
+export const AC_SLEEPER_SURCHARGE = 100;
+export const NON_AC_SLEEPER_SURCHARGE = 50;
 
 /* -------------------------------------------------------
    COMPANY INFO
@@ -178,8 +186,6 @@ export const MHASLA_SIDE_STOPS = [
 
 /* -------------------------------------------------------
    MANGAON / KOLAD SIDE = ₹350
-   NOTE:
-   - Kolad is last slab stop
 ------------------------------------------------------- */
 export const MANGAON_SIDE_STOPS = [
     "Mangaon",
@@ -376,7 +382,6 @@ export const STOP_NAMES_MARATHI = {
    STOP ALIASES / NORMALIZATION
 ------------------------------------------------------- */
 const STOP_ALIASES = {
-    // Main village aliases
     shrivardhan: "Shrivardhan Bus Depot",
     "shrivardhan bus depot": "Shrivardhan Bus Depot",
     "shrivardhan gandre naka": "Shrivardhan Gandre Naka",
@@ -404,7 +409,6 @@ const STOP_ALIASES = {
     "mangoan railway station": "Mangaon Railway Station",
     kolad: "Kolad",
 
-    // City aliases
     panvel: "Panvel ST Stand",
     "panvel st stand": "Panvel ST Stand",
     vashi: "Vashi",
@@ -481,21 +485,24 @@ export function getStopDisplayFromObject(stop) {
 
     if (typeof stop === "string") {
         const normalized = normalizeStopName(stop);
-        return `${normalized} (${getStopNameMarathi(normalized)})`;
+        const marathi = getStopNameMarathi(normalized);
+        return marathi && marathi !== normalized ? `${normalized} (${marathi})` : normalized;
     }
 
     const english = normalizeStopName(stop.name || "");
     const marathi = stop.nameMr || getStopNameMarathi(english);
 
-    return marathi ? `${english} (${marathi})` : english;
+    return marathi && marathi !== english ? `${english} (${marathi})` : english;
 }
 
-export function createStopObject(stopName, time = "") {
+export function createStopObject(stopName, time = "", order = 1) {
     const normalized = normalizeStopName(stopName);
     return {
         name: normalized,
         nameMr: getStopNameMarathi(normalized),
         time: time || "",
+        order,
+        isActive: true,
     };
 }
 
@@ -650,6 +657,23 @@ export function getAvailableDropStopsWithMarathi(route) {
 }
 
 /* -------------------------------------------------------
+   SURCHARGE HELPER
+------------------------------------------------------- */
+export function getBusTypeSurcharge(busType) {
+    switch (busType) {
+        case BUS_TYPES.AC:
+            return AC_SURCHARGE;
+        case BUS_TYPES.AC_SLEEPER:
+            return AC_SLEEPER_SURCHARGE;
+        case BUS_TYPES.NON_AC_SLEEPER:
+            return NON_AC_SLEEPER_SURCHARGE;
+        case BUS_TYPES.NON_AC:
+        default:
+            return 0;
+    }
+}
+
+/* -------------------------------------------------------
    MAIN FARE CALCULATION
    RULE:
    - Forward: village pickup + city drop
@@ -712,7 +736,6 @@ export function getFare({
         };
     }
 
-    /* Forward: Village -> City */
     if (isForwardRoute(route)) {
         if (!isVillageStop(normalizedPickup)) {
             return {
@@ -737,7 +760,7 @@ export function getFare({
             };
         }
 
-        const surcharge = busType === BUS_TYPES.AC ? AC_SURCHARGE : 0;
+        const surcharge = getBusTypeSurcharge(busType);
         const amount = fareZone.baseFare + surcharge;
 
         return {
@@ -752,7 +775,6 @@ export function getFare({
         };
     }
 
-    /* Return: City -> Village */
     if (isReturnRoute(route)) {
         if (!isCityStop(normalizedPickup)) {
             return {
@@ -777,7 +799,7 @@ export function getFare({
             };
         }
 
-        const surcharge = busType === BUS_TYPES.AC ? AC_SURCHARGE : 0;
+        const surcharge = getBusTypeSurcharge(busType);
         const amount = fareZone.baseFare + surcharge;
 
         return {
@@ -803,7 +825,7 @@ export function getFare({
 ------------------------------------------------------- */
 export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
     const groups = getFareGroupsByRoute(route);
-    const surcharge = busType === BUS_TYPES.AC ? AC_SURCHARGE : 0;
+    const surcharge = getBusTypeSurcharge(busType);
 
     return groups.map((group) => ({
         zone: group.zone,
@@ -815,6 +837,15 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
         amount: group.fare + surcharge,
         busType,
     }));
+}
+
+/* -------------------------------------------------------
+   DEFAULT AMOUNT FOR BUS MODAL
+------------------------------------------------------- */
+export function getDefaultFareAmountByRoute(route, busType = BUS_TYPES.NON_AC) {
+    const preview = getFarePreviewByRoute(route, busType);
+    if (!preview.length) return 0;
+    return Math.max(...preview.map((item) => Number(item.amount || 0)));
 }
 
 /* -------------------------------------------------------

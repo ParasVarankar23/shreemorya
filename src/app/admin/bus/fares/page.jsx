@@ -21,6 +21,7 @@ import {
     Trash2,
     X,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const ITEMS_PER_PAGE = 10;
@@ -232,6 +233,7 @@ const getStatusTone = (status) => {
 
 export default function AdminFarePage() {
     const { triggerRefresh } = useAutoRefresh();
+    const searchParams = useSearchParams();
 
     const [buses, setBuses] = useState([]);
     const [fares, setFares] = useState([]);
@@ -266,6 +268,20 @@ export default function AdminFarePage() {
     const selectedTrip = useMemo(() => {
         return getTripSnapshot(selectedBus, form.tripDirection);
     }, [selectedBus, form.tripDirection]);
+
+    useEffect(() => {
+        const busIdFromQuery = String(searchParams.get("busId") || "").trim();
+
+        if (!busIdFromQuery || !buses.length || form.busId) {
+            return;
+        }
+
+        const busExists = buses.some((bus) => String(bus._id) === busIdFromQuery);
+
+        if (busExists) {
+            syncTripDefaults(busIdFromQuery, form.tripDirection || "FORWARD");
+        }
+    }, [searchParams, buses, form.busId, form.tripDirection]);
 
     const visibleFares = useMemo(() => {
         const query = String(searchTerm || "").trim().toLowerCase();

@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server";
+import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Schedule from "@/models/schedule.model";
-import createAuditLog from "@/lib/createAuditLog";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -44,7 +44,7 @@ export async function PUT(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });

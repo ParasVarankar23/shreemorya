@@ -10,8 +10,7 @@ export function signAccessToken(user) {
     return jwt.sign(
         {
             userId: String(user._id),
-            email: user.email,
-            role: user.role,
+            sid: user?.sessionId || user?.sid || String(Date.now()),
         },
         ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
@@ -22,8 +21,7 @@ export function signRefreshToken(user) {
     return jwt.sign(
         {
             userId: String(user._id),
-            email: user.email,
-            role: user.role,
+            sid: user?.sessionId || user?.sid || String(Date.now()),
         },
         REFRESH_TOKEN_SECRET,
         { expiresIn: "7d" }

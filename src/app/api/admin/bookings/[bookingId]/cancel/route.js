@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
-import Voucher from "@/models/voucher.model";
 import Payment from "@/models/payment.model";
-import createAuditLog from "@/lib/createAuditLog";
+import Voucher from "@/models/voucher.model";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import { NextResponse } from "next/server";
 
 function generateVoucherCode() {
     return `VCH-${Date.now()}`;
@@ -17,7 +17,7 @@ export async function POST(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json(

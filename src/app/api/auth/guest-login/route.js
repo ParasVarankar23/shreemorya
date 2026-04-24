@@ -1,5 +1,9 @@
-import { successResponse, errorResponse } from "@/utils/apiResponse";
-import { generateAccessToken, generateRefreshToken } from "@/utils/auth";
+import { errorResponse, successResponse } from "@/utils/apiResponse";
+import {
+    createSessionId,
+    generateAccessToken,
+    generateRefreshToken,
+} from "@/utils/auth";
 
 export async function POST() {
     try {
@@ -13,8 +17,9 @@ export async function POST() {
             authProvider: "guest",
         };
 
-        const accessToken = generateAccessToken(guestUser);
-        const refreshToken = generateRefreshToken(guestUser);
+        const sessionId = createSessionId();
+        const accessToken = generateAccessToken({ ...guestUser, sessionId });
+        const refreshToken = generateRefreshToken(guestUser, sessionId);
 
         return successResponse(
             {

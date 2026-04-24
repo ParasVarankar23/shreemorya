@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 /* ------------------------------------------
-   Pickup / Drop Point Schema
+   Route Point Schema
 ------------------------------------------- */
 const RoutePointSchema = new mongoose.Schema(
     {
@@ -34,31 +34,26 @@ const RoutePointSchema = new mongoose.Schema(
 );
 
 /* ------------------------------------------
-   Trip Definition (forward / return)
+   Trip Schema
 ------------------------------------------- */
 const TripSchema = new mongoose.Schema(
     {
-        routeName: {
+        from: {
             type: String,
             required: true,
             trim: true,
         },
-        startPoint: {
+        to: {
             type: String,
             required: true,
             trim: true,
         },
-        startTime: {
+        departureTime: {
             type: String,
             required: true,
             trim: true,
         },
-        endPoint: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        endTime: {
+        arrivalTime: {
             type: String,
             required: true,
             trim: true,
@@ -83,9 +78,28 @@ const TripSchema = new mongoose.Schema(
                 message: "dropPoints cannot exceed 150 entries",
             },
         },
-        baseFare: {
+    },
+    { _id: false }
+);
+
+/* ------------------------------------------
+   Fare Config Snapshot
+------------------------------------------- */
+const FareConfigSchema = new mongoose.Schema(
+    {
+        route: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+        busType: {
+            type: String,
+            enum: ["AC", "NON_AC", "AC_SLEEPER", "NON_AC_SLEEPER"],
+            default: "NON_AC",
+        },
+        defaultAmount: {
             type: Number,
-            required: true,
+            default: 0,
             min: 0,
         },
     },
@@ -93,7 +107,7 @@ const TripSchema = new mongoose.Schema(
 );
 
 /* ------------------------------------------
-   Bus Master Schema
+   Bus Schema
 ------------------------------------------- */
 const BusSchema = new mongoose.Schema(
     {
@@ -103,6 +117,7 @@ const BusSchema = new mongoose.Schema(
             unique: true,
             trim: true,
             uppercase: true,
+            index: true,
         },
 
         busName: {
@@ -113,14 +128,16 @@ const BusSchema = new mongoose.Schema(
 
         busType: {
             type: String,
-            enum: ["AC", "NON_AC"],
+            enum: ["AC", "NON_AC", "AC_SLEEPER", "NON_AC_SLEEPER"],
             required: true,
+            index: true,
         },
 
         seatLayout: {
             type: Number,
-            enum: [21, 22, 31, 35, 39],
+            enum: [21, 32, 35, 39],
             required: true,
+            index: true,
         },
 
         totalSeats: {
@@ -147,10 +164,25 @@ const BusSchema = new mongoose.Schema(
             },
         },
 
+        routeName: {
+            type: String,
+            required: true,
+            trim: true,
+            index: true,
+        },
+
+        routeCode: {
+            type: String,
+            default: "",
+            trim: true,
+            index: true,
+        },
+
         tripType: {
             type: String,
             enum: ["ONE_WAY", "RETURN"],
             default: "ONE_WAY",
+            index: true,
         },
 
         forwardTrip: {
@@ -163,12 +195,21 @@ const BusSchema = new mongoose.Schema(
             default: null,
         },
 
+        fareConfig: {
+            type: FareConfigSchema,
+            default: () => ({
+                route: "",
+                busType: "NON_AC",
+                defaultAmount: 0,
+            }),
+        },
+
         amenities: {
             type: [String],
             default: [],
         },
 
-        operatorNotes: {
+        notes: {
             type: String,
             default: "",
             trim: true,
@@ -204,8 +245,10 @@ const BusSchema = new mongoose.Schema(
     }
 );
 
-// Keep totalSeats in sync with seatLayout & handle ONE_WAY
-BusSchema.pre("validate", function () {
+/* ------------------------------------------
+   Hooks
+------------------------------------------- */
+BusSchema.pre("validate", function (next) {
     if (this.seatLayout && (!this.totalSeats || this.totalSeats !== this.seatLayout)) {
         this.totalSeats = this.seatLayout;
     }
@@ -213,9 +256,20 @@ BusSchema.pre("validate", function () {
     if (this.tripType === "ONE_WAY") {
         this.returnTrip = null;
     }
+
+    if (this.cabinSeatCount > 10) {
+        this.cabinSeatCount = 10;
+    }
+
+    if (Array.isArray(this.cabinSeats) && this.cabinSeats.length > 10) {
+        this.cabinSeats = this.cabinSeats.slice(0, 10);
+    }
+
+    next();
 });
 
 BusSchema.index({ busNumber: 1 }, { unique: true });
-BusSchema.index({ status: 1, busType: 1 });
+BusSchema.index({ status: 1, busType: 1, seatLayout: 1 });
+BusSchema.index({ routeName: 1, routeCode: 1 });
 
 export default mongoose.models.Bus || mongoose.model("Bus", BusSchema);

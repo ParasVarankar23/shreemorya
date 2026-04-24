@@ -1,13 +1,13 @@
-import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import AuditLog from "@/models/audit-log.model";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import { NextResponse } from "next/server";
 
 export async function GET(request) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json(

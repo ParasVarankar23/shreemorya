@@ -51,6 +51,23 @@ export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) 
         return "/user";
     };
 
+    const getProfileFromToken = async (token) => {
+        const res = await fetch("/api/auth/profile", {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+        });
+
+        if (!res.ok) {
+            return null;
+        }
+
+        const data = await res.json().catch(() => ({}));
+        return data?.user || data?.data?.user || null;
+    };
+
     // =========================
     // INIT GOOGLE LOGIN
     // =========================
@@ -94,7 +111,7 @@ export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) 
 
             localStorage.setItem("accessToken", accessToken);
             localStorage.setItem("refreshToken", refreshToken);
-            localStorage.setItem("user", JSON.stringify(user));
+            localStorage.removeItem("user");
 
             const redirectPath = getRoleRedirectPath(user);
             router.push(redirectPath);
@@ -159,14 +176,15 @@ export default function PublicNavbar({ mobileMenu, setMobileMenu, isScrolled }) 
     // =========================
     // BOOK NOW CLICK
     // =========================
-    const handleBookNow = () => {
+    const handleBookNow = async () => {
         try {
-            const storedUser = localStorage.getItem("user");
             const accessToken = localStorage.getItem("accessToken");
 
-            if (storedUser && accessToken) {
-                const user = JSON.parse(storedUser);
-                const redirectPath = getRoleRedirectPath(user);
+            if (accessToken) {
+                const profile = await getProfileFromToken(accessToken);
+                const redirectPath = profile
+                    ? getRoleRedirectPath(profile)
+                    : "/login";
                 router.push(redirectPath);
                 return;
             }

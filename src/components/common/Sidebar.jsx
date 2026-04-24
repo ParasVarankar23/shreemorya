@@ -39,7 +39,11 @@ const roleLinks = {
         { href: "/staff-portal/bus", label: "View Bus", icon: BusFront },
         { href: "/staff-portal/schedule", label: "Schedule", icon: CalendarDays },
         { href: "/staff-portal/booking", label: "View Booking", icon: Ticket },
-        { href: "/staff-portal/payment", label: "View Payment History", icon: ReceiptText },
+        {
+            href: "/staff-portal/payment",
+            label: "View Payment History",
+            icon: ReceiptText,
+        },
         { href: "/notifications", label: "Notifications", icon: Bell },
         { href: "/settings", label: "Settings", icon: Settings },
     ],
@@ -145,7 +149,7 @@ function SidebarContent({ role, pathname, onClose }) {
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white transition hover:border-[#F4B31A]/40 hover:text-[#F4B31A] lg:hidden"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white transition-all duration-200 hover:border-[#F4B31A]/40 hover:bg-[#F4B31A]/10 hover:text-[#F4B31A] lg:hidden"
                     >
                         <X size={18} />
                     </button>
@@ -154,20 +158,18 @@ function SidebarContent({ role, pathname, onClose }) {
 
             {/* Role Badge */}
             <div className="px-4 pt-4">
-                <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur-sm">
+                <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
                     <div className="inline-flex items-center gap-2 rounded-xl bg-[#F4B31A]/15 px-3 py-2 text-xs font-semibold text-[#FFE08A] ring-1 ring-[#F4B31A]/20">
                         <ShieldCheck size={14} />
                         {formatRole(role)} Access
                     </div>
 
-                    <p className="mt-2 text-xs text-white/70">
-                        {getRoleDescription(role)}
-                    </p>
+                    <p className="mt-2 text-xs text-white/70">{getRoleDescription(role)}</p>
                 </div>
             </div>
 
             {/* Nav */}
-            <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
                 <div className="mb-3 px-2">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50">
                         Main Navigation
@@ -184,8 +186,8 @@ function SidebarContent({ role, pathname, onClose }) {
                                 key={item.href}
                                 href={item.href}
                                 onClick={onClose}
-                                className={`group relative flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all duration-200 ${active
-                                        ? "bg-white text-[#12312F] shadow-lg"
+                                className={`group relative flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all duration-300 ${active
+                                        ? "bg-[#F4B31A]/12 text-[#FFE08A] ring-1 ring-[#F4B31A]/25 shadow-[0_8px_24px_rgba(244,179,26,0.08)]"
                                         : "text-white/85 hover:bg-white/10 hover:text-white"
                                     }`}
                             >
@@ -194,8 +196,8 @@ function SidebarContent({ role, pathname, onClose }) {
                                 )}
 
                                 <div
-                                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${active
-                                            ? "bg-[#F4B31A] text-[#12312F] shadow-md"
+                                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${active
+                                            ? "bg-[#F4B31A]/18 text-[#F4B31A] ring-1 ring-[#F4B31A]/25"
                                             : "bg-white/10 text-white/80 group-hover:bg-[#F4B31A]/15 group-hover:text-[#FFE08A]"
                                         }`}
                                 >
@@ -206,7 +208,9 @@ function SidebarContent({ role, pathname, onClose }) {
 
                                 <ChevronRight
                                     size={16}
-                                    className={`ml-auto transition ${active ? "text-[#12312F]" : "text-white/40 group-hover:text-white/70"
+                                    className={`ml-auto transition-all duration-300 ${active
+                                            ? "text-[#F4B31A]"
+                                            : "text-white/40 group-hover:text-white/70 group-hover:translate-x-0.5"
                                         }`}
                                 />
                             </Link>
@@ -217,7 +221,7 @@ function SidebarContent({ role, pathname, onClose }) {
 
             {/* Footer */}
             <div className="border-t border-white/10 p-4">
-                <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-xs text-white/70">
+                <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-xs text-white/70 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
                     <p className="font-semibold text-white">© 2026 Morya Travels</p>
                     <p className="mt-1">Travel dashboard management system</p>
                 </div>
@@ -301,12 +305,29 @@ export default function Sidebar({
                     accessToken = newAccessToken;
                 }
 
-                // 4) decode role from token
-                const payload = decodeJwtPayload(accessToken);
-                const tokenRole = normalizeRole(payload?.role);
+                // 4) resolve role from backend profile endpoint
+                const profileRes = await fetch("/api/auth/profile", {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                    cache: "no-store",
+                });
+
+                if (!profileRes.ok) {
+                    if (mounted) {
+                        setResolvedRole("guest");
+                        setIsLoadingRole(false);
+                    }
+                    return;
+                }
+
+                const profileData = await profileRes.json().catch(() => ({}));
+                const roleFromProfile =
+                    profileData?.user?.role || profileData?.data?.user?.role || "guest";
 
                 if (mounted) {
-                    setResolvedRole(tokenRole || "guest");
+                    setResolvedRole(normalizeRole(roleFromProfile));
                     setIsLoadingRole(false);
                 }
             } catch {
@@ -340,7 +361,7 @@ export default function Sidebar({
             {/* Mobile Overlay */}
             {isMobileOpen && (
                 <div
-                    className="fixed inset-0 z-[70] bg-slate-950/50 backdrop-blur-sm lg:hidden"
+                    className="fixed inset-0 z-[70] bg-slate-950/55 backdrop-blur-sm lg:hidden"
                     onClick={onClose}
                 />
             )}

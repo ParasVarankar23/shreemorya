@@ -204,7 +204,12 @@ export default function DashboardNavbar({
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) return;
 
-                const p = data?.user || data?.profile || {};
+                const p =
+                    data?.data?.user ||
+                    data?.data?.profile ||
+                    data?.user ||
+                    data?.profile ||
+                    {};
 
                 if (active) {
                     setFullName(String(p.fullName || p.name || storedUser?.fullName || storedUser?.name || "").trim());

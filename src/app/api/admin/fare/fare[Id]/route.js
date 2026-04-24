@@ -1,31 +1,24 @@
-import { NextResponse } from "next/server";
+import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Fare from "@/models/fare.model";
-import createAuditLog from "@/lib/createAuditLog";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import { NextResponse } from "next/server";
 
 /* ------------------------------------------
    GET /api/admin/fare/[fareId]
-   Admin: get single fare rule
 ------------------------------------------- */
 export async function GET(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
         }
 
         if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json(
-                { success: false, message: "Forbidden: Admin only" },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
         }
 
         const { fareId } = params;
@@ -33,10 +26,7 @@ export async function GET(request, { params }) {
         const fare = await Fare.findById(fareId);
 
         if (!fare || !fare.isActive) {
-            return NextResponse.json(
-                { success: false, message: "Fare rule not found" },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Fare rule not found" }, { status: 404 });
         }
 
         return NextResponse.json({
@@ -47,35 +37,25 @@ export async function GET(request, { params }) {
     } catch (error) {
         console.error("GET /api/admin/fare/[fareId] error:", error);
 
-        return NextResponse.json(
-            { success: false, message: "Failed to fetch fare rule" },
-            { status: 500 }
-        );
+        return NextResponse.json({ success: false, message: "Failed to fetch fare rule" }, { status: 500 });
     }
 }
 
 /* ------------------------------------------
    PUT /api/admin/fare/[fareId]
-   Admin: update single fare rule
 ------------------------------------------- */
 export async function PUT(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
         }
 
         if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json(
-                { success: false, message: "Forbidden: Admin only" },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
         }
 
         const { fareId } = params;
@@ -84,44 +64,51 @@ export async function PUT(request, { params }) {
         const fare = await Fare.findById(fareId);
 
         if (!fare || !fare.isActive) {
-            return NextResponse.json(
-                { success: false, message: "Fare rule not found" },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Fare rule not found" }, { status: 404 });
         }
 
         const oldValues = fare.toObject();
 
-        const allowedFields = [
-            "fareAmount",
-            "fareType",
-            "validFrom",
-            "validTill",
-            "label",
-            "reason",
-            "status",
-        ];
+        const {
+            fareAmount,
+            validFrom,
+            validTill,
+            fareType,
+            label,
+            reason,
+            status,
+        } = body;
 
-        for (const key of allowedFields) {
-            if (key in body) {
-                if (key === "validFrom" || key === "validTill") {
-                    const dateValue = new Date(body[key]);
+        if (fareAmount != null) {
+            fare.fareAmount = Number(fareAmount);
+        }
 
-                    if (Number.isNaN(dateValue.getTime())) {
-                        return NextResponse.json(
-                            {
-                                success: false,
-                                message: `Invalid date for ${key}`,
-                            },
-                            { status: 400 }
-                        );
-                    }
-
-                    fare[key] = dateValue;
-                } else {
-                    fare[key] = body[key];
-                }
+        if (validFrom) {
+            const validFromDate = new Date(validFrom);
+            if (Number.isNaN(validFromDate.getTime())) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Invalid validFrom date",
+                    },
+                    { status: 400 }
+                );
             }
+            fare.validFrom = validFromDate;
+        }
+
+        if (validTill) {
+            const validTillDate = new Date(validTill);
+            if (Number.isNaN(validTillDate.getTime())) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Invalid validTill date",
+                    },
+                    { status: 400 }
+                );
+            }
+            fare.validTill = validTillDate;
         }
 
         if (fare.validTill < fare.validFrom) {
@@ -134,7 +121,22 @@ export async function PUT(request, { params }) {
             );
         }
 
-        // Auto status update if expired
+        if (fareType) {
+            fare.fareType = fareType;
+        }
+
+        if (label !== undefined) {
+            fare.label = String(label || "").trim();
+        }
+
+        if (reason !== undefined) {
+            fare.reason = String(reason || "").trim();
+        }
+
+        if (status) {
+            fare.status = status;
+        }
+
         const now = new Date();
         if (fare.status !== "INACTIVE" && fare.validTill < now) {
             fare.status = "EXPIRED";
@@ -181,26 +183,19 @@ export async function PUT(request, { params }) {
 
 /* ------------------------------------------
    DELETE /api/admin/fare/[fareId]
-   Admin: soft delete fare rule
 ------------------------------------------- */
 export async function DELETE(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
         }
 
         if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json(
-                { success: false, message: "Forbidden: Admin only" },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
         }
 
         const { fareId } = params;
@@ -208,10 +203,7 @@ export async function DELETE(request, { params }) {
         const fare = await Fare.findById(fareId);
 
         if (!fare || !fare.isActive) {
-            return NextResponse.json(
-                { success: false, message: "Fare rule not found" },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Fare rule not found" }, { status: 404 });
         }
 
         const oldValues = fare.toObject();
@@ -246,9 +238,6 @@ export async function DELETE(request, { params }) {
     } catch (error) {
         console.error("DELETE /api/admin/fare/[fareId] error:", error);
 
-        return NextResponse.json(
-            { success: false, message: "Failed to delete fare rule" },
-            { status: 500 }
-        );
+        return NextResponse.json({ success: false, message: "Failed to delete fare rule" }, { status: 500 });
     }
 }

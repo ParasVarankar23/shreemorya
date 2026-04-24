@@ -1,13 +1,14 @@
-import bcrypt from "bcryptjs";
+import { sendWelcomePasswordEmail } from "@/lib/emailService";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
-import { successResponse, errorResponse } from "@/utils/apiResponse";
+import { errorResponse, successResponse } from "@/utils/apiResponse";
 import {
-    generateRandomPassword,
+    createSessionId,
     generateAccessToken,
+    generateRandomPassword,
     generateRefreshToken,
 } from "@/utils/auth";
-import { sendWelcomePasswordEmail } from "@/lib/emailService";
+import bcrypt from "bcryptjs";
 
 export async function POST(req) {
     try {
@@ -59,8 +60,9 @@ export async function POST(req) {
             password: plainPassword,
         });
 
-        const accessToken = generateAccessToken(user);
-        const refreshToken = generateRefreshToken(user);
+        const sessionId = createSessionId();
+        const accessToken = generateAccessToken({ ...user.toObject(), sessionId });
+        const refreshToken = generateRefreshToken(user, sessionId);
 
         return successResponse(
             {

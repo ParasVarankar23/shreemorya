@@ -66,7 +66,7 @@ export async function GET(request) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json(
@@ -177,7 +177,7 @@ export async function POST(request) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json(

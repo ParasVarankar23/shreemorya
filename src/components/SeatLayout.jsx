@@ -45,6 +45,7 @@ export function getSeatRows(total) {
         // 32 SEAT LAYOUT
         // =========================
         32: [
+            {left: 32, right: null},
             { left: null, right: [1, 2] },
             { left: [6, 5], right: [4, 3] },
             { left: [7, 8], right: [9, 10] },
@@ -204,7 +205,13 @@ export default function SeatLayout({
 
                 {/* Seat Layout */}
                 <div className="overflow-x-auto">
-                    <div className="min-w-[320px] sm:min-w-[420px] md:min-w-[560px]">
+                    <div
+                        className={clsx(
+                            compact
+                                ? "min-w-0"
+                                : "min-w-[320px] sm:min-w-[420px] md:min-w-[560px]"
+                        )}
+                    >
                         <div className="space-y-2.5 sm:space-y-3">
                             {rows.map((row, index) => {
                                 const isFront = !!row.isFront;
@@ -240,9 +247,11 @@ export default function SeatLayout({
                                         key={index}
                                         className={clsx(
                                             "grid items-center gap-2 sm:gap-3 md:gap-4",
-                                            isBack
-                                                ? "grid-cols-[1fr_auto_1fr]"
-                                                : "grid-cols-[1fr_minmax(40px,1.1fr)_1fr]"
+                                            compact
+                                                ? "grid-cols-[1fr_26px_1fr]"
+                                                : isBack
+                                                    ? "grid-cols-[1fr_auto_1fr]"
+                                                    : "grid-cols-[1fr_minmax(40px,1.1fr)_1fr]"
                                         )}
                                     >
                                         {/* Left block */}

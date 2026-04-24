@@ -1,3 +1,5 @@
+import { connectDB } from "@/lib/mongodb";
+import User from "@/models/User.model";
 import jwt from "jsonwebtoken";
 
 export function generateRandomPassword(fullName = "User") {
@@ -25,14 +27,12 @@ export function generateRandomPassword(fullName = "User") {
 }
 
 export function generateAccessToken(user) {
+    const sessionId = user?.sessionId || user?.sid || createSessionId();
+
     return jwt.sign(
         {
             userId: user._id || user.id,
-            email: user.email || "",
-            phoneNumber: user.phoneNumber || "",
-            role: user.role,
-            isGuest: user.isGuest || false,
-            authProvider: user.authProvider || "local",
+            sid: sessionId,
         },
         process.env.JWT_SECRET,
         {
@@ -41,10 +41,13 @@ export function generateAccessToken(user) {
     );
 }
 
-export function generateRefreshToken(user) {
+export function generateRefreshToken(user, sessionIdInput) {
+    const sessionId = sessionIdInput || user?.sessionId || user?.sid || createSessionId();
+
     return jwt.sign(
         {
             userId: user._id || user.id,
+            sid: sessionId,
         },
         process.env.JWT_REFRESH_SECRET,
         {
@@ -53,9 +56,22 @@ export function generateRefreshToken(user) {
     );
 }
 
+export function createSessionId() {
+    try {
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+            return crypto.randomUUID();
+        }
+    } catch {
+        // Fallback handled below
+    }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 // Extract authenticated user payload from Bearer token in Next.js Request
-// Returns null if missing/invalid. Does NOT hit the database; relies on JWT payload.
-export function getAuthUserFromRequest(request) {
+// Returns null if missing/invalid.
+// Resolves authorization fields from database so JWT can stay minimal.
+export async function getAuthUserFromRequest(request) {
     try {
         const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
 
@@ -75,7 +91,23 @@ export function getAuthUserFromRequest(request) {
             return null;
         }
 
-        return decoded;
+        await connectDB();
+
+        const user = await User.findById(decoded.userId)
+            .select("_id role isGuest authProvider")
+            .lean();
+
+        if (!user) {
+            return null;
+        }
+
+        return {
+            userId: String(user._id),
+            role: user.role,
+            isGuest: Boolean(user.isGuest),
+            authProvider: user.authProvider || "local",
+            sid: decoded.sid || null,
+        };
     } catch (error) {
         return null;
     }

@@ -1,8 +1,12 @@
-import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
-import { successResponse, errorResponse } from "@/utils/apiResponse";
-import { generateAccessToken, generateRefreshToken } from "@/utils/auth";
+import { errorResponse, successResponse } from "@/utils/apiResponse";
+import {
+    createSessionId,
+    generateAccessToken,
+    generateRefreshToken,
+} from "@/utils/auth";
+import bcrypt from "bcryptjs";
 
 export async function POST(req) {
     try {
@@ -40,8 +44,9 @@ export async function POST(req) {
             return errorResponse("Invalid credentials", 401);
         }
 
-        const accessToken = generateAccessToken(user);
-        const refreshToken = generateRefreshToken(user);
+        const sessionId = createSessionId();
+        const accessToken = generateAccessToken({ ...user.toObject(), sessionId });
+        const refreshToken = generateRefreshToken(user, sessionId);
 
         return successResponse(
             {

@@ -1,14 +1,25 @@
-import { OAuth2Client } from "google-auth-library";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
-import { successResponse, errorResponse } from "@/utils/apiResponse";
-import { generateAccessToken, generateRefreshToken } from "@/utils/auth";
-
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+import { errorResponse, successResponse } from "@/utils/apiResponse";
+import {
+    createSessionId,
+    generateAccessToken,
+    generateRefreshToken,
+} from "@/utils/auth";
+import { OAuth2Client } from "google-auth-library";
 
 export async function POST(req) {
     try {
         await connectDB();
+
+        const googleClientId =
+            process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+        if (!googleClientId) {
+            return errorResponse("Google login is not configured on server", 500);
+        }
+
+        const client = new OAuth2Client(googleClientId);
 
         const body = await req.json();
         const { credential } = body;
@@ -19,7 +30,7 @@ export async function POST(req) {
 
         const ticket = await client.verifyIdToken({
             idToken: credential,
-            audience: process.env.GOOGLE_CLIENT_ID,
+            audience: googleClientId,
         });
 
         const payload = ticket.getPayload();
@@ -46,8 +57,8 @@ export async function POST(req) {
             user = await User.create({
                 fullName,
                 email,
-                phoneNumber: "",
-                password: "",
+                phoneNumber: undefined,
+                password: undefined,
                 authProvider: "google",
                 googleId,
                 profileImage,
@@ -73,6 +84,12 @@ export async function POST(req) {
                 needsUpdate = true;
             }
 
+            // Keep unique sparse index compatibility by omitting missing phone values.
+            if (user.phoneNumber === "") {
+                user.phoneNumber = undefined;
+                needsUpdate = true;
+            }
+
             if (!user.isVerified && emailVerified) {
                 user.isVerified = true;
                 needsUpdate = true;
@@ -83,8 +100,9 @@ export async function POST(req) {
             }
         }
 
-        const accessToken = generateAccessToken(user);
-        const refreshToken = generateRefreshToken(user);
+        const sessionId = createSessionId();
+        const accessToken = generateAccessToken({ ...user.toObject(), sessionId });
+        const refreshToken = generateRefreshToken(user, sessionId);
 
         return successResponse(
             {

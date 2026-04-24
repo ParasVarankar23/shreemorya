@@ -102,9 +102,6 @@ const FareSchema = new mongoose.Schema(
 
         /* ------------------------------------------
            Grouping / Bulk Create Tracking
-           Example:
-           Admin creates one UI rule and system creates
-           multiple exact pair rows
         ------------------------------------------- */
         applyNextPickups: {
             type: Boolean,
@@ -175,10 +172,8 @@ const FareSchema = new mongoose.Schema(
 );
 
 /* ------------------------------------------
-   Compound Indexes
+   Indexes
 ------------------------------------------- */
-
-// Fast search for fare lookup during booking
 FareSchema.index({
     busId: 1,
     tripDirection: 1,
@@ -190,7 +185,6 @@ FareSchema.index({
     isActive: 1,
 });
 
-// Search by route + pickup/drop names
 FareSchema.index({
     routeName: 1,
     tripDirection: 1,
@@ -200,18 +194,21 @@ FareSchema.index({
     validTill: 1,
 });
 
-// Group-based operations
 FareSchema.index({
     parentRuleGroupId: 1,
 });
 
-// Optional auto-expire flag update before save
-FareSchema.pre("save", function () {
+/* ------------------------------------------
+   Auto-expire
+------------------------------------------- */
+FareSchema.pre("save", function (next) {
     const now = new Date();
 
     if (this.validTill && this.validTill < now && this.status !== "INACTIVE") {
         this.status = "EXPIRED";
     }
+
+    next();
 });
 
 export default mongoose.models.Fare || mongoose.model("Fare", FareSchema);

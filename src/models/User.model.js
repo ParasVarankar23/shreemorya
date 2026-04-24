@@ -12,7 +12,7 @@ const UserSchema = new mongoose.Schema(
             type: String,
             trim: true,
             lowercase: true,
-            default: null,
+            default: undefined,
             unique: true,
             sparse: true,
         },
@@ -20,7 +20,7 @@ const UserSchema = new mongoose.Schema(
         phoneNumber: {
             type: String,
             trim: true,
-            default: null,
+            default: undefined,
             unique: true,
             sparse: true,
         },

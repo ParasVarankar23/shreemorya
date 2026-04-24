@@ -100,7 +100,7 @@ export default function LoginForm() {
 
         if (accessToken) localStorage.setItem("accessToken", accessToken);
         if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
-        if (user) localStorage.setItem("user", JSON.stringify(user));
+        localStorage.removeItem("user");
 
         return user;
     };

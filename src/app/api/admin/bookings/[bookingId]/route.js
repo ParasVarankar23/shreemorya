@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
-import createAuditLog from "@/lib/createAuditLog";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import { NextResponse } from "next/server";
 
 /* ------------------------------------------
    GET /api/admin/bookings/[bookingId]
@@ -11,7 +11,7 @@ export async function GET(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json(
@@ -60,7 +60,7 @@ export async function PUT(request, { params }) {
     try {
         await connectDB();
 
-        const authUser = getAuthUserFromRequest(request);
+        const authUser = await getAuthUserFromRequest(request);
 
         if (!authUser) {
             return NextResponse.json(
