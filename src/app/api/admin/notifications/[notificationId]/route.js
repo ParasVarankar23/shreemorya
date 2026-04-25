@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
             return NextResponse.json({ success: false, message: "Forbidden: Admin/Staff only" }, { status: 403 });
         }
 
-        const { notificationId } = params;
+        const { notificationId } = (await params) || {};
 
         const notification = await Notification.findById(notificationId);
 
@@ -51,7 +51,7 @@ export async function PUT(request, { params }) {
             return NextResponse.json({ success: false, message: "Forbidden: Admin/Staff only" }, { status: 403 });
         }
 
-        const { notificationId } = params;
+        const { notificationId } = (await params) || {};
         const body = await request.json();
 
         const notification = await Notification.findById(notificationId);

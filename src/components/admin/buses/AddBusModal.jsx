@@ -1,1189 +1,1920 @@
 "use client";
 
 import SeatLayout from "@/components/SeatLayout";
+import { getStopNameMarathi, normalizeStopName } from "@/lib/fare";
+import { showAppToast } from "@/lib/toast";
+import clsx from "clsx";
 import {
-    BUS_TYPES,
-    getDefaultFareAmountByRoute,
-    getFarePreviewByRoute,
-    ROUTES,
-} from "@/lib/fare";
-import {
+    Armchair,
+    ArrowRightLeft,
     Bus,
-    ChevronDown,
-    ChevronUp,
-    Clock3,
+    CalendarDays,
+    CheckCircle2,
     IndianRupee,
     MapPin,
-    PencilLine,
+    Plus,
+    RefreshCw,
     Route,
     Save,
+    Table2,
+    Trash2,
     X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-const THEME = "#0E6B68";
-const MAX_ROUTE_POINTS = 150;
-const DEFAULT_ROUTE_POINTS = 10;
+const MAX_POINTS = 150;
+const MAX_CABINS = 10;
+const MAX_TABLES = 10;
 
-const initialForm = {
-    busNumber: "",
-    busName: "",
-    busType: BUS_TYPES.NON_AC,
-    seatLayout: 32,
-    cabinSeatCount: 0,
-    cabinSeats: [],
-    routeName: "Shrivardhan - Borli - Borivali - Virar",
-    routeCode: ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR,
-    tripType: "ONE_WAY",
-    forwardTrip: {
-        from: "Shrivardhan Bus Depot",
-        to: "Borivali Depot",
-        departureTime: "08:00",
-        arrivalTime: "12:30",
-        pickupPoints: [],
-        dropPoints: [],
-    },
-    returnTrip: {
-        from: "Borivali Depot",
-        to: "Shrivardhan Bus Depot",
-        departureTime: "18:00",
-        arrivalTime: "22:30",
-        pickupPoints: [],
-        dropPoints: [],
-    },
-    fareConfig: {
-        route: ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR,
-        busType: BUS_TYPES.NON_AC,
-        defaultAmount: 0,
-    },
-    status: "ACTIVE",
-    notes: "",
+const BUS_TYPES = {
+    NON_AC: "NON_AC",
+    AC: "AC",
+    SEMI_SLEEPER: "SEMI_SLEEPER",
+    SLEEPER: "SLEEPER",
+    SEATER: "SEATER",
 };
 
-function normalizeRoutePoints(points = []) {
-    if (!Array.isArray(points)) return [];
+const TRIP_TYPES = {
+    ONE_WAY: "ONE_WAY",
+    RETURN: "RETURN",
+};
 
-    return points
-        .slice(0, MAX_ROUTE_POINTS)
-        .map((point, index) => {
-            if (typeof point === "string") {
-                return {
-                    name: String(point).trim(),
-                    time: "",
-                    order: index + 1,
-                };
-            }
+const STATUS = {
+    ACTIVE: "ACTIVE",
+    INACTIVE: "INACTIVE",
+};
 
-            return {
-                name: String(point?.name || "").trim(),
-                time: String(point?.time || "").trim(),
-                order: Number(point?.order) > 0 ? Number(point.order) : index + 1,
-            };
-        })
-        .filter((point) => point.name);
+function uid(prefix = "") {
+    return `${prefix}${Date.now().toString(36)}${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
 }
 
-function createDefaultPoints(count = DEFAULT_ROUTE_POINTS) {
-    return Array.from({ length: count }, (_, index) => ({
+/* -------------------- Helpers -------------------- */
+
+function emptyPoint(order = 1) {
+    return {
+        id: uid("pt_"),
         name: "",
+        nameNormalized: "",
+        marathi: "",
         time: "",
-        order: index + 1,
+        order: Number(order) || 1,
+        isActive: true,
+    };
+}
+
+function emptyFareRule() {
+    return {
+        id: uid("fr_"),
+        tripDirection: "FORWARD",
+        pickupId: null,
+        dropId: null,
+        fare: 0,
+        startDate: "",
+        endDate: "",
+        applyToNextPickups: false,
+        applyToPreviousDrops: false,
+        isActive: true,
+    };
+}
+
+function getNextCabinLabel(cabins = []) {
+    const used = new Set((cabins || []).map((c) => String(c.label || "").toUpperCase()));
+    let i = 1;
+    while (used.has(`C${i}`)) i++;
+    return `C${i}`;
+}
+
+function getNextTableLabel(tables = []) {
+    const used = new Set((tables || []).map((t) => String(t.label || "").toUpperCase()));
+    let i = 1;
+    while (used.has(`T${i}`)) i++;
+    return `T${i}`;
+}
+
+function normalizeCabins(items = []) {
+    return (Array.isArray(items) ? items : [])
+        .slice(0, MAX_CABINS)
+        .map((item, index) => ({
+            id: item?.id || item?._id || uid("cb_"),
+            label: String(item?.label || `C${index + 1}`).trim(),
+            seatIds: Array.isArray(item?.seatIds) ? item.seatIds : [],
+        }));
+}
+
+function normalizeTables(items = []) {
+    return (Array.isArray(items) ? items : [])
+        .slice(0, MAX_TABLES)
+        .map((item, index) => ({
+            id: item?.id || item?._id || uid("tb_"),
+            label: String(item?.label || `T${index + 1}`).trim(),
+        }));
+}
+
+function reversePointsForReturn(forwardList = []) {
+    const reversed = [...forwardList].slice().reverse();
+    return reversed.map((p, idx) => ({
+        id: uid("pt_"),
+        name: p.name,
+        nameNormalized: p.nameNormalized || normalizeStopName(p.name),
+        marathi: p.marathi || getStopNameMarathi(p.name),
+        time: p.time,
+        order: idx + 1,
+        isActive: p.isActive ?? true,
     }));
 }
 
-function Field({ label, required, children }) {
+function getInitialState(initial = null) {
+    const base = {
+        busNumber: "",
+        busName: "",
+        busType: BUS_TYPES.NON_AC,
+        seatLayout: 32,
+        tripType: TRIP_TYPES.ONE_WAY,
+        status: STATUS.ACTIVE,
+        routeName: "",
+        forwardTrip: {
+            from: "",
+            to: "",
+            departureTime: "",
+            arrivalTime: "",
+            pickupPoints: [emptyPoint(1)],
+            dropPoints: [emptyPoint(1)],
+        },
+        returnTrip: {
+            from: "",
+            to: "",
+            departureTime: "",
+            arrivalTime: "",
+            pickupPoints: [],
+            dropPoints: [],
+        },
+        autoGenerateReturn: false,
+        cabins: [],
+        tables: [],
+        fareRules: [],
+    };
+
+    if (!initial) return base;
+
+    const normalizePoints = (arr = []) =>
+        (Array.isArray(arr) ? arr : [])
+            .slice(0, MAX_POINTS)
+            .map((p, idx) => ({
+                id: p?.id || uid("pt_"),
+                name: String(p?.name || "").trim(),
+                nameNormalized: normalizeStopName(String(p?.name || "")),
+                marathi: p?.marathi || getStopNameMarathi(String(p?.name || "")),
+                time: String(p?.time || ""),
+                order: Number(p?.order) || idx + 1,
+                isActive: p?.isActive ?? true,
+            }));
+
+    return {
+        ...base,
+        ...initial,
+        forwardTrip: {
+            ...base.forwardTrip,
+            ...(initial.forwardTrip || {}),
+            pickupPoints: normalizePoints(
+                initial.forwardTrip?.pickupPoints || base.forwardTrip.pickupPoints
+            ),
+            dropPoints: normalizePoints(
+                initial.forwardTrip?.dropPoints || base.forwardTrip.dropPoints
+            ),
+        },
+        returnTrip: {
+            ...base.returnTrip,
+            ...(initial.returnTrip || {}),
+            pickupPoints: normalizePoints(initial.returnTrip?.pickupPoints || []),
+            dropPoints: normalizePoints(initial.returnTrip?.dropPoints || []),
+        },
+        cabins: normalizeCabins(initial.cabins),
+        tables: normalizeTables(initial.tables),
+        fareRules: Array.isArray(initial.fareRules)
+            ? initial.fareRules.map((fr) => ({
+                ...emptyFareRule(),
+                ...fr,
+                id: fr?.id || fr?._id || uid("fr_"),
+            }))
+            : [],
+    };
+}
+
+/* -------------------- UI Helpers -------------------- */
+
+function SectionCard({ icon: Icon, title, subtitle, right, children }) {
     return (
-        <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                {label} {required ? <span className="text-red-500">*</span> : null}
-            </label>
+        <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
+            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0B5D5A]/10 text-[#0B5D5A]">
+                        {Icon ? <Icon className="h-5 w-5" /> : null}
+                    </div>
+                    <div>
+                        <h4 className="text-base font-semibold text-slate-900">{title}</h4>
+                        {subtitle ? (
+                            <p className="text-xs text-slate-500 sm:text-sm">{subtitle}</p>
+                        ) : null}
+                    </div>
+                </div>
+                {right ? <div>{right}</div> : null}
+            </div>
+            <div className="p-5">{children}</div>
+        </section>
+    );
+}
+
+function Input({ className = "", ...props }) {
+    return (
+        <input
+            {...props}
+            className={clsx(
+                "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10",
+                className
+            )}
+        />
+    );
+}
+
+function Select({ className = "", children, ...props }) {
+    return (
+        <select
+            {...props}
+            className={clsx(
+                "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-all focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10",
+                className
+            )}
+        >
             {children}
+        </select>
+    );
+}
+
+function Label({ children, required = false }) {
+    return (
+        <label className="mb-2 block text-sm font-medium text-slate-700">
+            <span>{children}</span>
+            {required && <span className="ml-1 text-red-500">*</span>}
+        </label>
+    );
+}
+
+function Chip({ children, className = "" }) {
+    return (
+        <span
+            className={clsx(
+                "inline-flex items-center rounded-full border border-[#0B5D5A]/10 bg-[#0B5D5A]/5 px-3 py-1 text-xs font-semibold text-[#0B5D5A]",
+                className
+            )}
+        >
+            {children}
+        </span>
+    );
+}
+
+function Toggle({ checked, onChange, label }) {
+    return (
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={onChange}
+                className="h-4 w-4 rounded border-slate-300 accent-[#0B5D5A]"
+            />
+            {label}
+        </label>
+    );
+}
+
+function EmptyState({ text }) {
+    return (
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+            <p className="font-semibold text-slate-700">{text}</p>
         </div>
     );
 }
 
-function Input(props) {
-    return (
-        <input
-            {...props}
-            className={`w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-transparent focus:ring-2 ${props.className || ""
-                }`}
-            style={{ "--tw-ring-color": `${THEME}33` }}
-        />
-    );
-}
+/* -------------------- Main Component -------------------- */
 
-function Select(props) {
-    return (
-        <select
-            {...props}
-            className={`w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-transparent focus:ring-2 ${props.className || ""
-                }`}
-            style={{ "--tw-ring-color": `${THEME}33` }}
-        />
-    );
-}
-
-function normalizeBusToForm(busData = {}) {
-    const routeCode =
-        busData?.routeCode ||
-        busData?.fareConfig?.route ||
-        ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR;
-
-    const busType = busData?.busType || BUS_TYPES.NON_AC;
-
-    const existingDefaultAmount = Number(busData?.fareConfig?.defaultAmount || 0);
-
-    const fallbackDefaultAmount = getDefaultFareAmountByRoute(routeCode, busType);
-
-    return {
-        ...initialForm,
-        ...busData,
-
-        busNumber: busData?.busNumber || "",
-        busName: busData?.busName || "",
-        busType,
-        seatLayout: Number(busData?.seatLayout || 32),
-        cabinSeatCount: Number(busData?.cabinSeatCount || 0),
-        cabinSeats: Array.isArray(busData?.cabinSeats)
-            ? busData.cabinSeats.map((n) => Number(n))
-            : [],
-        routeName:
-            busData?.routeName || "Shrivardhan - Borli - Borivali - Virar",
-        routeCode,
-        tripType: busData?.tripType || "ONE_WAY",
-
-        forwardTrip: {
-            ...initialForm.forwardTrip,
-            ...(busData?.forwardTrip || {}),
-            from: busData?.forwardTrip?.from || initialForm.forwardTrip.from,
-            to: busData?.forwardTrip?.to || initialForm.forwardTrip.to,
-            departureTime:
-                busData?.forwardTrip?.departureTime ||
-                initialForm.forwardTrip.departureTime,
-            arrivalTime:
-                busData?.forwardTrip?.arrivalTime || initialForm.forwardTrip.arrivalTime,
-            pickupPoints: normalizeRoutePoints(busData?.forwardTrip?.pickupPoints),
-            dropPoints: normalizeRoutePoints(busData?.forwardTrip?.dropPoints),
-        },
-
-        returnTrip: {
-            ...initialForm.returnTrip,
-            ...(busData?.returnTrip || {}),
-            from: busData?.returnTrip?.from || initialForm.returnTrip.from,
-            to: busData?.returnTrip?.to || initialForm.returnTrip.to,
-            departureTime:
-                busData?.returnTrip?.departureTime ||
-                initialForm.returnTrip.departureTime,
-            arrivalTime:
-                busData?.returnTrip?.arrivalTime || initialForm.returnTrip.arrivalTime,
-            pickupPoints: normalizeRoutePoints(busData?.returnTrip?.pickupPoints),
-            dropPoints: normalizeRoutePoints(busData?.returnTrip?.dropPoints),
-        },
-
-        fareConfig: {
-            route: routeCode,
-            busType,
-            defaultAmount:
-                existingDefaultAmount > 0 ? existingDefaultAmount : fallbackDefaultAmount,
-        },
-
-        status: busData?.status || "ACTIVE",
-        notes: busData?.notes || "",
-    };
-}
-
-export default function AddBusModal({
+export default function BusModalForm({
     open,
-    mode = "add",
-    bus = null,
     onClose,
-    onSuccess,
+    onSaved,
+    initialData = null,
 }) {
     const router = useRouter();
-    const [form, setForm] = useState(initialForm);
+    const [form, setForm] = useState(() => getInitialState(initialData));
     const [saving, setSaving] = useState(false);
-    const [expandedZone, setExpandedZone] = useState(null);
+    const [previewFareRule, setPreviewFareRule] = useState(null);
 
-    const getAccessToken = () => {
-        try {
-            return localStorage.getItem("accessToken") || "";
-        } catch {
-            return "";
-        }
-    };
-
-    const getRefreshToken = () => {
-        try {
-            return localStorage.getItem("refreshToken") || "";
-        } catch {
-            return "";
-        }
-    };
-
-    const setAccessToken = (token) => {
-        try {
-            localStorage.setItem("accessToken", token);
-        } catch {
-            // ignore
-        }
-    };
-
-    const refreshAccessToken = async () => {
-        try {
-            const refreshToken = getRefreshToken();
-            if (!refreshToken) return null;
-
-            const res = await fetch("/api/auth/refresh", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ refreshToken }),
-            });
-
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok || !data?.accessToken) {
-                return null;
-            }
-
-            setAccessToken(data.accessToken);
-            return data.accessToken;
-        } catch {
-            return null;
-        }
-    };
-
-    const fetchWithAutoRefresh = async (url, options = {}) => {
-        let token = getAccessToken();
-
-        const doFetch = async (accessToken) => {
-            const headers = new Headers(options.headers || undefined);
-
-            if (accessToken) {
-                headers.set("Authorization", `Bearer ${accessToken}`);
-            }
-
-            return fetch(url, {
-                ...options,
-                headers,
-            });
-        };
-
-        let res = await doFetch(token);
-
-        if (res.status === 401) {
-            const newToken = await refreshAccessToken();
-
-            if (newToken) {
-                res = await doFetch(newToken);
-            }
-        }
-
-        return res;
-    };
+    const editMode = Boolean(initialData && initialData._id);
 
     useEffect(() => {
         if (!open) return;
+        setForm(getInitialState(initialData));
+    }, [open, initialData]);
 
-        if (mode === "edit" && bus) {
-            setForm(normalizeBusToForm(bus));
-        } else {
-            setForm({
-                ...initialForm,
-                forwardTrip: {
-                    ...initialForm.forwardTrip,
-                    pickupPoints: createDefaultPoints(),
-                    dropPoints: createDefaultPoints(),
-                },
-                fareConfig: {
-                    ...initialForm.fareConfig,
-                    defaultAmount: getDefaultFareAmountByRoute(
-                        initialForm.routeCode,
-                        initialForm.busType
-                    ),
-                },
-            });
-        }
-
-        setExpandedZone(null);
-    }, [open, mode, bus]);
-
-    const farePreview = useMemo(() => {
-        return getFarePreviewByRoute(
-            form?.routeCode || ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR,
-            form?.busType || BUS_TYPES.NON_AC
-        );
-    }, [form.routeCode, form.busType]);
-
-    useEffect(() => {
-        if (!open) return;
-
-        setForm((prev) => {
-            const currentDefaultAmount = Number(prev?.fareConfig?.defaultAmount || 0);
-            const existingRoute = prev?.fareConfig?.route;
-            const existingBusType = prev?.fareConfig?.busType;
-
-            const routeChanged = existingRoute !== prev.routeCode;
-            const busTypeChanged = existingBusType !== prev.busType;
-
-            if (mode === "add") {
-                return {
-                    ...prev,
-                    fareConfig: {
-                        route: prev.routeCode,
-                        busType: prev.busType,
-                        defaultAmount: getDefaultFareAmountByRoute(prev.routeCode, prev.busType),
-                    },
-                };
-            }
-
-            if (mode === "edit" && (routeChanged || busTypeChanged || currentDefaultAmount <= 0)) {
-                return {
-                    ...prev,
-                    fareConfig: {
-                        route: prev.routeCode,
-                        busType: prev.busType,
-                        defaultAmount:
-                            currentDefaultAmount > 0 && !routeChanged && !busTypeChanged
-                                ? currentDefaultAmount
-                                : getDefaultFareAmountByRoute(prev.routeCode, prev.busType),
-                    },
-                };
-            }
-
-            return {
-                ...prev,
-                fareConfig: {
-                    ...prev.fareConfig,
-                    route: prev.routeCode,
-                    busType: prev.busType,
-                },
-            };
-        });
-    }, [form.routeCode, form.busType, mode, open]);
-
-    const handleChange = (key, value) => {
+    const updateField = useCallback((key, value) => {
         setForm((prev) => ({ ...prev, [key]: value }));
-    };
+    }, []);
 
-    const handleTripChange = (tripKey, field, value) => {
+    const updateTripField = useCallback((tripKey, key, value) => {
         setForm((prev) => ({
             ...prev,
-            [tripKey]: {
-                ...prev[tripKey],
-                [field]: value,
-            },
+            [tripKey]: { ...prev[tripKey], [key]: value },
         }));
-    };
+    }, []);
 
-    const handleRoutePointChange = (tripKey, listKey, index, field, value) => {
+    function addPointToList(tripKey, listKey) {
         setForm((prev) => {
-            const current = Array.isArray(prev?.[tripKey]?.[listKey])
-                ? [...prev[tripKey][listKey]]
-                : [];
-
-            current[index] = {
-                ...current[index],
-                [field]: value,
+            const list = Array.isArray(prev[tripKey][listKey]) ? [...prev[tripKey][listKey]] : [];
+            if (list.length >= MAX_POINTS) return prev;
+            list.push(emptyPoint(list.length + 1));
+            return {
+                ...prev,
+                [tripKey]: { ...prev[tripKey], [listKey]: list },
             };
+        });
+    }
+
+    function updatePoint(tripKey, listKey, pointId, patch) {
+        setForm((prev) => {
+            const list = Array.isArray(prev[tripKey][listKey])
+                ? prev[tripKey][listKey].map((p) => (p.id === pointId ? { ...p, ...patch } : p))
+                : [];
+            const withOrder = list.map((p, idx) => ({ ...p, order: idx + 1 }));
+            return {
+                ...prev,
+                [tripKey]: { ...prev[tripKey], [listKey]: withOrder },
+            };
+        });
+    }
+
+    function removePoint(tripKey, listKey, pointId) {
+        setForm((prev) => {
+            const list = Array.isArray(prev[tripKey][listKey])
+                ? prev[tripKey][listKey].filter((p) => p.id !== pointId)
+                : [];
+            const withOrder = list.map((p, idx) => ({ ...p, order: idx + 1 }));
+            return {
+                ...prev,
+                [tripKey]: { ...prev[tripKey], [listKey]: withOrder },
+            };
+        });
+    }
+
+    function handlePointNameChange(tripKey, listKey, pointId, rawValue) {
+        const normalized = normalizeStopName(String(rawValue || ""));
+        const marathi = getStopNameMarathi(String(rawValue || ""));
+        updatePoint(tripKey, listKey, pointId, {
+            name: rawValue,
+            nameNormalized: normalized,
+            marathi,
+        });
+    }
+
+    function addCabin() {
+        setForm((prev) => {
+            const cabins = normalizeCabins(prev.cabins);
+            if (cabins.length >= MAX_CABINS) return prev;
+            return {
+                ...prev,
+                cabins: [...cabins, { id: uid("cb_"), label: getNextCabinLabel(cabins) }],
+            };
+        });
+    }
+
+    function updateCabin(cabinId, label) {
+        setForm((prev) => ({
+            ...prev,
+            cabins: (prev.cabins || []).map((c) =>
+                c.id === cabinId ? { ...c, label } : c
+            ),
+        }));
+    }
+
+    function removeCabin(cabinId) {
+        setForm((prev) => ({
+            ...prev,
+            cabins: (prev.cabins || []).filter((c) => c.id !== cabinId),
+        }));
+    }
+
+    function resetCabins() {
+        setForm((prev) => ({ ...prev, cabins: [] }));
+    }
+
+    function addTable() {
+        setForm((prev) => {
+            const tables = normalizeTables(prev.tables);
+            if (tables.length >= MAX_TABLES) return prev;
+            return {
+                ...prev,
+                tables: [...tables, { id: uid("tb_"), label: getNextTableLabel(tables) }],
+            };
+        });
+    }
+
+    function updateTable(tableId, label) {
+        setForm((prev) => ({
+            ...prev,
+            tables: (prev.tables || []).map((t) =>
+                t.id === tableId ? { ...t, label } : t
+            ),
+        }));
+    }
+
+    function removeTable(tableId) {
+        setForm((prev) => ({
+            ...prev,
+            tables: (prev.tables || []).filter((t) => t.id !== tableId),
+        }));
+    }
+
+    function addFareRule() {
+        setForm((prev) => ({
+            ...prev,
+            fareRules: [...(prev.fareRules || []), emptyFareRule()],
+        }));
+    }
+
+    function updateFareRule(ruleId, patch) {
+        setForm((prev) => ({
+            ...prev,
+            fareRules: (prev.fareRules || []).map((r) =>
+                r.id === ruleId ? { ...r, ...patch } : r
+            ),
+        }));
+    }
+
+    function removeFareRule(ruleId) {
+        setForm((prev) => ({
+            ...prev,
+            fareRules: (prev.fareRules || []).filter((r) => r.id !== ruleId),
+        }));
+    }
+
+    useEffect(() => {
+        if (!form.autoGenerateReturn) return;
+
+        setForm((prev) => {
+            const retFrom = prev.forwardTrip.to || prev.returnTrip.from || "";
+            const retTo = prev.forwardTrip.from || prev.returnTrip.to || "";
+
+            const newReturnPickup = reversePointsForReturn(prev.forwardTrip.dropPoints || []);
+            const newReturnDrop = reversePointsForReturn(prev.forwardTrip.pickupPoints || []);
 
             return {
                 ...prev,
-                [tripKey]: {
-                    ...prev[tripKey],
-                    [listKey]: current,
+                returnTrip: {
+                    ...prev.returnTrip,
+                    from: retFrom,
+                    to: retTo,
+                    pickupPoints: newReturnPickup,
+                    dropPoints: newReturnDrop,
+                    departureTime: prev.returnTrip.departureTime,
+                    arrivalTime: prev.returnTrip.arrivalTime,
                 },
             };
         });
-    };
+    }, [
+        form.autoGenerateReturn,
+        form.forwardTrip.pickupPoints,
+        form.forwardTrip.dropPoints,
+        form.forwardTrip.from,
+        form.forwardTrip.to,
+    ]);
 
-    const addRoutePoint = (tripKey, listKey) => {
-        setForm((prev) => {
-            const current = Array.isArray(prev?.[tripKey]?.[listKey])
-                ? [...prev[tripKey][listKey]]
-                : [];
-
-            if (current.length >= MAX_ROUTE_POINTS) {
-                return prev;
-            }
-
-            current.push({
-                name: "",
-                time: "",
-                order: current.length + 1,
-            });
-
-            return {
+    useEffect(() => {
+        if (form.tripType === TRIP_TYPES.ONE_WAY) {
+            setForm((prev) => ({
                 ...prev,
-                [tripKey]: {
-                    ...prev[tripKey],
-                    [listKey]: current,
-                },
-            };
-        });
-    };
-
-    const removeRoutePoint = (tripKey, listKey, index) => {
-        setForm((prev) => {
-            const current = Array.isArray(prev?.[tripKey]?.[listKey])
-                ? [...prev[tripKey][listKey]]
-                : [];
-
-            current.splice(index, 1);
-
-            const withOrder = current.map((point, idx) => ({
-                ...point,
-                order: idx + 1,
+                returnTrip: { ...getInitialState().returnTrip },
+                autoGenerateReturn: false,
             }));
+        }
+    }, [form.tripType]);
 
-            return {
-                ...prev,
-                [tripKey]: {
-                    ...prev[tripKey],
-                    [listKey]: withOrder,
-                },
-            };
-        });
-    };
-
-    const handleCabinSeats = (value) => {
-        const seats = String(value || "")
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean)
-            .map((item) => Number(item))
-            .filter((n) => !Number.isNaN(n));
-
-        setForm((prev) => ({
-            ...prev,
-            cabinSeats: seats,
-            cabinSeatCount: seats.length,
+    const pickupOptions = useMemo(() => {
+        const forward = (form.forwardTrip?.pickupPoints || []).map((p) => ({
+            id: p.id,
+            label: p.name || p.nameNormalized || "(unnamed)",
+            marathi: p.marathi || getStopNameMarathi(p.name),
         }));
-    };
+        const forwardDrops = (form.forwardTrip?.dropPoints || []).map((p) => ({
+            id: p.id,
+            label: p.name || p.nameNormalized || "(unnamed)",
+            marathi: p.marathi || getStopNameMarathi(p.name),
+        }));
+        const retP = (form.returnTrip?.pickupPoints || []).map((p) => ({
+            id: p.id,
+            label: p.name || p.nameNormalized || "(unnamed)",
+            marathi: p.marathi || getStopNameMarathi(p.name),
+        }));
+        const retD = (form.returnTrip?.dropPoints || []).map((p) => ({
+            id: p.id,
+            label: p.name || p.nameNormalized || "(unnamed)",
+            marathi: p.marathi || getStopNameMarathi(p.name),
+        }));
 
-    const validateForm = () => {
-        const validateRoutePoints = (points = [], label) => {
-            for (let index = 0; index < points.length; index += 1) {
-                const point = points[index] || {};
-                const name = String(point?.name || "").trim();
-                const time = String(point?.time || "").trim();
-
-                if (!name && !time) {
-                    continue;
-                }
-
-                if (!name) {
-                    return `${label} point ${index + 1} name is required`;
-                }
-
-                if (!time) {
-                    return `${label} point ${index + 1} time is required`;
-                }
-            }
-
-            return null;
+        return {
+            FORWARD: { pickups: forward, drops: forwardDrops },
+            RETURN: { pickups: retP, drops: retD },
         };
+    }, [form.forwardTrip, form.returnTrip]);
 
+    function validate() {
         if (!form.busNumber?.trim()) return "Bus number is required";
         if (!form.busName?.trim()) return "Bus name is required";
         if (!form.routeName?.trim()) return "Route name is required";
-        if (!form.forwardTrip?.from?.trim()) return "Forward trip from is required";
-        if (!form.forwardTrip?.to?.trim()) return "Forward trip to is required";
-        if (!form.forwardTrip?.departureTime?.trim()) return "Forward departure time is required";
-        if (!form.forwardTrip?.arrivalTime?.trim()) return "Forward arrival time is required";
+        if (!form.forwardTrip.from?.trim()) return "Forward trip start is required";
+        if (!form.forwardTrip.to?.trim()) return "Forward trip end is required";
+        if (!form.forwardTrip.departureTime?.trim()) return "Forward departure time is required";
+        if (!form.forwardTrip.arrivalTime?.trim()) return "Forward arrival time is required";
 
-        if (form.tripType === "RETURN") {
-            if (!form.returnTrip?.from?.trim()) return "Return trip from is required";
-            if (!form.returnTrip?.to?.trim()) return "Return trip to is required";
-            if (!form.returnTrip?.departureTime?.trim()) return "Return departure time is required";
-            if (!form.returnTrip?.arrivalTime?.trim()) return "Return arrival time is required";
-        }
-
-        if ((form?.forwardTrip?.pickupPoints || []).length > MAX_ROUTE_POINTS) {
-            return `Forward trip pickup points cannot exceed ${MAX_ROUTE_POINTS}`;
-        }
-
-        const forwardPickupError = validateRoutePoints(
-            form?.forwardTrip?.pickupPoints || [],
-            "Forward pickup"
-        );
-        if (forwardPickupError) return forwardPickupError;
-
-        if ((form?.forwardTrip?.dropPoints || []).length > MAX_ROUTE_POINTS) {
-            return `Forward trip drop points cannot exceed ${MAX_ROUTE_POINTS}`;
-        }
-
-        const forwardDropError = validateRoutePoints(
-            form?.forwardTrip?.dropPoints || [],
-            "Forward drop"
-        );
-        if (forwardDropError) return forwardDropError;
-
-        if (form.tripType === "RETURN") {
-            if ((form?.returnTrip?.pickupPoints || []).length > MAX_ROUTE_POINTS) {
-                return `Return trip pickup points cannot exceed ${MAX_ROUTE_POINTS}`;
-            }
-
-            const returnPickupError = validateRoutePoints(
-                form?.returnTrip?.pickupPoints || [],
-                "Return pickup"
-            );
-            if (returnPickupError) return returnPickupError;
-
-            if ((form?.returnTrip?.dropPoints || []).length > MAX_ROUTE_POINTS) {
-                return `Return trip drop points cannot exceed ${MAX_ROUTE_POINTS}`;
-            }
-
-            const returnDropError = validateRoutePoints(
-                form?.returnTrip?.dropPoints || [],
-                "Return drop"
-            );
-            if (returnDropError) return returnDropError;
+        if (form.tripType === TRIP_TYPES.RETURN) {
+            if (!form.returnTrip.from?.trim()) return "Return trip start is required";
+            if (!form.returnTrip.to?.trim()) return "Return trip end is required";
+            if (!form.returnTrip.departureTime?.trim()) return "Return departure time is required";
+            if (!form.returnTrip.arrivalTime?.trim()) return "Return arrival time is required";
         }
 
         return null;
-    };
+    }
 
-    const renderRoutePointsEditor = (tripKey, listKey, title, addLabel) => {
-        const points = Array.isArray(form?.[tripKey]?.[listKey])
-            ? form[tripKey][listKey]
-            : [];
-
-        return (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                    <div>
-                        <h5 className="text-sm font-semibold text-slate-800">
-                            {title} ({points.length}/{MAX_ROUTE_POINTS})
-                        </h5>
-                        <p className="text-xs text-slate-500">Add point name and time</p>
-                    </div>
-
-                    <button
-                        type="button"
-                        onClick={() => addRoutePoint(tripKey, listKey)}
-                        disabled={points.length >= MAX_ROUTE_POINTS}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        {addLabel}
-                    </button>
-                </div>
-
-                {points.length ? (
-                    <div className="space-y-3">
-                        {points.map((point, idx) => (
-                            <div key={`${tripKey}-${listKey}-${idx}`} className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <p className="text-xs font-semibold text-slate-600">Point {idx + 1}</p>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeRoutePoint(tripKey, listKey, idx)}
-                                        className="text-xs font-semibold text-red-500"
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                    <Input
-                                        value={point?.name || ""}
-                                        onChange={(e) =>
-                                            handleRoutePointChange(
-                                                tripKey,
-                                                listKey,
-                                                idx,
-                                                "name",
-                                                e.target.value
-                                            )
-                                        }
-                                        placeholder="Point name"
-                                    />
-                                    <Input
-                                        type="time"
-                                        value={point?.time || ""}
-                                        onChange={(e) =>
-                                            handleRoutePointChange(
-                                                tripKey,
-                                                listKey,
-                                                idx,
-                                                "time",
-                                                e.target.value
-                                            )
-                                        }
-                                    />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-center text-xs text-slate-500">
-                        No points added yet
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    const submit = async (e) => {
+    async function handleSubmit(e) {
         e?.preventDefault?.();
-
-        const errorMessage = validateForm();
-        if (errorMessage) {
-            alert(errorMessage);
+        const err = validate();
+        if (err) {
+            showAppToast("error", err);
             return;
         }
 
         try {
             setSaving(true);
 
-            const normalizeTripPayload = (trip = {}) => {
-                const normalizePoints = (points = []) => {
-                    if (!Array.isArray(points)) return [];
-
-                    return points
-                        .slice(0, MAX_ROUTE_POINTS)
-                        .map((point, index) => ({
-                            name: String(point?.name || "").trim(),
-                            time: String(point?.time || "").trim(),
-                            order: index + 1,
-                            isActive: true,
-                        }))
-                        .filter((point) => point.name && point.time);
-                };
-
-                return {
-                    ...trip,
-                    from: String(trip?.from || "").trim(),
-                    to: String(trip?.to || "").trim(),
-                    departureTime: String(trip?.departureTime || "").trim(),
-                    arrivalTime: String(trip?.arrivalTime || "").trim(),
-                    pickupPoints: normalizePoints(trip?.pickupPoints),
-                    dropPoints: normalizePoints(trip?.dropPoints),
-                };
-            };
+            const normalizePointsForSend = (arr = []) =>
+                (Array.isArray(arr) ? arr : [])
+                    .slice(0, MAX_POINTS)
+                    .map((p, idx) => ({
+                        id: p.id,
+                        name: String(p.name || "").trim(),
+                        marathi: p.marathi || getStopNameMarathi(p.name || ""),
+                        time: String(p.time || ""),
+                        order: Number(p.order) || idx + 1,
+                        isActive: p.isActive ?? true,
+                    }));
 
             const payload = {
-                ...form,
-                seatLayout: Number(form.seatLayout),
-                cabinSeatCount: Number(form.cabinSeatCount || 0),
-                cabinSeats: Array.isArray(form.cabinSeats)
-                    ? form.cabinSeats.map((n) => Number(n)).filter((n) => !Number.isNaN(n))
-                    : [],
-                forwardTrip: normalizeTripPayload(form.forwardTrip),
-                returnTrip:
-                    form.tripType === "RETURN"
-                        ? normalizeTripPayload(form.returnTrip)
-                        : null,
-                fareConfig: {
-                    route: form.routeCode,
-                    busType: form.busType,
-                    defaultAmount: Number(form.fareConfig?.defaultAmount || 0),
+                busNumber: form.busNumber,
+                busName: form.busName,
+                busType: form.busType,
+                seatLayout: Number(form.seatLayout || 32),
+                tripType: form.tripType,
+                status: form.status,
+                routeName: form.routeName,
+                forwardTrip: {
+                    from: form.forwardTrip.from,
+                    to: form.forwardTrip.to,
+                    departureTime: form.forwardTrip.departureTime,
+                    arrivalTime: form.forwardTrip.arrivalTime,
+                    pickupPoints: normalizePointsForSend(form.forwardTrip.pickupPoints),
+                    dropPoints: normalizePointsForSend(form.forwardTrip.dropPoints),
                 },
+                returnTrip:
+                    form.tripType === TRIP_TYPES.RETURN
+                        ? {
+                            from: form.returnTrip.from,
+                            to: form.returnTrip.to,
+                            departureTime: form.returnTrip.departureTime,
+                            arrivalTime: form.returnTrip.arrivalTime,
+                            pickupPoints: normalizePointsForSend(form.returnTrip.pickupPoints),
+                            dropPoints: normalizePointsForSend(form.returnTrip.dropPoints),
+                        }
+                        : null,
+                autoGenerateReturn: !!form.autoGenerateReturn,
+                cabins: (form.cabins || [])
+                    .map((c) => ({ id: c.id, label: String(c.label || "").trim() }))
+                    .slice(0, MAX_CABINS),
+                tables: (form.tables || [])
+                    .map((t) => ({ id: t.id, label: String(t.label || "").trim() }))
+                    .slice(0, MAX_TABLES),
+                fareRules: (form.fareRules || []).map((r) => ({
+                    ...r,
+                    pickupId: r.pickupId,
+                    dropId: r.dropId,
+                })),
             };
 
-            const url =
-                mode === "edit" && bus?._id
-                    ? `/api/admin/buses/${bus._id}`
-                    : "/api/admin/buses";
+            const endpoint = editMode ? `/api/admin/buses/${initialData._id}` : `/api/admin/buses`;
+            const method = editMode ? "PUT" : "POST";
 
-            const method = mode === "edit" ? "PUT" : "POST";
+            const token = (() => {
+                try {
+                    return localStorage.getItem("accessToken") || "";
+                } catch {
+                    return "";
+                }
+            })();
 
-            const res = await fetchWithAutoRefresh(url, {
+            const res = await fetch(endpoint, {
                 method,
                 headers: {
                     "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify(payload),
             });
 
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
-                alert(data?.message || `Failed to ${mode === "edit" ? "update" : "create"} bus`);
+                showAppToast("error", data?.message || "Failed to save bus");
                 return;
             }
 
-            onSuccess?.(data?.data);
+            onSaved?.(data?.item || data?.data || payload);
+            showAppToast("success", editMode ? "Bus updated successfully" : "Bus created successfully");
             onClose?.();
-        } catch (error) {
-            console.error(error);
-            alert(`Failed to ${mode === "edit" ? "update" : "create"} bus`);
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", "Failed to save bus");
         } finally {
             setSaving(false);
         }
-    };
+    }
 
     if (!open) return null;
 
-    const modalTitle = mode === "edit" ? "Edit Bus" : "Add Bus";
-    const modalDescription =
-        mode === "edit"
-            ? "Update bus details, route, timings, layout and fare configuration"
-            : "Create a new bus with route, timings, seat layout and fare configuration";
-
-    const submitLabel = saving
-        ? mode === "edit"
-            ? "Updating..."
-            : "Saving..."
-        : mode === "edit"
-            ? "Update Bus"
-            : "Create Bus";
-
     return (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 p-2 sm:p-4">
-            <div className="relative flex h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6">
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                            <div
-                                className="flex h-10 w-10 items-center justify-center rounded-2xl"
-                                style={{ backgroundColor: "#E8F5F4" }}
-                            >
-                                {mode === "edit" ? (
-                                    <PencilLine className="h-5 w-5" style={{ color: THEME }} />
-                                ) : (
-                                    <Bus className="h-5 w-5" style={{ color: THEME }} />
-                                )}
+        <div className="fixed inset-0 z-[9999] bg-black/45 backdrop-blur-[2px]">
+            <div className="flex h-full w-full items-center justify-center p-2 sm:p-4">
+                <div className="relative flex h-[96vh] w-full max-w-[1700px] flex-col overflow-hidden rounded-[32px] bg-[#F8FAFC] shadow-[0_30px_100px_rgba(2,8,23,0.25)]">
+                    {/* Header */}
+                    <div className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#0B5D5A]/10 text-[#0B5D5A]">
+                                    <Bus className="h-7 w-7" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
+                                        {editMode ? "Edit Premium Bus" : "Create Premium Bus"}
+                                    </h2>
+                                    <p className="text-sm text-slate-500">
+                                        Morya Travels premium bus setup • route • cabins • tables • fare rules
+                                    </p>
+                                </div>
                             </div>
-                            <div>
-                                <h2 className="truncate text-lg font-bold text-slate-900 sm:text-xl">
-                                    {modalTitle}
-                                </h2>
-                                <p className="text-xs text-slate-500 sm:text-sm">{modalDescription}</p>
+
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
+                                    {form.seatLayout} Seats
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
+                                    {form.tripType}
+                                </span>
+                                <button
+                                    onClick={onClose}
+                                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    <X className="h-4 w-4" />
+                                    Close
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    <button
-                        onClick={onClose}
-                        className="rounded-2xl border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50"
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="no-scrollbar flex-1 overflow-y-auto">
-                    <div className="grid grid-cols-1 gap-6 p-4 sm:p-6 xl:grid-cols-5">
-                        {/* Left Form */}
-                        <form onSubmit={submit} className="space-y-6 xl:col-span-3">
-                            {/* Basic Details */}
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                                <div className="mb-4 flex items-center gap-2">
-                                    <div
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl"
-                                        style={{ backgroundColor: "#E8F5F4" }}
+                    {/* Body */}
+                    <div className="flex flex-1 overflow-hidden">
+                        <form
+                            onSubmit={handleSubmit}
+                            className="flex-1 overflow-y-auto px-3 py-4 sm:px-5 lg:px-6 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300"
+                        >
+                            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
+                                {/* Left Content */}
+                                <div className="space-y-6">
+                                    {/* 1. Bus Details */}
+                                    <SectionCard
+                                        icon={Bus}
+                                        title="Bus Details"
+                                        subtitle="Basic premium bus information"
                                     >
-                                        <Bus className="h-5 w-5" style={{ color: THEME }} />
-                                    </div>
-                                    <h3 className="text-base font-semibold text-slate-900">Basic Details</h3>
-                                </div>
+                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                            <div>
+                                                <Label required>Bus Number</Label>
+                                                <Input
+                                                    value={form.busNumber}
+                                                    onChange={(e) =>
+                                                        updateField("busNumber", e.target.value.toUpperCase())
+                                                    }
+                                                    placeholder="MH12AB1234"
+                                                />
+                                            </div>
 
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <Field label="Bus Number" required>
-                                        <Input
-                                            value={form.busNumber}
-                                            onChange={(e) => handleChange("busNumber", e.target.value.toUpperCase())}
-                                            placeholder="MH12AB1234"
-                                        />
-                                    </Field>
+                                            <div>
+                                                <Label required>Bus Name</Label>
+                                                <Input
+                                                    value={form.busName}
+                                                    onChange={(e) => updateField("busName", e.target.value)}
+                                                    placeholder="Morya Premium Coach"
+                                                />
+                                            </div>
 
-                                    <Field label="Bus Name" required>
-                                        <Input
-                                            value={form.busName}
-                                            onChange={(e) => handleChange("busName", e.target.value)}
-                                            placeholder="Morya Premium Coach"
-                                        />
-                                    </Field>
-
-                                    <Field label="Bus Type" required>
-                                        <Select
-                                            value={form.busType}
-                                            onChange={(e) => handleChange("busType", e.target.value)}
-                                        >
-                                            <option value={BUS_TYPES.NON_AC}>NON_AC</option>
-                                            <option value={BUS_TYPES.AC}>AC</option>
-                                            <option value={BUS_TYPES.NON_AC_SLEEPER}>NON_AC_SLEEPER</option>
-                                            <option value={BUS_TYPES.AC_SLEEPER}>AC_SLEEPER</option>
-                                        </Select>
-                                    </Field>
-
-                                    <Field label="Seat Layout" required>
-                                        <Select
-                                            value={form.seatLayout}
-                                            onChange={(e) => handleChange("seatLayout", Number(e.target.value))}
-                                        >
-                                            <option value={21}>21 Seater</option>
-                                            <option value={32}>32 Seater</option>
-                                            <option value={35}>35 Seater</option>
-                                            <option value={39}>39 Seater</option>
-                                        </Select>
-                                    </Field>
-
-                                    <Field label="Cabin Seats (comma separated)">
-                                        <Input
-                                            value={(form.cabinSeats || []).join(", ")}
-                                            onChange={(e) => handleCabinSeats(e.target.value)}
-                                            placeholder="1, 2"
-                                        />
-                                    </Field>
-
-                                    <Field label="Status">
-                                        <Select
-                                            value={form.status}
-                                            onChange={(e) => handleChange("status", e.target.value)}
-                                        >
-                                            <option value="ACTIVE">ACTIVE</option>
-                                            <option value="INACTIVE">INACTIVE</option>
-                                            <option value="MAINTENANCE">MAINTENANCE</option>
-                                        </Select>
-                                    </Field>
-                                </div>
-                            </div>
-
-                            {/* Route Details */}
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                                <div className="mb-4 flex items-center gap-2">
-                                    <div
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl"
-                                        style={{ backgroundColor: "#E8F5F4" }}
-                                    >
-                                        <Route className="h-5 w-5" style={{ color: THEME }} />
-                                    </div>
-                                    <h3 className="text-base font-semibold text-slate-900">Route Details</h3>
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <Field label="Route Name" required>
-                                        <Input
-                                            value={form.routeName}
-                                            onChange={(e) => handleChange("routeName", e.target.value)}
-                                        />
-                                    </Field>
-
-                                    <Field label="Route Code" required>
-                                        <Select
-                                            value={form.routeCode}
-                                            onChange={(e) => handleChange("routeCode", e.target.value)}
-                                        >
-                                            <option value={ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR}>
-                                                SHRIVARDHAN → BORIVALI / VIRAR
-                                            </option>
-                                            <option value={ROUTES.BORIVALI_VIRAR_TO_BORLI_SHRIVARDHAN}>
-                                                BORIVALI / VIRAR → SHRIVARDHAN
-                                            </option>
-                                        </Select>
-                                    </Field>
-
-                                    <Field label="Trip Type">
-                                        <Select
-                                            value={form.tripType}
-                                            onChange={(e) => handleChange("tripType", e.target.value)}
-                                        >
-                                            <option value="ONE_WAY">ONE_WAY</option>
-                                            <option value="RETURN">RETURN</option>
-                                        </Select>
-                                    </Field>
-
-                                    <Field label="Notes">
-                                        <Input
-                                            value={form.notes}
-                                            onChange={(e) => handleChange("notes", e.target.value)}
-                                            placeholder="Daily morning trip"
-                                        />
-                                    </Field>
-
-                                    <Field label="Default Fare (INR)">
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            value={Number(form?.fareConfig?.defaultAmount || 0)}
-                                            onChange={(e) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    fareConfig: {
-                                                        ...prev.fareConfig,
-                                                        defaultAmount: Math.max(0, Number(e.target.value || 0)),
-                                                    },
-                                                }))
-                                            }
-                                        />
-                                    </Field>
-                                </div>
-                            </div>
-
-                            {/* Forward Trip */}
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                                <div className="mb-4 flex items-center gap-2">
-                                    <div
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl"
-                                        style={{ backgroundColor: "#E8F5F4" }}
-                                    >
-                                        <Clock3 className="h-5 w-5" style={{ color: THEME }} />
-                                    </div>
-                                    <h3 className="text-base font-semibold text-slate-900">Forward Trip</h3>
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <Field label="From" required>
-                                        <Input
-                                            value={form.forwardTrip.from}
-                                            onChange={(e) => handleTripChange("forwardTrip", "from", e.target.value)}
-                                        />
-                                    </Field>
-
-                                    <Field label="To" required>
-                                        <Input
-                                            value={form.forwardTrip.to}
-                                            onChange={(e) => handleTripChange("forwardTrip", "to", e.target.value)}
-                                        />
-                                    </Field>
-
-                                    <Field label="Departure Time" required>
-                                        <Input
-                                            type="time"
-                                            value={form.forwardTrip.departureTime}
-                                            onChange={(e) =>
-                                                handleTripChange("forwardTrip", "departureTime", e.target.value)
-                                            }
-                                        />
-                                    </Field>
-
-                                    <Field label="Arrival Time" required>
-                                        <Input
-                                            type="time"
-                                            value={form.forwardTrip.arrivalTime}
-                                            onChange={(e) =>
-                                                handleTripChange("forwardTrip", "arrivalTime", e.target.value)
-                                            }
-                                        />
-                                    </Field>
-                                </div>
-
-                                <div className="mt-4 space-y-4">
-                                    {renderRoutePointsEditor("forwardTrip", "pickupPoints", "Pickup Points", "Add Pickup Point")}
-                                    {renderRoutePointsEditor("forwardTrip", "dropPoints", "Drop Points", "Add Drop Point")}
-                                </div>
-                            </div>
-
-                            {/* Return Trip */}
-                            {form.tripType === "RETURN" && (
-                                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                                    <div className="mb-4 flex items-center gap-2">
-                                        <div
-                                            className="flex h-9 w-9 items-center justify-center rounded-xl"
-                                            style={{ backgroundColor: "#E8F5F4" }}
-                                        >
-                                            <MapPin className="h-5 w-5" style={{ color: THEME }} />
-                                        </div>
-                                        <h3 className="text-base font-semibold text-slate-900">Return Trip</h3>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        <Field label="From" required>
-                                            <Input
-                                                value={form.returnTrip.from}
-                                                onChange={(e) => handleTripChange("returnTrip", "from", e.target.value)}
-                                            />
-                                        </Field>
-
-                                        <Field label="To" required>
-                                            <Input
-                                                value={form.returnTrip.to}
-                                                onChange={(e) => handleTripChange("returnTrip", "to", e.target.value)}
-                                            />
-                                        </Field>
-
-                                        <Field label="Departure Time" required>
-                                            <Input
-                                                type="time"
-                                                value={form.returnTrip.departureTime}
-                                                onChange={(e) =>
-                                                    handleTripChange("returnTrip", "departureTime", e.target.value)
-                                                }
-                                            />
-                                        </Field>
-
-                                        <Field label="Arrival Time" required>
-                                            <Input
-                                                type="time"
-                                                value={form.returnTrip.arrivalTime}
-                                                onChange={(e) =>
-                                                    handleTripChange("returnTrip", "arrivalTime", e.target.value)
-                                                }
-                                            />
-                                        </Field>
-                                    </div>
-
-                                    <div className="mt-4 space-y-4">
-                                        {renderRoutePointsEditor("returnTrip", "pickupPoints", "Return Pickup Points", "Add Return Pickup Point")}
-                                        {renderRoutePointsEditor("returnTrip", "dropPoints", "Return Drop Points", "Add Return Drop Point")}
-                                    </div>
-                                </div>
-                            )}
-                        </form>
-
-                        {/* Right Preview */}
-                        <div className="space-y-6 xl:col-span-2">
-                            <SeatLayout
-                                layout={Number(form.seatLayout)}
-                                cabins={(form.cabinSeats || []).map((seatNo) => ({ seatNo }))}
-                                compact
-                            />
-
-                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-                                    <div
-                                        className="flex h-8 w-8 items-center justify-center rounded-xl"
-                                        style={{ backgroundColor: "#E8F5F4" }}
-                                    >
-                                        <IndianRupee className="h-4 w-4" style={{ color: THEME }} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-slate-900 sm:text-base">
-                                            Fare Preview
-                                        </h3>
-                                        <p className="text-xs text-slate-500">
-                                            {mode === "edit"
-                                                ? "Existing bus fare config + live fallback preview"
-                                                : "Based on route & bus type (with real stop groups)"}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="no-scrollbar max-h-[420px] space-y-3 overflow-y-auto p-4">
-                                    {farePreview.length ? (
-                                        farePreview.map((zone, index) => {
-                                            const isOpen = expandedZone === index;
-
-                                            return (
-                                                <div
-                                                    key={zone.zone}
-                                                    className="overflow-hidden rounded-2xl border border-slate-200"
+                                            <div>
+                                                <Label>Bus Type</Label>
+                                                <Select
+                                                    value={form.busType}
+                                                    onChange={(e) => updateField("busType", e.target.value)}
                                                 >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setExpandedZone(isOpen ? null : index)}
-                                                        className="flex w-full items-center justify-between bg-slate-50 px-4 py-3 text-left"
+                                                    <option value={BUS_TYPES.NON_AC}>NON_AC</option>
+                                                    <option value={BUS_TYPES.AC}>AC</option>
+                                                    <option value={BUS_TYPES.SEMI_SLEEPER}>SEMI_SLEEPER</option>
+                                                    <option value={BUS_TYPES.SLEEPER}>SLEEPER</option>
+                                                    <option value={BUS_TYPES.SEATER}>SEATER</option>
+                                                </Select>
+                                            </div>
+
+                                            <div>
+                                                <Label>Seat Layout</Label>
+                                                <Select
+                                                    value={form.seatLayout}
+                                                    onChange={(e) => updateField("seatLayout", Number(e.target.value))}
+                                                >
+                                                    <option value={21}>21 Seater</option>
+                                                    <option value={32}>32 Seater</option>
+                                                    <option value={35}>35 Seater</option>
+                                                    <option value={39}>39 Seater</option>
+                                                </Select>
+                                            </div>
+
+                                            <div>
+                                                <Label>Trip Type</Label>
+                                                <Select
+                                                    value={form.tripType}
+                                                    onChange={(e) => updateField("tripType", e.target.value)}
+                                                >
+                                                    <option value={TRIP_TYPES.ONE_WAY}>ONE_WAY</option>
+                                                    <option value={TRIP_TYPES.RETURN}>RETURN</option>
+                                                </Select>
+                                            </div>
+
+                                            <div>
+                                                <Label>Status</Label>
+                                                <Select
+                                                    value={form.status}
+                                                    onChange={(e) => updateField("status", e.target.value)}
+                                                >
+                                                    <option value={STATUS.ACTIVE}>ACTIVE</option>
+                                                    <option value={STATUS.INACTIVE}>INACTIVE</option>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </SectionCard>
+
+                                    {/* 2. Route Forward */}
+                                    <SectionCard
+                                        icon={Route}
+                                        title="Route Forward"
+                                        subtitle="Main route and forward trip schedule"
+                                    >
+                                        <div className="space-y-5">
+                                            {/* Row 1 - Route Name */}
+                                            <div className="grid grid-cols-1">
+                                                <div>
+                                                    <Label required>Route Name</Label>
+                                                    <Input
+                                                        value={form.routeName}
+                                                        onChange={(e) => updateField("routeName", e.target.value)}
+                                                        placeholder="Shrivardhan - Borli - Borivali - Virar"
+                                                    />
+                                                    <p className="mt-2 text-xs text-slate-500">
+                                                        Full route display name shown in listings and fare setup
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 2 - Start Point + Departure */}
+                                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                <div>
+                                                    <Label required>Start Point</Label>
+                                                    <Input
+                                                        value={form.forwardTrip.from}
+                                                        onChange={(e) =>
+                                                            setForm((p) => ({
+                                                                ...p,
+                                                                forwardTrip: { ...p.forwardTrip, from: e.target.value },
+                                                            }))
+                                                        }
+                                                        placeholder="Shrivardhan Bus Depot"
+                                                    />
+                                                    <p className="mt-2 text-xs font-medium text-[#0B5D5A]">
+                                                        {getStopNameMarathi(form.forwardTrip.from || "") || "-"}
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <Label required>Departure Time</Label>
+                                                    <Input
+                                                        type="time"
+                                                        value={form.forwardTrip.departureTime}
+                                                        onChange={(e) =>
+                                                            setForm((p) => ({
+                                                                ...p,
+                                                                forwardTrip: {
+                                                                    ...p.forwardTrip,
+                                                                    departureTime: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                    />
+                                                    <p className="mt-2 text-xs text-slate-500">
+                                                        Bus departure from the start point
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3 - End Point + Arrival */}
+                                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                <div>
+                                                    <Label required>End Point</Label>
+                                                    <Input
+                                                        value={form.forwardTrip.to}
+                                                        onChange={(e) =>
+                                                            setForm((p) => ({
+                                                                ...p,
+                                                                forwardTrip: { ...p.forwardTrip, to: e.target.value },
+                                                            }))
+                                                        }
+                                                        placeholder="Borivali Depot"
+                                                    />
+                                                    <p className="mt-2 text-xs font-medium text-[#0B5D5A]">
+                                                        {getStopNameMarathi(form.forwardTrip.to || "") || "-"}
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <Label required>Arrival Time</Label>
+                                                    <Input
+                                                        type="time"
+                                                        value={form.forwardTrip.arrivalTime}
+                                                        onChange={(e) =>
+                                                            setForm((p) => ({
+                                                                ...p,
+                                                                forwardTrip: {
+                                                                    ...p.forwardTrip,
+                                                                    arrivalTime: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                    />
+                                                    <p className="mt-2 text-xs text-slate-500">
+                                                        Expected arrival at the end point
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </SectionCard>
+
+                                    {/* 3. Pickup Points */}
+                                    <SectionCard
+                                        icon={MapPin}
+                                        title={`Pickup Points (${(form.forwardTrip?.pickupPoints || []).length}/${MAX_POINTS})`}
+                                        subtitle="Add all forward pickup stops"
+                                        right={
+                                            <button
+                                                type="button"
+                                                onClick={() => addPointToList("forwardTrip", "pickupPoints")}
+                                                className="inline-flex items-center gap-2 rounded-full border border-[#0B5D5A]/10 bg-[#0B5D5A]/5 px-4 py-2 text-xs font-bold text-[#0B5D5A] hover:bg-[#0B5D5A]/10"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Add Pickup
+                                            </button>
+                                        }
+                                    >
+                                        {(form.forwardTrip?.pickupPoints || []).length === 0 ? (
+                                            <EmptyState text="No pickup points added" />
+                                        ) : (
+                                            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                                {(form.forwardTrip.pickupPoints || []).map((pt, index) => (
+                                                    <div
+                                                        key={pt.id}
+                                                        className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm"
                                                     >
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-slate-900">{zone.label}</p>
-                                                            <p className="text-xs text-slate-500">
-                                                                {zone.stops?.length || 0} stops
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="flex items-center gap-3">
-                                                            <span
-                                                                className="rounded-full px-3 py-1 text-xs font-semibold text-white"
-                                                                style={{ backgroundColor: THEME }}
+                                                        <div className="mb-4 flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Chip>Pickup #{index + 1}</Chip>
+                                                                <Chip className="border-slate-200 bg-slate-50 text-slate-700">
+                                                                    Order {pt.order}
+                                                                </Chip>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removePoint("forwardTrip", "pickupPoints", pt.id)
+                                                                }
+                                                                className="rounded-2xl bg-red-50 p-2 text-red-600 hover:bg-red-100"
                                                             >
-                                                                ₹{zone.amount}
-                                                            </span>
-                                                            {isOpen ? (
-                                                                <ChevronUp className="h-4 w-4 text-slate-500" />
-                                                            ) : (
-                                                                <ChevronDown className="h-4 w-4 text-slate-500" />
-                                                            )}
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
                                                         </div>
-                                                    </button>
 
-                                                    {isOpen && (
-                                                        <div className="border-t border-slate-100 bg-white p-4">
-                                                            <div className="grid grid-cols-1 gap-2">
-                                                                {(zone.stopsWithMarathi || []).map((stop, idx) => (
-                                                                    <div
-                                                                        key={`${zone.zone}-${idx}`}
-                                                                        className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
-                                                                    >
-                                                                        <p className="text-sm font-medium text-slate-800">
-                                                                            {stop.english}
-                                                                        </p>
-                                                                        <p className="text-xs text-slate-500">{stop.marathi}</p>
-                                                                    </div>
-                                                                ))}
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            <div>
+                                                                <Label required>Pickup Stop Name</Label>
+                                                                <Input
+                                                                    value={pt.name}
+                                                                    onChange={(e) =>
+                                                                        handlePointNameChange(
+                                                                            "forwardTrip",
+                                                                            "pickupPoints",
+                                                                            pt.id,
+                                                                            e.target.value
+                                                                        )
+                                                                    }
+                                                                    placeholder="English Stop Name"
+                                                                />
+                                                            </div>
+
+                                                            <div>
+                                                                <Label>Marathi Name</Label>
+                                                                <Input
+                                                                    value={pt.marathi}
+                                                                    readOnly
+                                                                    placeholder="Marathi (auto)"
+                                                                    className="border-[#0B5D5A]/10 bg-[#0B5D5A]/5 text-[#0B5D5A]"
+                                                                />
+                                                            </div>
+
+                                                            <div>
+                                                                <Label required>Pickup Time</Label>
+                                                                <Input
+                                                                    type="time"
+                                                                    value={pt.time}
+                                                                    onChange={(e) =>
+                                                                        updatePoint("forwardTrip", "pickupPoints", pt.id, {
+                                                                            time: e.target.value,
+                                                                        })
+                                                                    }
+                                                                />
                                                             </div>
                                                         </div>
-                                                    )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </SectionCard>
+
+                                    {/* 4. Drop Points */}
+                                    <SectionCard
+                                        icon={ArrowRightLeft}
+                                        title={`Drop Points (${(form.forwardTrip?.dropPoints || []).length}/${MAX_POINTS})`}
+                                        subtitle="Add all forward drop stops"
+                                        right={
+                                            <button
+                                                type="button"
+                                                onClick={() => addPointToList("forwardTrip", "dropPoints")}
+                                                className="inline-flex items-center gap-2 rounded-full border border-[#0B5D5A]/10 bg-[#0B5D5A]/5 px-4 py-2 text-xs font-bold text-[#0B5D5A] hover:bg-[#0B5D5A]/10"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Add Drop
+                                            </button>
+                                        }
+                                    >
+                                        {(form.forwardTrip?.dropPoints || []).length === 0 ? (
+                                            <EmptyState text="No drop points added" />
+                                        ) : (
+                                            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                                {(form.forwardTrip.dropPoints || []).map((pt, index) => (
+                                                    <div
+                                                        key={pt.id}
+                                                        className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm"
+                                                    >
+                                                        <div className="mb-4 flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Chip>Drop #{index + 1}</Chip>
+                                                                <Chip className="border-slate-200 bg-slate-50 text-slate-700">
+                                                                    Order {pt.order}
+                                                                </Chip>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removePoint("forwardTrip", "dropPoints", pt.id)
+                                                                }
+                                                                className="rounded-2xl bg-red-50 p-2 text-red-600 hover:bg-red-100"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            <div>
+                                                                <Label required>Drop Stop Name</Label>
+                                                                <Input
+                                                                    value={pt.name}
+                                                                    onChange={(e) =>
+                                                                        handlePointNameChange(
+                                                                            "forwardTrip",
+                                                                            "dropPoints",
+                                                                            pt.id,
+                                                                            e.target.value
+                                                                        )
+                                                                    }
+                                                                    placeholder="English Stop Name"
+                                                                />
+                                                            </div>
+
+                                                            <div>
+                                                                <Label>Marathi Name</Label>
+                                                                <Input
+                                                                    value={pt.marathi}
+                                                                    readOnly
+                                                                    placeholder="Marathi (auto)"
+                                                                    className="border-[#0B5D5A]/10 bg-[#0B5D5A]/5 text-[#0B5D5A]"
+                                                                />
+                                                            </div>
+
+                                                            <div>
+                                                                <Label required>Drop Time</Label>
+                                                                <Input
+                                                                    type="time"
+                                                                    value={pt.time}
+                                                                    onChange={(e) =>
+                                                                        updatePoint("forwardTrip", "dropPoints", pt.id, {
+                                                                            time: e.target.value,
+                                                                        })
+                                                                    }
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </SectionCard>
+
+                                    {/* Return Trip */}
+                                    {form.tripType === TRIP_TYPES.RETURN && (
+                                        <SectionCard
+                                            icon={RefreshCw}
+                                            title="Return Trip"
+                                            subtitle="Return route schedule and reverse stop details"
+                                            right={
+                                                <Toggle
+                                                    checked={!!form.autoGenerateReturn}
+                                                    onChange={(e) => updateField("autoGenerateReturn", e.target.checked)}
+                                                    label="Auto-generate Return"
+                                                />
+                                            }
+                                        >
+                                            <div className="space-y-5">
+                                                {/* Row 1 */}
+                                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                    <div>
+                                                        <Label required>Return Start Point</Label>
+                                                        <Input
+                                                            value={form.returnTrip.from}
+                                                            onChange={(e) =>
+                                                                updateTripField("returnTrip", "from", e.target.value)
+                                                            }
+                                                            disabled={form.autoGenerateReturn}
+                                                            className={clsx(
+                                                                form.autoGenerateReturn && "bg-slate-100 text-slate-500"
+                                                            )}
+                                                            placeholder="Borivali Depot"
+                                                        />
+                                                        <p className="mt-2 text-xs font-medium text-[#0B5D5A]">
+                                                            {getStopNameMarathi(form.returnTrip.from || "") || "-"}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <Label required>Departure Time</Label>
+                                                        <Input
+                                                            type="time"
+                                                            value={form.returnTrip.departureTime}
+                                                            onChange={(e) =>
+                                                                updateTripField("returnTrip", "departureTime", e.target.value)
+                                                            }
+                                                        />
+                                                        <p className="mt-2 text-xs text-slate-500">
+                                                            Bus departure from the return start point
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                                            No fare preview available for selected route.
-                                        </div>
+
+                                                {/* Row 2 */}
+                                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                    <div>
+                                                        <Label required>Return End Point</Label>
+                                                        <Input
+                                                            value={form.returnTrip.to}
+                                                            onChange={(e) =>
+                                                                updateTripField("returnTrip", "to", e.target.value)
+                                                            }
+                                                            disabled={form.autoGenerateReturn}
+                                                            className={clsx(
+                                                                form.autoGenerateReturn && "bg-slate-100 text-slate-500"
+                                                            )}
+                                                            placeholder="Shrivardhan Bus Depot"
+                                                        />
+                                                        <p className="mt-2 text-xs font-medium text-[#0B5D5A]">
+                                                            {getStopNameMarathi(form.returnTrip.to || "") || "-"}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <Label required>Arrival Time</Label>
+                                                        <Input
+                                                            type="time"
+                                                            value={form.returnTrip.arrivalTime}
+                                                            onChange={(e) =>
+                                                                updateTripField("returnTrip", "arrivalTime", e.target.value)
+                                                            }
+                                                        />
+                                                        <p className="mt-2 text-xs text-slate-500">
+                                                            Expected arrival at the return end point
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </SectionCard>
                                     )}
+
+                                    {/* 5. Cabins */}
+                                    <SectionCard
+                                        icon={Armchair}
+                                        title={`Cabins (${(form.cabins || []).length}/${MAX_CABINS})`}
+                                        subtitle="Auto labels C1, C2, C3..."
+                                        right={
+                                            <div className="flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={resetCabins}
+                                                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                                >
+                                                    <RefreshCw className="h-4 w-4" />
+                                                    Reset
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={addCabin}
+                                                    disabled={(form.cabins || []).length >= MAX_CABINS}
+                                                    className="inline-flex items-center gap-2 rounded-full bg-[#0B5D5A] px-4 py-2 text-xs font-bold text-white hover:bg-[#094B49] disabled:opacity-50"
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                    Add Cabin
+                                                </button>
+                                            </div>
+                                        }
+                                    >
+                                        {(form.cabins || []).length === 0 ? (
+                                            <EmptyState text="No cabins added" />
+                                        ) : (
+                                            <>
+                                                <div className="mb-4 flex flex-wrap gap-2">
+                                                    {(form.cabins || []).map((c) => (
+                                                        <Chip key={c.id}>{c.label}</Chip>
+                                                    ))}
+                                                </div>
+
+                                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                                    {(form.cabins || []).map((c, index) => (
+                                                        <div
+                                                            key={c.id}
+                                                            className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"
+                                                        >
+                                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0B5D5A]/10 text-sm font-bold text-[#0B5D5A]">
+                                                                {index + 1}
+                                                            </div>
+                                                            <Input
+                                                                value={c.label}
+                                                                onChange={(e) => updateCabin(c.id, e.target.value)}
+                                                                placeholder={`C${index + 1}`}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeCabin(c.id)}
+                                                                className="rounded-2xl bg-red-50 p-2 text-red-600 hover:bg-red-100"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </SectionCard>
+
+                                    {/* 6. Tables */}
+                                    <SectionCard
+                                        icon={Table2}
+                                        title={`Tables (${(form.tables || []).length}/${MAX_TABLES})`}
+                                        subtitle="Auto labels T1, T2, T3..."
+                                        right={
+                                            <button
+                                                type="button"
+                                                onClick={addTable}
+                                                disabled={(form.tables || []).length >= MAX_TABLES}
+                                                className="inline-flex items-center gap-2 rounded-full bg-[#0B5D5A] px-4 py-2 text-xs font-bold text-white hover:bg-[#094B49] disabled:opacity-50"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Add Table
+                                            </button>
+                                        }
+                                    >
+                                        {(form.tables || []).length === 0 ? (
+                                            <EmptyState text="No tables added" />
+                                        ) : (
+                                            <>
+                                                <div className="mb-4 flex flex-wrap gap-2">
+                                                    {(form.tables || []).map((t) => (
+                                                        <Chip key={t.id}>{t.label}</Chip>
+                                                    ))}
+                                                </div>
+
+                                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                                    {(form.tables || []).map((t, index) => (
+                                                        <div
+                                                            key={t.id}
+                                                            className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"
+                                                        >
+                                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0B5D5A]/10 text-sm font-bold text-[#0B5D5A]">
+                                                                {index + 1}
+                                                            </div>
+                                                            <Input
+                                                                value={t.label}
+                                                                onChange={(e) => updateTable(t.id, e.target.value)}
+                                                                placeholder={`T${index + 1}`}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeTable(t.id)}
+                                                                className="rounded-2xl bg-red-50 p-2 text-red-600 hover:bg-red-100"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </SectionCard>
+
+                                    {/* 7. Fare Rules */}
+                                    <SectionCard
+                                        icon={IndianRupee}
+                                        title={`Pickup → Drop Fare Rules (${(form.fareRules || []).length})`}
+                                        subtitle="Premium fare rule configuration with better visualization"
+                                        right={
+                                            <button
+                                                type="button"
+                                                onClick={addFareRule}
+                                                className="inline-flex items-center gap-2 rounded-full border border-[#0B5D5A]/10 bg-[#0B5D5A]/5 px-4 py-2 text-xs font-bold text-[#0B5D5A] hover:bg-[#0B5D5A]/10"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Add Fare Rule
+                                            </button>
+                                        }
+                                    >
+                                        {(form.fareRules || []).length === 0 ? (
+                                            <EmptyState text="No fare rules configured" />
+                                        ) : (
+                                            <div className="space-y-5">
+                                                {(form.fareRules || []).map((fr, index) => {
+                                                    const dir = fr.tripDirection || "FORWARD";
+                                                    const pickups = pickupOptions[dir]?.pickups || [];
+                                                    const drops = pickupOptions[dir]?.drops || [];
+
+                                                    const selectedPickup = pickups.find((p) => p.id === fr.pickupId);
+                                                    const selectedDrop = drops.find((p) => p.id === fr.dropId);
+
+                                                    return (
+                                                        <div
+                                                            key={fr.id}
+                                                            className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+                                                        >
+                                                            <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <span className="inline-flex items-center rounded-full bg-[#0B5D5A] px-3 py-1 text-xs font-bold text-white">
+                                                                        {fr.tripDirection}
+                                                                    </span>
+                                                                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                                                                        Rule #{index + 1}
+                                                                    </span>
+                                                                    <span className="inline-flex items-center rounded-full border border-[#0B5D5A]/10 bg-[#0B5D5A]/5 px-3 py-1 text-xs font-bold text-[#0B5D5A]">
+                                                                        ₹ {Number(fr.fare || 0)}
+                                                                    </span>
+                                                                    {fr.isActive ? (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                                                            Active
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                                                                            Inactive
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeFareRule(fr.id)}
+                                                                    className="inline-flex items-center justify-center rounded-2xl bg-red-50 p-2 text-red-600 hover:bg-red-100"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 gap-5 p-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+                                                                {/* Left */}
+                                                                <div className="space-y-4">
+                                                                    {/* Row 1 */}
+                                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                                        <div>
+                                                                            <Label>Trip Direction</Label>
+                                                                            <Select
+                                                                                value={fr.tripDirection}
+                                                                                onChange={(e) =>
+                                                                                    updateFareRule(fr.id, {
+                                                                                        tripDirection: e.target.value,
+                                                                                        pickupId: null,
+                                                                                        dropId: null,
+                                                                                    })
+                                                                                }
+                                                                            >
+                                                                                <option value="FORWARD">FORWARD</option>
+                                                                                {form.tripType === TRIP_TYPES.RETURN && (
+                                                                                    <option value="RETURN">RETURN</option>
+                                                                                )}
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        <div>
+                                                                            <Label>Select Pickup</Label>
+                                                                            <Select
+                                                                                value={fr.pickupId || ""}
+                                                                                onChange={(e) =>
+                                                                                    updateFareRule(fr.id, {
+                                                                                        pickupId: e.target.value || null,
+                                                                                    })
+                                                                                }
+                                                                            >
+                                                                                <option value="">Select Pickup</option>
+                                                                                {pickups.map((p) => (
+                                                                                    <option key={p.id} value={p.id}>
+                                                                                        {p.label || "(unnamed)"}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </Select>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Row 2 */}
+                                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                                        <div>
+                                                                            <Label>Select Drop</Label>
+                                                                            <Select
+                                                                                value={fr.dropId || ""}
+                                                                                onChange={(e) =>
+                                                                                    updateFareRule(fr.id, {
+                                                                                        dropId: e.target.value || null,
+                                                                                    })
+                                                                                }
+                                                                            >
+                                                                                <option value="">Select Drop</option>
+                                                                                {drops.map((p) => (
+                                                                                    <option key={p.id} value={p.id}>
+                                                                                        {p.label || "(unnamed)"}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        <div>
+                                                                            <Label>Fare (₹)</Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                value={Number(fr.fare || 0)}
+                                                                                onChange={(e) =>
+                                                                                    updateFareRule(fr.id, {
+                                                                                        fare: Number(e.target.value || 0),
+                                                                                    })
+                                                                                }
+                                                                                placeholder="0"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Row 3 */}
+                                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                                        <div>
+                                                                            <Label>Start Date</Label>
+                                                                            <Input
+                                                                                type="date"
+                                                                                value={fr.startDate || ""}
+                                                                                onChange={(e) =>
+                                                                                    updateFareRule(fr.id, {
+                                                                                        startDate: e.target.value,
+                                                                                    })
+                                                                                }
+                                                                            />
+                                                                        </div>
+
+                                                                        <div>
+                                                                            <Label>End Date</Label>
+                                                                            <Input
+                                                                                type="date"
+                                                                                value={fr.endDate || ""}
+                                                                                onChange={(e) =>
+                                                                                    updateFareRule(fr.id, {
+                                                                                        endDate: e.target.value,
+                                                                                    })
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Toggles */}
+                                                                    <div className="flex flex-wrap gap-2 pt-1">
+                                                                        <Toggle
+                                                                            checked={fr.applyToNextPickups || false}
+                                                                            onChange={(e) =>
+                                                                                updateFareRule(fr.id, {
+                                                                                    applyToNextPickups: e.target.checked,
+                                                                                })
+                                                                            }
+                                                                            label="Apply to next pickups"
+                                                                        />
+
+                                                                        <Toggle
+                                                                            checked={fr.applyToPreviousDrops || false}
+                                                                            onChange={(e) =>
+                                                                                updateFareRule(fr.id, {
+                                                                                    applyToPreviousDrops: e.target.checked,
+                                                                                })
+                                                                            }
+                                                                            label="Apply to previous drops"
+                                                                        />
+
+                                                                        <Toggle
+                                                                            checked={fr.isActive || false}
+                                                                            onChange={(e) =>
+                                                                                updateFareRule(fr.id, {
+                                                                                    isActive: e.target.checked,
+                                                                                })
+                                                                            }
+                                                                            label="Active"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Right Visual */}
+                                                                <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                                                                    <div className="mb-4 flex items-center justify-between gap-3">
+                                                                        <div className="flex items-center gap-2 text-sm font-semibold text-[#0B5D5A]">
+                                                                            <CalendarDays className="h-4 w-4" />
+                                                                            Fare Visualization
+                                                                        </div>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                setPreviewFareRule({
+                                                                                    rule: fr,
+                                                                                    selectedPickup,
+                                                                                    selectedDrop,
+                                                                                    index,
+                                                                                })
+                                                                            }
+                                                                            className="inline-flex items-center gap-2 rounded-full border border-[#0B5D5A]/10 bg-white px-3 py-2 text-xs font-bold text-[#0B5D5A] hover:bg-[#0B5D5A]/5"
+                                                                        >
+                                                                            Open Preview
+                                                                        </button>
+                                                                    </div>
+
+                                                                    <div className="space-y-3">
+                                                                        <div className="rounded-2xl border border-white bg-white p-3">
+                                                                            <p className="text-xs font-medium text-slate-500">English Route</p>
+                                                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                                                {selectedPickup?.label || "Select Pickup"} →{" "}
+                                                                                {selectedDrop?.label || "Select Drop"}
+                                                                            </p>
+                                                                        </div>
+
+                                                                        <div className="rounded-2xl border border-white bg-white p-3">
+                                                                            <p className="text-xs font-medium text-slate-500">Fare Amount</p>
+                                                                            <p className="mt-1 text-lg font-bold text-[#0B5D5A]">
+                                                                                ₹ {Number(fr.fare || 0)}
+                                                                            </p>
+                                                                        </div>
+
+                                                                        <div className="rounded-2xl bg-[#0B5D5A] p-4 text-white">
+                                                                            <p className="text-xs text-white/80">Quick Summary</p>
+                                                                            <p className="mt-1 text-sm font-semibold">
+                                                                                {fr.tripDirection} • {selectedPickup?.label || "Pickup"} →{" "}
+                                                                                {selectedDrop?.label || "Drop"}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </SectionCard>
                                 </div>
+
+                                {/* Right Sidebar */}
+                                <aside className="hidden xl:block">
+                                    <div className="sticky top-4 space-y-5">
+                                        {/* Seat Preview */}
+                                        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
+                                            <div className="border-b border-slate-100 px-5 py-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <h5 className="text-base font-semibold text-slate-900">
+                                                            Seat Preview
+                                                        </h5>
+                                                        <p className="text-xs text-slate-500">
+                                                            Live layout visualization
+                                                        </p>
+                                                    </div>
+                                                    <Chip>{form.seatLayout} Seats</Chip>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-4">
+                                                <div className="mb-3 flex items-center justify-between">
+                                                    <span className="text-sm font-medium text-slate-600">Cabins</span>
+                                                    <span className="text-sm font-bold text-[#0B5D5A]">
+                                                        {(form.cabins || []).length}/{MAX_CABINS}
+                                                    </span>
+                                                </div>
+
+                                                <div className="mb-4 flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={resetCabins}
+                                                        className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                                    >
+                                                        <RefreshCw className="h-4 w-4" />
+                                                        Reset
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={addCabin}
+                                                        disabled={(form.cabins || []).length >= MAX_CABINS}
+                                                        className="inline-flex items-center gap-2 rounded-2xl bg-[#0B5D5A] px-3 py-2 text-xs font-bold text-white hover:bg-[#094B49] disabled:opacity-50"
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                        Cabin
+                                                    </button>
+                                                </div>
+
+                                                <div className="rounded-[24px] border border-slate-100 bg-slate-50 p-3">
+                                                    <SeatLayout
+                                                        layout={Number(form.seatLayout)}
+                                                        cabins={(form.cabins || []).map((c) => ({ label: c.label }))}
+                                                        tables={(form.tables || []).map((t) => ({ label: t.label }))}
+                                                        compact
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Quick Summary */}
+                                        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
+                                            <div className="border-b border-slate-100 px-5 py-4">
+                                                <h5 className="text-base font-semibold text-slate-900">Quick Summary</h5>
+                                                <p className="text-xs text-slate-500">Live premium overview</p>
+                                            </div>
+
+                                            <div className="space-y-3 p-4 text-sm">
+                                                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2">
+                                                    <span className="text-slate-500">Bus Number</span>
+                                                    <span className="font-semibold text-slate-800">
+                                                        {form.busNumber || "-"}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2">
+                                                    <span className="text-slate-500">Bus Name</span>
+                                                    <span className="font-semibold text-slate-800">
+                                                        {form.busName || "-"}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2">
+                                                    <span className="text-slate-500">Route</span>
+                                                    <span className="max-w-[180px] truncate font-semibold text-slate-800">
+                                                        {form.routeName ||
+                                                            `${form.forwardTrip.from} → ${form.forwardTrip.to}` ||
+                                                            "-"}
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="rounded-3xl bg-slate-50 p-3 text-center">
+                                                        <p className="text-xs text-slate-500">Pickups</p>
+                                                        <p className="mt-1 text-xl font-bold text-[#0B5D5A]">
+                                                            {(form.forwardTrip?.pickupPoints || []).length}
+                                                        </p>
+                                                    </div>
+                                                    <div className="rounded-3xl bg-slate-50 p-3 text-center">
+                                                        <p className="text-xs text-slate-500">Drops</p>
+                                                        <p className="mt-1 text-xl font-bold text-[#0B5D5A]">
+                                                            {(form.forwardTrip?.dropPoints || []).length}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="rounded-3xl bg-slate-50 p-3 text-center">
+                                                        <p className="text-xs text-slate-500">Cabins</p>
+                                                        <p className="mt-1 text-xl font-bold text-[#0B5D5A]">
+                                                            {(form.cabins || []).length}
+                                                        </p>
+                                                    </div>
+                                                    <div className="rounded-3xl bg-slate-50 p-3 text-center">
+                                                        <p className="text-xs text-slate-500">Tables</p>
+                                                        <p className="mt-1 text-xl font-bold text-[#0B5D5A]">
+                                                            {(form.tables || []).length}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-3xl bg-[#0B5D5A] p-4 text-white">
+                                                    <p className="text-xs text-white/80">Fare Rules</p>
+                                                    <p className="mt-1 text-2xl font-bold">
+                                                        {(form.fareRules || []).length}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Cabins & Tables */}
+                                        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
+                                            <div className="border-b border-slate-100 px-5 py-4">
+                                                <h5 className="text-base font-semibold text-slate-900">
+                                                    Cabins & Tables
+                                                </h5>
+                                                <p className="text-xs text-slate-500">Visual labels preview</p>
+                                            </div>
+
+                                            <div className="space-y-4 p-4">
+                                                <div>
+                                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                        Cabins
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(form.cabins || []).length ? (
+                                                            (form.cabins || []).map((c) => <Chip key={c.id}>{c.label}</Chip>)
+                                                        ) : (
+                                                            <p className="text-sm text-slate-400">No cabins</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                        Tables
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(form.tables || []).length ? (
+                                                            (form.tables || []).map((t) => <Chip key={t.id}>{t.label}</Chip>)
+                                                        ) : (
+                                                            <p className="text-sm text-slate-400">No tables</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </aside>
                             </div>
+                        </form>
+                    </div>
 
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                                <h4 className="text-sm font-semibold text-slate-900">
-                                    {mode === "edit" ? "Current Fare Config" : "Default Fare Config"}
-                                </h4>
+                    {/* Footer */}
+                    <div className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
 
-                                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Route</p>
-                                        <p className="mt-1 break-all text-sm font-medium text-slate-800">
-                                            {form.routeCode}
-                                        </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const busId = editMode ? initialData._id : "";
+                                    const target = busId
+                                        ? `/admin/bus/fares?busId=${busId}`
+                                        : "/admin/bus/fares";
+                                    router.push(target);
+                                }}
+                                className="rounded-2xl border border-[#0B5D5A]/10 bg-[#0B5D5A]/5 px-5 py-3 text-sm font-semibold text-[#0B5D5A] hover:bg-[#0B5D5A]/10"
+                            >
+                                View Fares
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleSubmit}
+                                disabled={saving}
+                                className={clsx(
+                                    "inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0B5D5A] px-6 py-3 text-sm font-bold text-white shadow-md shadow-[#0B5D5A]/15 transition hover:bg-[#094B49]",
+                                    saving && "opacity-60"
+                                )}
+                            >
+                                <Save className="h-4 w-4" />
+                                {saving
+                                    ? editMode
+                                        ? "Updating..."
+                                        : "Saving..."
+                                    : editMode
+                                        ? "Update Bus"
+                                        : "Create Bus"}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Fare Preview Modal */}
+                    {previewFareRule && (
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-sm">
+                            <div className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_100px_rgba(2,8,23,0.25)]">
+                                {/* Header */}
+                                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0B5D5A]/10 text-[#0B5D5A]">
+                                            <IndianRupee className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-bold text-slate-900 sm:text-lg">
+                                                Fare Rule Preview
+                                            </h3>
+                                            <p className="text-xs text-slate-500 sm:text-sm">
+                                                Rule #{previewFareRule.index + 1} • {previewFareRule.rule.tripDirection}
+                                            </p>
+                                        </div>
                                     </div>
 
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Bus Type</p>
-                                        <p className="mt-1 text-sm font-medium text-slate-800">{form.busType}</p>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPreviewFareRule(null)}
+                                        className="rounded-2xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                                    >
+                                        <X className="h-5 w-5" />
+                                    </button>
+                                </div>
 
-                                    <div className="rounded-xl bg-slate-50 p-3 sm:col-span-2">
-                                        <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                                            {mode === "edit" ? "Saved / Fallback Default Amount" : "Default Amount"}
-                                        </p>
-                                        <p className="mt-1 text-base font-semibold text-slate-900">
-                                            ₹{Number(form.fareConfig?.defaultAmount || 0)}
-                                        </p>
+                                {/* Body */}
+                                <div className="max-h-[75vh] overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300">
+                                    <div className="space-y-4">
+                                        {/* Route Visualization */}
+                                        <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                                            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#0B5D5A]">
+                                                <CalendarDays className="h-4 w-4" />
+                                                Route Visualization
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                <div className="rounded-2xl bg-white p-4">
+                                                    <p className="text-xs font-medium text-slate-500">English Route</p>
+                                                    <p className="mt-2 text-base font-bold text-slate-900 leading-snug break-words">
+                                                        {previewFareRule.selectedPickup?.label || "Select Pickup"} →{" "}
+                                                        {previewFareRule.selectedDrop?.label || "Select Drop"}
+                                                    </p>
+                                                </div>
+
+                                                <div className="rounded-2xl bg-white p-4">
+                                                    <p className="text-xs font-medium text-slate-500">Trip Direction</p>
+                                                    <div className="mt-2">
+                                                        <span className="inline-flex items-center rounded-full bg-[#0B5D5A] px-3 py-1 text-xs font-bold text-white">
+                                                            {previewFareRule.rule.tripDirection}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-2xl bg-white p-4">
+                                                    <p className="text-xs font-medium text-slate-500">Pickup Marathi</p>
+                                                    <p className="mt-2 text-sm font-semibold text-[#0B5D5A] break-words">
+                                                        {previewFareRule.selectedPickup?.marathi || "-"}
+                                                    </p>
+                                                </div>
+
+                                                <div className="rounded-2xl bg-white p-4">
+                                                    <p className="text-xs font-medium text-slate-500">Drop Marathi</p>
+                                                    <p className="mt-2 text-sm font-semibold text-[#0B5D5A] break-words">
+                                                        {previewFareRule.selectedDrop?.marathi || "-"}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Fare + Rule Details */}
+                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                                            {/* Fare Amount */}
+                                            <div className="rounded-[24px] bg-[#0B5D5A] p-5 text-white sm:p-6">
+                                                <p className="text-sm text-white/80">Fare Amount</p>
+                                                <p className="mt-2 text-4xl font-bold leading-none">
+                                                    ₹ {Number(previewFareRule.rule.fare || 0)}
+                                                </p>
+                                                <p className="mt-3 text-sm text-white/90 break-words">
+                                                    {previewFareRule.selectedPickup?.label || "Pickup"} →{" "}
+                                                    {previewFareRule.selectedDrop?.label || "Drop"}
+                                                </p>
+                                            </div>
+
+                                            {/* Rule Details */}
+                                            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                                                <p className="mb-3 text-base font-bold text-slate-800">Rule Details</p>
+
+                                                <div className="space-y-3 text-sm">
+                                                    <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3">
+                                                        <span className="text-slate-500">Status</span>
+                                                        <span
+                                                            className={clsx(
+                                                                "font-semibold",
+                                                                previewFareRule.rule.isActive ? "text-emerald-600" : "text-slate-500"
+                                                            )}
+                                                        >
+                                                            {previewFareRule.rule.isActive ? "Active" : "Inactive"}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3">
+                                                        <span className="text-slate-500">Start Date</span>
+                                                        <span className="font-semibold text-slate-800">
+                                                            {previewFareRule.rule.startDate || "-"}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3">
+                                                        <span className="text-slate-500">End Date</span>
+                                                        <span className="font-semibold text-slate-800">
+                                                            {previewFareRule.rule.endDate || "-"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Rule Application */}
+                                        <div className="rounded-[24px] border border-slate-200 bg-white p-4 sm:p-5">
+                                            <p className="mb-3 text-base font-bold text-slate-800">Rule Application</p>
+
+                                            <div className="flex flex-wrap gap-2">
+                                                <span
+                                                    className={clsx(
+                                                        "inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold",
+                                                        previewFareRule.rule.applyToNextPickups
+                                                            ? "bg-[#0B5D5A]/10 text-[#0B5D5A]"
+                                                            : "bg-slate-100 text-slate-500"
+                                                    )}
+                                                >
+                                                    Apply to next pickups:{" "}
+                                                    {previewFareRule.rule.applyToNextPickups ? "Yes" : "No"}
+                                                </span>
+
+                                                <span
+                                                    className={clsx(
+                                                        "inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold",
+                                                        previewFareRule.rule.applyToPreviousDrops
+                                                            ? "bg-[#0B5D5A]/10 text-[#0B5D5A]"
+                                                            : "bg-slate-100 text-slate-500"
+                                                    )}
+                                                >
+                                                    Apply to previous drops:{" "}
+                                                    {previewFareRule.rule.applyToPreviousDrops ? "Yes" : "No"}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
+                                </div>
+
+                                {/* Footer */}
+                                <div className="flex justify-end border-t border-slate-100 px-5 py-4 sm:px-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPreviewFareRule(null)}
+                                        className="rounded-2xl bg-[#0B5D5A] px-5 py-3 text-sm font-bold text-white hover:bg-[#094B49]"
+                                    >
+                                        Close Preview
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="sticky bottom-0 flex flex-col gap-3 border-t border-slate-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const busId = mode === "edit" && bus?._id ? String(bus._id) : "";
-                            const target = busId ? `/admin/bus/fares?busId=${busId}` : "/admin/bus/fares";
-                            router.push(target);
-                        }}
-                        className="w-full rounded-2xl border border-[#d9e8e6] px-4 py-2.5 text-sm font-semibold text-[#0E6B68] transition hover:bg-[#f1f8f7] sm:w-auto"
-                    >
-                        Add Fares
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
-                    >
-                        Cancel
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={submit}
-                        disabled={saving}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60 sm:w-auto"
-                        style={{ backgroundColor: THEME }}
-                    >
-                        <Save className="h-4 w-4" />
-                        {submitLabel}
-                    </button>
+                    )}
                 </div>
             </div>
         </div>

@@ -1,199 +1,236 @@
 "use client";
 
-import React from "react";
-import { Bus, Pencil, Trash2, Eye } from "lucide-react";
-
-const THEME = "#0E6B68";
+import { BusFront, Pencil, Trash2, Eye, MapPinned } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function BusTable({
     buses = [],
     loading = false,
     onEdit,
     onDelete,
-    onView,
+    onViewLayout,
 }) {
+    const router = useRouter();
+
     if (loading) {
         return (
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-transparent" style={{ borderTopColor: THEME }} />
-                <p className="mt-4 text-sm text-slate-500">Loading buses...</p>
+            <div className="rounded-[28px] border border-slate-200 bg-white p-10 text-center shadow-sm">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0B5D5A]/10">
+                    <BusFront className="h-7 w-7 text-[#0B5D5A]" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-slate-500">Loading buses...</p>
             </div>
         );
     }
 
     if (!buses.length) {
         return (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
-                <div
-                    className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl"
-                    style={{ backgroundColor: "#E8F5F4" }}
-                >
-                    <Bus className="h-7 w-7" style={{ color: THEME }} />
+            <div className="rounded-[28px] border border-slate-200 bg-white p-10 text-center shadow-sm">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0B5D5A]/10">
+                    <BusFront className="h-7 w-7 text-[#0B5D5A]" />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-slate-900">No buses found</h3>
+                <p className="mt-4 text-base font-semibold text-slate-700">No buses found</p>
                 <p className="mt-1 text-sm text-slate-500">
-                    Add your first bus to start managing routes and seat layouts.
+                    Create a new premium bus to see it listed here.
                 </p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-4">
-            {/* Desktop / Tablet Table */}
-            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                        <thead className="bg-slate-50">
-                            <tr className="border-b border-slate-200">
-                                {["Bus", "Type", "Seats", "Route", "Trip", "Status", "Actions"].map((head) => (
-                                    <th
-                                        key={head}
-                                        className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
-                                    >
-                                        {head}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {buses.map((bus) => (
-                                <tr key={bus._id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/70">
-                                    <td className="px-4 py-4">
-                                        <div>
-                                            <p className="font-semibold text-slate-900">{bus.busName}</p>
-                                            <p className="text-xs text-slate-500">{bus.busNumber}</p>
+        <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto md:block">
+                <table className="min-w-full">
+                    <thead className="bg-slate-50/90">
+                        <tr className="border-b border-slate-200">
+                            <th className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                                Bus Details
+                            </th>
+                            <th className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                                Route
+                            </th>
+                            <th className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                                Bus Type
+                            </th>
+                            <th className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                                Seat Layout
+                            </th>
+                            <th className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                                Fare Rules
+                            </th>
+                            <th className="px-6 py-4 text-center text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100">
+                        {buses.map((bus) => (
+                            <tr
+                                key={bus._id}
+                                className="transition-colors duration-200 hover:bg-[#0B5D5A]/[0.03]"
+                            >
+                                {/* Bus */}
+                                <td className="px-6 py-5 align-top">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-[#0B5D5A]/10">
+                                            <BusFront className="h-6 w-6 text-[#0B5D5A]" />
                                         </div>
-                                    </td>
-
-                                    <td className="px-4 py-4 text-sm text-slate-700">{bus.busType}</td>
-
-                                    <td className="px-4 py-4">
-                                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                            {bus.seatLayout} Seats
-                                        </span>
-                                    </td>
-
-                                    <td className="px-4 py-4">
-                                        <div className="max-w-[260px]">
-                                            <p className="truncate text-sm font-medium text-slate-800">{bus.routeName}</p>
-                                            <p className="truncate text-xs text-slate-500">
-                                                {bus.forwardTrip?.from} → {bus.forwardTrip?.to}
+                                        <div className="min-w-0">
+                                            <p className="truncate text-base font-bold text-slate-900">
+                                                {bus.busNumber}
+                                            </p>
+                                            <p className="mt-0.5 truncate text-sm text-slate-600">
+                                                {bus.busName}
                                             </p>
                                         </div>
-                                    </td>
+                                    </div>
+                                </td>
 
-                                    <td className="px-4 py-4 text-sm text-slate-700">{bus.tripType}</td>
+                                {/* Route */}
+                                <td className="px-6 py-5 align-top">
+                                    <div className="space-y-1.5">
+                                        <p className="text-sm font-semibold text-slate-800">{bus.routeName}</p>
+                                    </div>
+                                </td>
 
-                                    <td className="px-4 py-4">
-                                        <span
-                                            className={`rounded-full px-3 py-1 text-xs font-semibold ${bus.status === "ACTIVE"
-                                                    ? "bg-emerald-50 text-emerald-700"
-                                                    : bus.status === "MAINTENANCE"
-                                                        ? "bg-amber-50 text-amber-700"
-                                                        : "bg-slate-100 text-slate-700"
-                                                }`}
+                                {/* Type */}
+                                <td className="px-6 py-5 align-top">
+                                    <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                                        {String(bus.busType || "").replaceAll("_", " ")}
+                                    </span>
+                                </td>
+
+                                {/* Layout */}
+                                <td className="px-6 py-5 align-top">
+                                    <button
+                                        type="button"
+                                        onClick={() => onViewLayout?.(bus)}
+                                        className="inline-flex items-center rounded-full border border-[#0B5D5A]/15 bg-[#0B5D5A]/10 px-3.5 py-1.5 text-xs font-bold text-[#0B5D5A] transition hover:bg-[#0B5D5A]/15"
+                                    >
+                                        {bus.seatLayout} Seats
+                                    </button>
+                                </td>
+
+                                {/* Fare Rules */}
+                                <td className="px-6 py-5 align-top">
+                                    <span className="inline-flex rounded-full border border-[#0B5D5A]/15 bg-[#0B5D5A]/10 px-3.5 py-1.5 text-xs font-bold text-[#0B5D5A]">
+                                        {bus.fareRules?.length || 0} Rules
+                                    </span>
+                                </td>
+
+                                {/* Actions */}
+                                <td className="px-6 py-5 align-top">
+                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => onEdit?.(bus)}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
                                         >
-                                            {bus.status}
-                                        </span>
-                                    </td>
+                                            <Pencil className="h-4 w-4" />
+                                            Edit
+                                        </button>
 
-                                    <td className="px-4 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => onView?.(bus)}
-                                                className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50"
-                                                title="View"
-                                            >
-                                                <Eye className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => onEdit?.(bus)}
-                                                className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50"
-                                                title="Edit"
-                                            >
-                                                <Pencil className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => onDelete?.(bus)}
-                                                className="rounded-xl border border-red-200 p-2 text-red-600 transition hover:bg-red-50"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => router.push(`/admin/bus/fares?busId=${bus._id}`)}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
+                                        >
+                                            <Eye className="h-4 w-4" />
+                                            View Fares
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => onDelete?.(bus)}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
 
-            {/* Mobile / Tablet Cards */}
-            <div className="grid grid-cols-1 gap-4 lg:hidden">
+            {/* Mobile Cards */}
+            <div className="grid gap-4 p-4 md:hidden">
                 {buses.map((bus) => (
-                    <div key={bus._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="truncate text-base font-semibold text-slate-900">{bus.busName}</p>
-                                <p className="text-xs text-slate-500">{bus.busNumber}</p>
+                    <div
+                        key={bus._id}
+                        className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                        {/* Top */}
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#0B5D5A]/10">
+                                <BusFront className="h-6 w-6 text-[#0B5D5A]" />
                             </div>
 
-                            <span
-                                className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold ${bus.status === "ACTIVE"
-                                        ? "bg-emerald-50 text-emerald-700"
-                                        : bus.status === "MAINTENANCE"
-                                            ? "bg-amber-50 text-amber-700"
-                                            : "bg-slate-100 text-slate-700"
-                                    }`}
-                            >
-                                {bus.status}
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-base font-bold text-slate-900">{bus.busNumber}</p>
+                                <p className="truncate text-sm text-slate-600">{bus.busName}</p>
+                            </div>
+
+                            <span className="rounded-full border border-[#0B5D5A]/15 bg-[#0B5D5A]/10 px-3 py-1 text-xs font-bold text-[#0B5D5A]">
+                                {bus.seatLayout} Seats
                             </span>
                         </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                            <div className="rounded-xl bg-slate-50 p-3">
-                                <p className="text-[11px] uppercase tracking-wide text-slate-500">Type</p>
-                                <p className="mt-1 font-medium text-slate-800">{bus.busType}</p>
-                            </div>
-                            <div className="rounded-xl bg-slate-50 p-3">
-                                <p className="text-[11px] uppercase tracking-wide text-slate-500">Seats</p>
-                                <p className="mt-1 font-medium text-slate-800">{bus.seatLayout}</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-3 rounded-xl bg-slate-50 p-3">
-                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Route</p>
-                            <p className="mt-1 text-sm font-medium text-slate-800">{bus.routeName}</p>
-                            <p className="mt-1 text-xs text-slate-500">
-                                {bus.forwardTrip?.from} → {bus.forwardTrip?.to}
+                        {/* Route */}
+                        <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                            <p className="text-sm font-semibold text-slate-800">{bus.routeName}</p>
+                            <p className="mt-1 text-xs text-slate-600">
+                                {bus.forwardTrip?.from || "-"} → {bus.forwardTrip?.to || "-"}
                             </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                                    {String(bus.busType || "").replaceAll("_", " ")}
+                                </span>
+                                <span className="rounded-full border border-[#0B5D5A]/15 bg-[#0B5D5A]/10 px-2.5 py-1 text-[11px] font-semibold text-[#0B5D5A]">
+                                    {bus.fareRules?.length || 0} fare rules
+                                </span>
+                            </div>
                         </div>
 
-                        <div className="mt-4 flex items-center gap-2">
+                        {/* Actions */}
+                        <div className="mt-4 grid grid-cols-3 gap-2">
                             <button
-                                onClick={() => onView?.(bus)}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
-                                <Eye className="h-4 w-4" />
-                                View
-                            </button>
-                            <button
+                                type="button"
                                 onClick={() => onEdit?.(bus)}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-white transition"
-                                style={{ backgroundColor: THEME }}
+                                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
                             >
-                                <Pencil className="h-4 w-4" />
                                 Edit
                             </button>
+
                             <button
-                                onClick={() => onDelete?.(bus)}
-                                className="flex items-center justify-center rounded-xl border border-red-200 px-3 py-2.5 text-red-600 transition hover:bg-red-50"
+                                type="button"
+                                onClick={() => router.push(`/admin/bus/fares?busId=${bus._id}`)}
+                                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
                             >
-                                <Trash2 className="h-4 w-4" />
+                                Fares
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => onDelete?.(bus)}
+                                className="rounded-2xl border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                            >
+                                Delete
                             </button>
                         </div>
+
+                        {/* View Layout Button */}
+                        <button
+                            type="button"
+                            onClick={() => onViewLayout?.(bus)}
+                            className="mt-3 w-full rounded-2xl bg-[#0B5D5A] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#094B49]"
+                        >
+                            View Seat Layout
+                        </button>
                     </div>
                 ))}
             </div>

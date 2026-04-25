@@ -1,122 +1,88 @@
 import mongoose from "mongoose";
 
-/* ------------------------------------------
-   Route Point Schema
-------------------------------------------- */
-const RoutePointSchema = new mongoose.Schema(
+const PointSchema = new mongoose.Schema(
     {
-        name: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        time: {
-            type: String,
-            default: "",
-            trim: true,
-        },
-        landmark: {
-            type: String,
-            default: "",
-            trim: true,
-        },
-        order: {
-            type: Number,
-            required: true,
-            min: 1,
-        },
-        isActive: {
-            type: Boolean,
-            default: true,
-        },
+        name: { type: String, required: true, trim: true },
+        nameMr: { type: String, default: "", trim: true },
+        time: { type: String, default: "", trim: true },
+        order: { type: Number, required: true, min: 1 },
     },
     { _id: false }
 );
 
-/* ------------------------------------------
-   Trip Schema
-------------------------------------------- */
 const TripSchema = new mongoose.Schema(
     {
-        from: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        to: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        departureTime: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        arrivalTime: {
-            type: String,
-            required: true,
-            trim: true,
-        },
+        from: { type: String, required: true, trim: true },
+        departureTime: { type: String, default: "", trim: true },
+        to: { type: String, required: true, trim: true },
+        arrivalTime: { type: String, default: "", trim: true },
+
         pickupPoints: {
-            type: [RoutePointSchema],
+            type: [PointSchema],
             default: [],
             validate: {
-                validator: function (value) {
-                    return !value || value.length <= 150;
-                },
-                message: "pickupPoints cannot exceed 150 entries",
+                validator: (arr) => Array.isArray(arr) && arr.length <= 150,
+                message: "Maximum 150 pickup points allowed",
             },
         },
+
         dropPoints: {
-            type: [RoutePointSchema],
+            type: [PointSchema],
             default: [],
             validate: {
-                validator: function (value) {
-                    return !value || value.length <= 150;
-                },
-                message: "dropPoints cannot exceed 150 entries",
+                validator: (arr) => Array.isArray(arr) && arr.length <= 150,
+                message: "Maximum 150 drop points allowed",
             },
         },
     },
     { _id: false }
 );
 
-/* ------------------------------------------
-   Fare Config Snapshot
-------------------------------------------- */
-const FareConfigSchema = new mongoose.Schema(
+const CabinSchema = new mongoose.Schema(
     {
-        route: {
-            type: String,
-            default: "",
-            trim: true,
-        },
-        busType: {
-            type: String,
-            enum: ["AC", "NON_AC", "AC_SLEEPER", "NON_AC_SLEEPER"],
-            default: "NON_AC",
-        },
-        defaultAmount: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
+        label: { type: String, required: true, trim: true },
+        seatIds: { type: [String], default: [] }, // optional
     },
     { _id: false }
 );
 
-/* ------------------------------------------
-   Bus Schema
-------------------------------------------- */
+const FareRuleSchema = new mongoose.Schema(
+    {
+        tripDirection: {
+            type: String,
+            enum: ["FORWARD", "RETURN"],
+            required: true,
+            default: "FORWARD",
+        },
+
+        pickup: { type: String, required: true, trim: true },
+        pickupMr: { type: String, default: "", trim: true },
+        pickupOrder: { type: Number, required: true, min: 1 },
+
+        drop: { type: String, required: true, trim: true },
+        dropMr: { type: String, default: "", trim: true },
+        dropOrder: { type: Number, required: true, min: 1 },
+
+        fare: { type: Number, required: true, min: 0 },
+
+        startDate: { type: Date, required: true },
+        endDate: { type: Date, required: true },
+
+        applyToNextPickups: { type: Boolean, default: false },
+        applyToPreviousDrops: { type: Boolean, default: false },
+
+        isActive: { type: Boolean, default: true },
+    },
+    { _id: true }
+);
+
 const BusSchema = new mongoose.Schema(
     {
         busNumber: {
             type: String,
             required: true,
-            unique: true,
             trim: true,
-            uppercase: true,
+            unique: true,
             index: true,
         },
 
@@ -128,8 +94,9 @@ const BusSchema = new mongoose.Schema(
 
         busType: {
             type: String,
-            enum: ["AC", "NON_AC", "AC_SLEEPER", "NON_AC_SLEEPER"],
+            enum: ["NON_AC", "AC", "SLEEPER", "SEMI_SLEEPER", "SEATER"],
             required: true,
+            default: "NON_AC",
             index: true,
         },
 
@@ -140,28 +107,12 @@ const BusSchema = new mongoose.Schema(
             index: true,
         },
 
-        totalSeats: {
-            type: Number,
+        tripType: {
+            type: String,
+            enum: ["ONE_WAY", "RETURN"],
             required: true,
-            min: 1,
-        },
-
-        cabinSeatCount: {
-            type: Number,
-            default: 0,
-            min: 0,
-            max: 10,
-        },
-
-        cabinSeats: {
-            type: [Number],
-            default: [],
-            validate: {
-                validator: function (value) {
-                    return !value || value.length <= 10;
-                },
-                message: "cabinSeats cannot exceed 10 seats",
-            },
+            default: "ONE_WAY",
+            index: true,
         },
 
         routeName: {
@@ -171,17 +122,15 @@ const BusSchema = new mongoose.Schema(
             index: true,
         },
 
-        routeCode: {
-            type: String,
-            default: "",
-            trim: true,
-            index: true,
+        autoGenerateReturn: {
+            type: Boolean,
+            default: true,
         },
 
-        tripType: {
+        status: {
             type: String,
-            enum: ["ONE_WAY", "RETURN"],
-            default: "ONE_WAY",
+            enum: ["ACTIVE", "INACTIVE"],
+            default: "ACTIVE",
             index: true,
         },
 
@@ -195,49 +144,18 @@ const BusSchema = new mongoose.Schema(
             default: null,
         },
 
-        fareConfig: {
-            type: FareConfigSchema,
-            default: () => ({
-                route: "",
-                busType: "NON_AC",
-                defaultAmount: 0,
-            }),
-        },
-
-        amenities: {
-            type: [String],
+        cabins: {
+            type: [CabinSchema],
             default: [],
+            validate: {
+                validator: (arr) => Array.isArray(arr) && arr.length <= 10,
+                message: "Maximum 10 cabins allowed",
+            },
         },
 
-        notes: {
-            type: String,
-            default: "",
-            trim: true,
-        },
-
-        status: {
-            type: String,
-            enum: ["ACTIVE", "INACTIVE", "MAINTENANCE"],
-            default: "ACTIVE",
-            index: true,
-        },
-
-        createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: true,
-        },
-
-        updatedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: null,
-        },
-
-        isActive: {
-            type: Boolean,
-            default: true,
-            index: true,
+        fareRules: {
+            type: [FareRuleSchema],
+            default: [],
         },
     },
     {
@@ -245,31 +163,8 @@ const BusSchema = new mongoose.Schema(
     }
 );
 
-/* ------------------------------------------
-   Hooks
-------------------------------------------- */
-BusSchema.pre("validate", function (next) {
-    if (this.seatLayout && (!this.totalSeats || this.totalSeats !== this.seatLayout)) {
-        this.totalSeats = this.seatLayout;
-    }
-
-    if (this.tripType === "ONE_WAY") {
-        this.returnTrip = null;
-    }
-
-    if (this.cabinSeatCount > 10) {
-        this.cabinSeatCount = 10;
-    }
-
-    if (Array.isArray(this.cabinSeats) && this.cabinSeats.length > 10) {
-        this.cabinSeats = this.cabinSeats.slice(0, 10);
-    }
-
-    next();
-});
-
-BusSchema.index({ busNumber: 1 }, { unique: true });
-BusSchema.index({ status: 1, busType: 1, seatLayout: 1 });
-BusSchema.index({ routeName: 1, routeCode: 1 });
+BusSchema.index({ busNumber: 1 });
+BusSchema.index({ routeName: 1, tripType: 1, status: 1 });
+BusSchema.index({ "fareRules.tripDirection": 1, "fareRules.startDate": 1, "fareRules.endDate": 1 });
 
 export default mongoose.models.Bus || mongoose.model("Bus", BusSchema);

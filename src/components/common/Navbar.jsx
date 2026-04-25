@@ -38,6 +38,15 @@ export default function DashboardNavbar({
 
     const profileMenuRef = useRef(null);
     const notifMenuRef = useRef(null);
+    const canUseNotifications = ["admin", "staff"].includes(String(role || "").toLowerCase());
+
+    const normalizeNotification = (item = {}) => ({
+        id: item?.id || item?._id || "",
+        title: String(item?.title || "Notification"),
+        message: String(item?.message || ""),
+        createdAt: item?.createdAt,
+        read: Boolean(item?.read ?? item?.isRead),
+    });
 
     const getAccessToken = () => {
         try {
@@ -268,18 +277,20 @@ export default function DashboardNavbar({
     }, []);
 
     useEffect(() => {
+        if (!canUseNotifications) return undefined;
+
         let mounted = true;
 
         async function loadCount() {
             try {
-                const res = await fetchWithAutoRefresh("/api/auth/notifications", {
+                const res = await fetchWithAutoRefresh("/api/admin/notifications", {
                     method: "GET",
                 });
 
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !mounted) return;
 
-                const list = data.notifications || [];
+                const list = (data?.data || []).map(normalizeNotification);
                 const unread = list.filter((n) => !n.read).length;
                 setNotifCount(unread);
             } catch {
@@ -294,18 +305,24 @@ export default function DashboardNavbar({
             mounted = false;
             clearInterval(id);
         };
-    }, []);
+    }, [canUseNotifications]);
 
     async function loadRecent() {
+        if (!canUseNotifications) {
+            setRecentNotifs([]);
+            setNotifCount(0);
+            return;
+        }
+
         try {
-            const res = await fetchWithAutoRefresh("/api/auth/notifications", {
+            const res = await fetchWithAutoRefresh("/api/admin/notifications", {
                 method: "GET",
             });
 
             const data = await res.json().catch(() => ({}));
             if (!res.ok) return;
 
-            const list = data.notifications || [];
+            const list = (data?.data || []).map(normalizeNotification);
             setRecentNotifs(list.slice(0, 5));
         } catch {
             // ignore
@@ -322,15 +339,16 @@ export default function DashboardNavbar({
     }
 
     async function markAsRead(notification) {
+        if (!canUseNotifications || !notification?.id) return;
+
         try {
-            const res = await fetchWithAutoRefresh("/api/auth/notifications", {
-                method: "PATCH",
+            const res = await fetchWithAutoRefresh(`/api/admin/notifications/${notification.id}`, {
+                method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    id: notification.id,
-                    read: true,
+                    isRead: true,
                 }),
             });
 

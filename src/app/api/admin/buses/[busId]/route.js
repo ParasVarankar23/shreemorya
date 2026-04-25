@@ -1,321 +1,307 @@
-import createAuditLog from "@/lib/createAuditLog";
-import { BUS_TYPES, ROUTES, getFarePreviewByRoute } from "@/lib/fare.js";
-import connectDB from "@/lib/mongodb";
+import dbConnect from "@/lib/db";
+import { getStopNameMarathi, normalizeStopName } from "@/lib/fare";
 import Bus from "@/models/bus.model";
-import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
 import { NextResponse } from "next/server";
 
-const ALLOWED_SEAT_LAYOUTS = [21, 32, 35, 39];
-const MAX_ROUTE_POINTS = 150;
-
-function isValidTimeString(value = "") {
-    return /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(value || "").trim());
+function cleanString(v) {
+    return String(v || "").trim();
 }
 
-function normalizeRoutePoints(points = []) {
-    if (!Array.isArray(points)) return [];
-
-    return points
-        .slice(0, MAX_ROUTE_POINTS)
-        .map((point, index) => {
-            if (typeof point === "string") {
-                return {
-                    name: String(point).trim(),
-                    time: "",
-                    order: index + 1,
-                    isActive: true,
-                };
-            }
-
-            return {
-                name: String(point?.name || "").trim(),
-                time: String(point?.time || "").trim(),
-                order: Number(point?.order) > 0 ? Number(point.order) : index + 1,
-                isActive: point?.isActive !== false,
-            };
-        })
-        .filter((point) => point.name);
+function toDate(v) {
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function normalizeTrip(trip) {
-    if (!trip) return null;
-
+function normalizePoint(point, index) {
+    const name = normalizeStopName(cleanString(point?.name));
     return {
-        from: String(trip.from || "").trim(),
-        to: String(trip.to || "").trim(),
-        departureTime: String(trip.departureTime || "").trim(),
-        arrivalTime: String(trip.arrivalTime || "").trim(),
-        pickupPoints: normalizeRoutePoints(trip.pickupPoints),
-        dropPoints: normalizeRoutePoints(trip.dropPoints),
+        name,
+        nameMr: getStopNameMarathi(name) || cleanString(point?.nameMr),
+        time: cleanString(point?.time),
+        order: Number(point?.order || index + 1),
     };
 }
 
-function validateTrip(trip, label = "forwardTrip") {
-    if (!trip) return `${label} is required`;
+function normalizeTrip(trip = {}) {
+    const pickupPoints = (trip.pickupPoints || [])
+        .filter((p) => cleanString(p?.name))
+        .slice(0, 150)
+        .map((p, i) => normalizePoint(p, i));
 
-    if (!trip.from || !trip.to || !trip.departureTime || !trip.arrivalTime) {
-        return `${label}.from, ${label}.to, ${label}.departureTime and ${label}.arrivalTime are required`;
+    const dropPoints = (trip.dropPoints || [])
+        .filter((p) => cleanString(p?.name))
+        .slice(0, 150)
+        .map((p, i) => normalizePoint(p, i));
+
+    return {
+        from: normalizeStopName(cleanString(trip?.from)),
+        departureTime: cleanString(trip?.departureTime),
+        to: normalizeStopName(cleanString(trip?.to)),
+        arrivalTime: cleanString(trip?.arrivalTime),
+        pickupPoints,
+        dropPoints,
+    };
+}
+
+function autoGenerateReturnTrip(forwardTrip, existingReturnTrip = null) {
+    const reversedPickup = [...(forwardTrip.dropPoints || [])]
+        .reverse()
+        .map((p, i) => ({
+            name: p.name,
+            nameMr: p.nameMr || getStopNameMarathi(p.name) || "",
+            time: "",
+            order: i + 1,
+        }));
+
+    const reversedDrop = [...(forwardTrip.pickupPoints || [])]
+        .reverse()
+        .map((p, i) => ({
+            name: p.name,
+            nameMr: p.nameMr || getStopNameMarathi(p.name) || "",
+            time: "",
+            order: i + 1,
+        }));
+
+    return {
+        from: forwardTrip.to,
+        departureTime: cleanString(existingReturnTrip?.departureTime),
+        to: forwardTrip.from,
+        arrivalTime: cleanString(existingReturnTrip?.arrivalTime),
+        pickupPoints: reversedPickup,
+        dropPoints: reversedDrop,
+    };
+}
+
+function getTripByDirection(payload, direction) {
+    return direction === "RETURN" ? payload.returnTrip : payload.forwardTrip;
+}
+
+function normalizeFareRule(rule, index, payload) {
+    const direction = cleanString(rule?.tripDirection || "FORWARD").toUpperCase();
+    const tripDirection = direction === "RETURN" ? "RETURN" : "FORWARD";
+
+    const trip = getTripByDirection(payload, tripDirection);
+    if (!trip) return null;
+
+    const pickup = normalizeStopName(cleanString(rule?.pickup));
+    const drop = normalizeStopName(cleanString(rule?.drop));
+
+    const pickupList = trip.pickupPoints || [];
+    const dropList = trip.dropPoints || [];
+
+    const pickupPoint = pickupList.find((p) => p.name === pickup);
+    const dropPoint = dropList.find((p) => p.name === drop);
+
+    if (!pickupPoint || !dropPoint) return null;
+
+    const startDate = toDate(rule?.startDate);
+    const endDate = toDate(rule?.endDate);
+
+    if (!startDate || !endDate) return null;
+
+    return {
+        tripDirection,
+        pickup,
+        pickupMr: getStopNameMarathi(pickup) || cleanString(rule?.pickupMr),
+        pickupOrder: pickupPoint.order,
+        drop,
+        dropMr: getStopNameMarathi(drop) || cleanString(rule?.dropMr),
+        dropOrder: dropPoint.order,
+        fare: Number(rule?.fare || 0),
+        startDate,
+        endDate,
+        applyToNextPickups: Boolean(rule?.applyToNextPickups),
+        applyToPreviousDrops: Boolean(rule?.applyToPreviousDrops),
+        isActive: rule?.isActive !== false,
+    };
+}
+
+function normalizePayload(body = {}) {
+    const forwardTrip = normalizeTrip(body.forwardTrip);
+
+    let returnTrip = null;
+    if (cleanString(body.tripType).toUpperCase() === "RETURN") {
+        const autoGenerateReturn = body.autoGenerateReturn ?? true;
+
+        if (autoGenerateReturn) {
+            returnTrip = autoGenerateReturnTrip(forwardTrip, body.returnTrip);
+        } else {
+            returnTrip = normalizeTrip(body.returnTrip || {});
+        }
     }
 
-    if (!isValidTimeString(trip.departureTime) || !isValidTimeString(trip.arrivalTime)) {
-        return `${label} time format must be HH:mm`;
+    const payload = {
+        busNumber: cleanString(body.busNumber).toUpperCase(),
+        busName: cleanString(body.busName),
+        busType: cleanString(body.busType).toUpperCase() || "NON_AC",
+        seatLayout: Number(body.seatLayout || 39),
+        tripType: cleanString(body.tripType).toUpperCase() || "ONE_WAY",
+        routeName: cleanString(body.routeName),
+        autoGenerateReturn: body.autoGenerateReturn !== false,
+        status: cleanString(body.status).toUpperCase() || "ACTIVE",
+        forwardTrip,
+        returnTrip,
+        cabins: (body.cabins || [])
+            .filter((c) => cleanString(c?.label))
+            .slice(0, 10)
+            .map((c) => ({
+                label: cleanString(c.label).toUpperCase(),
+                seatIds: Array.isArray(c?.seatIds) ? c.seatIds.map((s) => cleanString(s)).filter(Boolean) : [],
+            })),
+    };
+
+    payload.fareRules = (body.fareRules || [])
+        .map((rule, i) => normalizeFareRule(rule, i, payload))
+        .filter(Boolean);
+
+    return payload;
+}
+
+function validatePayload(payload) {
+    if (!payload.busNumber) return "Bus number is required";
+    if (!payload.busName) return "Bus name is required";
+    if (!payload.routeName) return "Route name is required";
+
+    if (!payload.forwardTrip?.from) return "Forward start point is required";
+    if (!payload.forwardTrip?.to) return "Forward end point is required";
+
+    if (payload.tripType === "RETURN") {
+        if (!payload.returnTrip?.from) return "Return start point is required";
+        if (!payload.returnTrip?.to) return "Return end point is required";
     }
 
-    if ((trip.pickupPoints || []).length > MAX_ROUTE_POINTS) {
-        return `${label}.pickupPoints cannot exceed ${MAX_ROUTE_POINTS}`;
-    }
-
-    if ((trip.dropPoints || []).length > MAX_ROUTE_POINTS) {
-        return `${label}.dropPoints cannot exceed ${MAX_ROUTE_POINTS}`;
+    for (const rule of payload.fareRules) {
+        if (rule.endDate < rule.startDate) {
+            return `Fare rule date range invalid for ${rule.pickup} → ${rule.drop}`;
+        }
     }
 
     return null;
 }
 
-function getDefaultAmountFromFare(route, busType) {
-    const preview = getFarePreviewByRoute(route, busType);
-    if (!preview.length) return 0;
-    return Math.max(...preview.map((item) => Number(item.amount || 0)));
-}
-
-/* ------------------------------------------
-   GET /api/admin/buses/[busId]
-------------------------------------------- */
 export async function GET(request, { params }) {
     try {
-        await connectDB();
+        await dbConnect();
 
-        const authUser = await getAuthUserFromRequest(request);
-
-        if (!authUser) {
-            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-        }
-
-        if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
-        }
-
-        const { busId } = params;
-
-        const bus = await Bus.findById(busId);
-
-        if (!bus || !bus.isActive) {
-            return NextResponse.json({ success: false, message: "Bus not found" }, { status: 404 });
-        }
-
-        return NextResponse.json({
-            success: true,
-            message: "Bus fetched successfully",
-            data: bus,
-        });
-    } catch (error) {
-        console.error("GET /api/admin/buses/[busId] error:", error);
-
-        return NextResponse.json({ success: false, message: "Failed to fetch bus" }, { status: 500 });
-    }
-}
-
-/* ------------------------------------------
-   PUT /api/admin/buses/[busId]
-------------------------------------------- */
-export async function PUT(request, { params }) {
-    try {
-        await connectDB();
-
-        const authUser = await getAuthUserFromRequest(request);
-
-        if (!authUser) {
-            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-        }
-
-        if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
-        }
-
-        const { busId } = params;
-        const body = await request.json();
-
-        const bus = await Bus.findById(busId);
-
-        if (!bus || !bus.isActive) {
-            return NextResponse.json({ success: false, message: "Bus not found" }, { status: 404 });
-        }
-
-        const oldValues = bus.toObject();
-
-        if (body.busNumber) {
-            const duplicate = await Bus.findOne({
-                _id: { $ne: busId },
-                busNumber: String(body.busNumber).trim().toUpperCase(),
-            });
-
-            if (duplicate) {
-                return NextResponse.json({ success: false, message: "Bus number already exists" }, { status: 409 });
-            }
-        }
-
-        if (body.busType && !Object.values(BUS_TYPES).includes(body.busType)) {
-            return NextResponse.json({ success: false, message: "Invalid busType" }, { status: 400 });
-        }
-
-        if (body.seatLayout && !ALLOWED_SEAT_LAYOUTS.includes(Number(body.seatLayout))) {
+        const { busId } = (await params) || {};
+        if (!busId) {
             return NextResponse.json(
-                { success: false, message: "Invalid seat layout. Allowed: 21, 32, 35, 39" },
+                { success: false, message: "Bus id is required" },
                 { status: 400 }
             );
         }
 
-        if (body.routeCode && !Object.values(ROUTES).includes(body.routeCode)) {
-            return NextResponse.json({ success: false, message: "Invalid routeCode" }, { status: 400 });
-        }
+        const item = await Bus.findById(busId).lean();
 
-        const nextTripType = body.tripType || bus.tripType;
-
-        let normalizedForwardTrip = bus.forwardTrip;
-        if (body.forwardTrip) {
-            normalizedForwardTrip = normalizeTrip(body.forwardTrip);
-            const err = validateTrip(normalizedForwardTrip, "forwardTrip");
-            if (err) {
-                return NextResponse.json({ success: false, message: err }, { status: 400 });
-            }
-        }
-
-        let normalizedReturnTrip = bus.returnTrip;
-        if (nextTripType === "RETURN") {
-            normalizedReturnTrip = body.returnTrip ? normalizeTrip(body.returnTrip) : bus.returnTrip;
-            const err = validateTrip(normalizedReturnTrip, "returnTrip");
-            if (err) {
-                return NextResponse.json({ success: false, message: err }, { status: 400 });
-            }
-        } else {
-            normalizedReturnTrip = null;
-        }
-
-        const nextBusType = body.busType || bus.busType;
-        const nextRouteCode = body.routeCode !== undefined ? String(body.routeCode || "").trim() : bus.routeCode;
-
-        const nextFareConfig = {
-            route: body?.fareConfig?.route || nextRouteCode || bus?.fareConfig?.route || "",
-            busType: body?.fareConfig?.busType || nextBusType || bus?.fareConfig?.busType || "NON_AC",
-            defaultAmount:
-                Number(body?.fareConfig?.defaultAmount) > 0
-                    ? Number(body.fareConfig.defaultAmount)
-                    : 0,
-        };
-
-        if (!nextFareConfig.defaultAmount && nextFareConfig.route) {
-            nextFareConfig.defaultAmount = getDefaultAmountFromFare(nextFareConfig.route, nextFareConfig.busType);
-        }
-
-        Object.assign(bus, {
-            ...body,
-            busNumber: body.busNumber ? String(body.busNumber).trim().toUpperCase() : bus.busNumber,
-            busName: body.busName ? String(body.busName).trim() : bus.busName,
-            seatLayout: body.seatLayout ? Number(body.seatLayout) : bus.seatLayout,
-            totalSeats: body.seatLayout ? Number(body.seatLayout) : bus.totalSeats,
-            cabinSeatCount:
-                body.cabinSeatCount !== undefined ? Math.min(Number(body.cabinSeatCount || 0), 10) : bus.cabinSeatCount,
-            cabinSeats: Array.isArray(body.cabinSeats) ? body.cabinSeats.slice(0, 10) : bus.cabinSeats,
-            routeName: body.routeName ? String(body.routeName).trim() : bus.routeName,
-            routeCode: nextRouteCode,
-            forwardTrip: normalizedForwardTrip,
-            returnTrip: normalizedReturnTrip,
-            fareConfig: nextFareConfig,
-            notes: body.notes !== undefined ? String(body.notes || "").trim() : bus.notes,
-            updatedBy: authUser.userId,
-        });
-
-        await bus.save();
-
-        try {
-            await createAuditLog({
-                userId: authUser.userId,
-                userRole: authUser.role,
-                action: "UPDATE_BUS",
-                entityType: "BUS",
-                entityId: bus._id,
-                entityCode: bus.busNumber,
-                message: `Updated bus ${bus.busNumber}`,
-                oldValues,
-                newValues: bus.toObject(),
-                status: "SUCCESS",
-            });
-        } catch (auditError) {
-            console.error("Audit log update bus error:", auditError);
+        if (!item) {
+            return NextResponse.json(
+                { success: false, message: "Bus not found" },
+                { status: 404 }
+            );
         }
 
         return NextResponse.json({
             success: true,
-            message: "Bus updated successfully",
-            data: bus,
+            item,
         });
     } catch (error) {
-        console.error("PUT /api/admin/buses/[busId] error:", error);
-
+        console.error("GET /api/admin/buses/[busId] error:", error);
         return NextResponse.json(
-            { success: false, message: error.message || "Failed to update bus" },
+            { success: false, message: "Failed to fetch bus" },
             { status: 500 }
         );
     }
 }
 
-/* ------------------------------------------
-   DELETE /api/admin/buses/[busId]
-------------------------------------------- */
+export async function PUT(request, { params }) {
+    try {
+        await dbConnect();
+
+        const { busId } = (await params) || {};
+        if (!busId) {
+            return NextResponse.json(
+                { success: false, message: "Bus id is required" },
+                { status: 400 }
+            );
+        }
+
+        const body = await request.json();
+
+        const payload = normalizePayload(body);
+        const error = validatePayload(payload);
+
+        if (error) {
+            return NextResponse.json({ success: false, message: error }, { status: 400 });
+        }
+
+        const existingByNumber = await Bus.findOne({
+            busNumber: payload.busNumber,
+            _id: { $ne: busId },
+        });
+
+        if (existingByNumber) {
+            return NextResponse.json(
+                { success: false, message: "Bus number already exists" },
+                { status: 409 }
+            );
+        }
+
+        const updated = await Bus.findByIdAndUpdate(busId, payload, {
+            new: true,
+            runValidators: true,
+        });
+
+        if (!updated) {
+            return NextResponse.json(
+                { success: false, message: "Bus not found" },
+                { status: 404 }
+            );
+        }
+
+        return NextResponse.json(
+            { success: true, item: updated, message: "Bus updated successfully" },
+            { status: 200 }
+        );
+    } catch (error) {
+        console.error("PUT /api/admin/buses/[busId] error:", error);
+        return NextResponse.json(
+            { success: false, message: "Failed to update bus" },
+            { status: 500 }
+        );
+    }
+}
+
 export async function DELETE(request, { params }) {
     try {
-        await connectDB();
+        await dbConnect();
 
-        const authUser = await getAuthUserFromRequest(request);
-
-        if (!authUser) {
-            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+        const { busId } = (await params) || {};
+        if (!busId) {
+            return NextResponse.json(
+                { success: false, message: "Bus id is required" },
+                { status: 400 }
+            );
         }
 
-        if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
+        const deleted = await Bus.findByIdAndDelete(busId);
+
+        if (!deleted) {
+            return NextResponse.json(
+                { success: false, message: "Bus not found" },
+                { status: 404 }
+            );
         }
 
-        const { busId } = params;
-
-        const bus = await Bus.findById(busId);
-
-        if (!bus || !bus.isActive) {
-            return NextResponse.json({ success: false, message: "Bus not found" }, { status: 404 });
-        }
-
-        const oldValues = bus.toObject();
-
-        bus.isActive = false;
-        bus.status = "INACTIVE";
-        bus.updatedBy = authUser.userId;
-
-        await bus.save();
-
-        try {
-            await createAuditLog({
-                userId: authUser.userId,
-                userRole: authUser.role,
-                action: "DELETE_BUS",
-                entityType: "BUS",
-                entityId: bus._id,
-                entityCode: bus.busNumber,
-                message: `Soft deleted bus ${bus.busNumber}`,
-                oldValues,
-                newValues: bus.toObject(),
-                status: "SUCCESS",
-            });
-        } catch (auditError) {
-            console.error("Audit log delete bus error:", auditError);
-        }
-
-        return NextResponse.json({
-            success: true,
-            message: "Bus deleted successfully",
-        });
+        return NextResponse.json(
+            { success: true, message: "Bus deleted successfully" },
+            { status: 200 }
+        );
     } catch (error) {
         console.error("DELETE /api/admin/buses/[busId] error:", error);
-
-        return NextResponse.json({ success: false, message: "Failed to delete bus" }, { status: 500 });
+        return NextResponse.json(
+            { success: false, message: "Failed to delete bus" },
+            { status: 500 }
+        );
     }
 }

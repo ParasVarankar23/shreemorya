@@ -45,7 +45,7 @@ export function getSeatRows(total) {
         // 32 SEAT LAYOUT
         // =========================
         32: [
-            {left: 32, right: null},
+            { left: 32, right: null },
             { left: null, right: [1, 2] },
             { left: [6, 5], right: [4, 3] },
             { left: [7, 8], right: [9, 10] },
@@ -103,14 +103,25 @@ export default function SeatLayout({
     onViewBooking,
     compact = false,
     cabins = [],
+    tables = [],
     cabinLimit = 10,
+    tableLimit = 10,
 }) {
     const totalSeats = Number(String(layout || "39")) || 39;
     const rows = getSeatRows(totalSeats);
 
     // Cabin max 10
     const safeCabins = Array.isArray(cabins) ? cabins.slice(0, cabinLimit) : [];
-    const cabinSeatIds = safeCabins.map((c, i) => String(c?.seatNo || `CB${i + 1}`));
+    const cabinSeatIds = safeCabins.map((c, i) => ({
+        seatId: String(c?.seatNo || c?.label || `CB${i + 1}`),
+        displayLabel: `C${i + 1}`,
+    }));
+
+    const safeTables = Array.isArray(tables) ? tables.slice(0, tableLimit) : [];
+    const tableLabels = safeTables.map((t, i) => ({
+        seatId: String(t?.seatNo || t?.label || `T${i + 1}`),
+        displayLabel: `T${i + 1}`,
+    }));
 
     const bookedSet = new Set((bookedSeats || []).map((s) => toStr(s)));
     const selectedSet = new Set((selectedSeats || []).map((s) => toStr(s)));
@@ -286,10 +297,35 @@ export default function SeatLayout({
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5">
-                            {cabinSeatIds.map((seatId) => (
-                                <div key={seatId} className="flex flex-col items-center gap-1">
-                                    <div className="text-[10px] font-semibold text-slate-500">CB</div>
-                                    {renderSeat(seatId, true)}
+                            {cabinSeatIds.map((cabin) => (
+                                <div key={cabin.displayLabel} className="flex flex-col items-center gap-1">
+                                    <div className="text-[10px] font-semibold text-slate-500">{cabin.displayLabel}</div>
+                                    {renderSeat(cabin.seatId, true)}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Table Seats */}
+                {tableLabels.length > 0 && (
+                    <div className="mt-5 border-t border-slate-200 pt-4">
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="text-xs font-semibold text-slate-700 sm:text-sm">
+                                Table Seats
+                            </div>
+                            <div className="text-[11px] text-slate-500">Max 10 only</div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5">
+                            {tableLabels.map((table) => (
+                                <div key={table.displayLabel} className="flex flex-col items-center gap-1">
+                                    <div className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                        {table.displayLabel}
+                                    </div>
+                                    <div className="flex items-center justify-center rounded-xl border border-emerald-300 bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-800 shadow-sm">
+                                        {table.seatId}
+                                    </div>
                                 </div>
                             ))}
                         </div>
