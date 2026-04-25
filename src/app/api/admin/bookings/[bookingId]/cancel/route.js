@@ -1,4 +1,4 @@
-import connectDB from "@/lib/connectDB";
+import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import { NextResponse } from "next/server";
 
@@ -6,7 +6,7 @@ export async function POST(request, { params }) {
     try {
         await connectDB();
 
-        const { bookingId } = params;
+        const { bookingId } = await params;
         const body = await request.json();
         const actionType = body?.actionType || "NO_REFUND";
 

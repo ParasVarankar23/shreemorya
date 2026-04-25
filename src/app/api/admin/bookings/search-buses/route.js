@@ -87,16 +87,24 @@ export async function GET(request) {
                 continue;
             }
 
-            const bookings = await Booking.find({
+            const allBookings = await Booking.find({
                 scheduleId: schedule._id,
                 travelDate: date,
-                bookingStatus: { $ne: "CANCELLED" },
             }).lean();
 
-            const bookedCount = bookings.reduce(
-                (acc, item) => acc + (Array.isArray(item?.seats) ? item.seats.length : 0),
-                0
-            );
+            const bookedCount = allBookings.reduce((acc, item) => {
+                if (item.bookingStatus !== "CANCELLED") {
+                    return acc + (Array.isArray(item?.seats) ? item.seats.length : 0);
+                }
+                return acc;
+            }, 0);
+
+            const blockedCount = allBookings.reduce((acc, item) => {
+                if (item.bookingStatus === "CANCELLED" && item.seatStatus === "blocked") {
+                    return acc + (Array.isArray(item?.seats) ? item.seats.length : 0);
+                }
+                return acc;
+            }, 0);
 
             filtered.push({
                 _id: schedule._id,

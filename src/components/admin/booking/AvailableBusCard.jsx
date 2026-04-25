@@ -3,10 +3,12 @@
 import { BusFront, Clock3, Eye, MapPin, Route } from "lucide-react";
 
 export default function AvailableBusCard({ bus, onViewSeats }) {
-    const totalSeats = Number(bus?.seatLayout || 39);
+    const baseSeats = Number(bus?.seatLayout || 39);
+    const cabins = Number(bus?.cabinCount || 0);
+    const tables = Number(bus?.tableCount || 0);
+    const totalSeats = baseSeats + cabins + tables;
     const booked = Number(bus?.bookedCount || 0);
     const blocked = Number(bus?.blockedCount || 0);
-    const cabins = Number(bus?.cabinCount || 0);
     const available = Math.max(totalSeats - booked - blocked, 0);
 
     return (
@@ -54,12 +56,19 @@ export default function AvailableBusCard({ bus, onViewSeats }) {
             </div>
 
             {/* Stats */}
-            <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-                <StatCard label="TOTAL" value={totalSeats} tone="teal" />
-                <StatCard label="BOOKED" value={booked} tone="slate" />
-                <StatCard label="BLOCKED" value={blocked} tone="amber" />
-                <StatCard label="CABINS" value={cabins} tone="indigo" />
-                <StatCard label="AVAILABLE" value={available} tone="green" />
+            <div className="mt-5 space-y-3">
+                {/* Row 1 */}
+                <div className="grid grid-cols-3 gap-3">
+                    <StatCard label="TOTAL" value={totalSeats} tone="teal" />
+                    <StatCard label="BOOKED" value={booked} tone="slate" />
+                    <StatCard label="BLOCKED" value={blocked} tone="amber" />
+                </div>
+                {/* Row 2 */}
+                <div className="grid grid-cols-3 gap-3">
+                    <StatCard label="CABINS" value={cabins} tone="indigo" />
+                    <StatCard label="TABLE" value={tables} tone="violet" />
+                    <StatCard label="AVAILABLE" value={available} tone="green" />
+                </div>
             </div>
 
             {/* Route Info */}
@@ -90,6 +99,7 @@ function StatCard({ label, value, tone = "slate" }) {
         slate: "bg-slate-100 text-slate-700 border border-slate-200",
         amber: "bg-[#FFF7ED] text-[#C2410C] border border-[#FED7AA]",
         indigo: "bg-indigo-50 text-indigo-700 border border-indigo-100",
+        violet: "bg-violet-50 text-violet-700 border border-violet-100",
         green: "bg-emerald-50 text-emerald-700 border border-emerald-100",
     };
 

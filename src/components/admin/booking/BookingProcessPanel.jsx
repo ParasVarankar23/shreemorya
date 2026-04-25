@@ -1,7 +1,9 @@
 "use client";
 
 import {
+    Ban,
     BusFront,
+    CalendarDays,
     Download,
     Mail,
     Phone,
@@ -42,13 +44,11 @@ export default function BookingProcessPanel({
 
     const [cancelModalOpen, setCancelModalOpen] = useState(false);
     const [printModalOpen, setPrintModalOpen] = useState(false);
-    const [blockModalOpen, setBlockModalOpen] = useState(false);
 
     const [cancelLoading, setCancelLoading] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
-    const [blockLoading, setBlockLoading] = useState(false);
-    const [blockSeatNo, setBlockSeatNo] = useState("");
-    const [blockReason, setBlockReason] = useState("");
+    const [blockingSeats, setBlockingSeats] = useState(false);
+    const [unblockingSeats, setUnblockingSeats] = useState(false);
 
     useEffect(() => {
         if (selectedBus?._id && travelDate) {
@@ -70,16 +70,19 @@ export default function BookingProcessPanel({
                 map[String(seatNo)] = {
                     bookingId: booking?._id,
                     status:
-                        booking?.bookingStatus === "CANCELLED"
+                        booking?.bookingStatus === "CANCELLED" ||
+                            booking?.seatStatus === "blocked"
                             ? "blocked"
-                            : booking?.seatStatus || "booked",
+                            : "booked",
                     customerName: booking?.customerName || "",
                     customerPhone: booking?.customerPhone || "",
                     customerEmail: booking?.customerEmail || "",
                     pickupName: booking?.pickupName || pickupStop?.name || "",
                     dropName: booking?.dropName || dropStop?.name || "",
-                    pickupMarathi: booking?.pickupMarathi || pickupStop?.marathiName || "",
-                    dropMarathi: booking?.dropMarathi || dropStop?.marathiName || "",
+                    pickupMarathi:
+                        booking?.pickupMarathi || pickupStop?.marathiName || "",
+                    dropMarathi:
+                        booking?.dropMarathi || dropStop?.marathiName || "",
                     pickupTime: booking?.pickupTime || pickupStop?.time || "",
                     dropTime: booking?.dropTime || dropStop?.time || "",
                     fare: booking?.finalPayableAmount || booking?.fare || 0,
@@ -109,6 +112,18 @@ export default function BookingProcessPanel({
         const perSeat = Number(selectedBus?.fare || 0);
         return perSeat * selectedSeats.length;
     }, [selectedBus, selectedSeats]);
+
+    const selectedBlockedSeats = useMemo(() => {
+        return selectedSeats.filter((seat) => blockedSeats.includes(String(seat)));
+    }, [selectedSeats, blockedSeats]);
+
+    const selectedFreshSeats = useMemo(() => {
+        return selectedSeats.filter(
+            (seat) =>
+                !blockedSeats.includes(String(seat)) &&
+                !bookedSeats.includes(String(seat))
+        );
+    }, [selectedSeats, blockedSeats, bookedSeats]);
 
     const loadExistingBookings = async () => {
         try {
@@ -170,9 +185,7 @@ export default function BookingProcessPanel({
             (booking?.seats || []).map(String).includes(String(seatNo))
         );
 
-        if (!matchedBooking) {
-            return;
-        }
+        if (!matchedBooking) return;
 
         setSelectedBookingDetail({
             seatNo: String(seatNo),
@@ -184,8 +197,10 @@ export default function BookingProcessPanel({
             customerEmail: matchedBooking?.customerEmail || "",
             pickupName: matchedBooking?.pickupName || pickupStop?.name || "",
             dropName: matchedBooking?.dropName || dropStop?.name || "",
-            pickupMarathi: matchedBooking?.pickupMarathi || pickupStop?.marathiName || "",
-            dropMarathi: matchedBooking?.dropMarathi || dropStop?.marathiName || "",
+            pickupMarathi:
+                matchedBooking?.pickupMarathi || pickupStop?.marathiName || "",
+            dropMarathi:
+                matchedBooking?.dropMarathi || dropStop?.marathiName || "",
             pickupTime: matchedBooking?.pickupTime || pickupStop?.time || "",
             dropTime: matchedBooking?.dropTime || dropStop?.time || "",
             fare: matchedBooking?.finalPayableAmount || matchedBooking?.fare || 0,
@@ -205,19 +220,36 @@ export default function BookingProcessPanel({
 
     const handleCreateBooking = async (paymentMode) => {
         try {
-            if (!selectedBus?._id) return showAppToast("error", "Please select a bus first");
-            if (!travelDate) return showAppToast("error", "Please select travel date");
-            if (!pickupStop || !dropStop) return showAppToast("error", "Pickup and drop are required");
-            if (selectedSeats.length === 0) return showAppToast("error", "Please select at least one seat");
-            if (!customerName.trim()) return showAppToast("error", "Passenger name is required");
-            if (!customerPhone.trim()) return showAppToast("error", "Phone number is required");
+            if (!selectedBus?._id) {
+                return showAppToast("error", "Please select a bus first");
+            }
+
+            if (!travelDate) {
+                return showAppToast("error", "Please select travel date");
+            }
+
+            if (!pickupStop || !dropStop) {
+                return showAppToast("error", "Pickup and drop are required");
+            }
+
+            if (selectedFreshSeats.length === 0) {
+                return showAppToast("error", "Please select at least one available seat");
+            }
+
+            if (!customerName.trim()) {
+                return showAppToast("error", "Passenger name is required");
+            }
+
+            if (!customerPhone.trim()) {
+                return showAppToast("error", "Phone number is required");
+            }
 
             setSubmitting(true);
 
             const payload = {
                 scheduleId: selectedBus._id,
                 travelDate,
-                seats: selectedSeats,
+                seats: selectedFreshSeats,
                 customerName: customerName.trim(),
                 customerPhone: customerPhone.trim(),
                 customerEmail: customerEmail.trim(),
@@ -254,21 +286,21 @@ export default function BookingProcessPanel({
         }
     };
 
-    const handleBlockSeat = async () => {
+    const handleBlockSelectedSeats = async () => {
         try {
-            if (!selectedBus?._id) return showAppToast("error", "Please select a bus first");
-            if (!travelDate) return showAppToast("error", "Please select travel date");
-            if (!blockSeatNo) return showAppToast("error", "Please select a seat number to block");
-
-            const seatNo = String(blockSeatNo).trim();
-            const alreadyBooked = bookedMap[seatNo];
-
-            if (alreadyBooked) {
-                showAppToast("error", `Seat ${seatNo} is already occupied`);
-                return;
+            if (!selectedBus?._id) {
+                return showAppToast("error", "Please select a bus first");
             }
 
-            setBlockLoading(true);
+            if (!travelDate) {
+                return showAppToast("error", "Please select travel date");
+            }
+
+            if (selectedFreshSeats.length === 0) {
+                return showAppToast("error", "Select available seat(s) to block");
+            }
+
+            setBlockingSeats(true);
 
             const res = await fetch("/api/admin/bookings", {
                 method: "POST",
@@ -276,10 +308,10 @@ export default function BookingProcessPanel({
                 body: JSON.stringify({
                     scheduleId: selectedBus._id,
                     travelDate,
-                    seats: [seatNo],
+                    seats: selectedFreshSeats,
                     customerName: "Blocked Seat",
                     customerPhone: "BLOCKED",
-                    customerEmail: blockReason.trim(),
+                    customerEmail: "",
                     pickupName: pickupStop?.name || "",
                     pickupMarathi: pickupStop?.marathiName || "",
                     pickupTime: pickupStop?.time || "",
@@ -298,19 +330,67 @@ export default function BookingProcessPanel({
             const data = await res.json();
 
             if (!res.ok || !data?.success) {
-                throw new Error(data?.message || "Failed to block seat");
+                throw new Error(data?.message || "Failed to block selected seats");
             }
 
-            showAppToast("success", `Seat ${seatNo} blocked successfully`);
-            setBlockModalOpen(false);
-            setBlockSeatNo("");
-            setBlockReason("");
+            showAppToast(
+                "success",
+                `Blocked seat(s): ${selectedFreshSeats.join(", ")}`
+            );
+
+            setSelectedSeats([]);
             await loadExistingBookings();
         } catch (error) {
-            console.error("handleBlockSeat error:", error);
-            showAppToast("error", error.message || "Failed to block seat");
+            console.error("handleBlockSelectedSeats error:", error);
+            showAppToast("error", error.message || "Failed to block selected seats");
         } finally {
-            setBlockLoading(false);
+            setBlockingSeats(false);
+        }
+    };
+
+    const handleUnblockSelectedSeats = async () => {
+        try {
+            if (selectedBlockedSeats.length === 0) {
+                return showAppToast("error", "Select blocked seat(s) to unblock");
+            }
+
+            setUnblockingSeats(true);
+
+            const blockedBookings = existingBookings.filter((booking) => {
+                const seats = (booking?.seats || []).map(String);
+
+                return (
+                    (booking?.bookingStatus === "CANCELLED" ||
+                        booking?.seatStatus === "blocked") &&
+                    seats.some((seat) => selectedBlockedSeats.includes(seat))
+                );
+            });
+
+            for (const booking of blockedBookings) {
+                const res = await fetch(`/api/admin/bookings/${booking._id}`, {
+                    method: "DELETE",
+                    headers: getAuthHeaders(),
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data?.success) {
+                    throw new Error(data?.message || "Failed to unblock selected seats");
+                }
+            }
+
+            showAppToast(
+                "success",
+                `Unblocked seat(s): ${selectedBlockedSeats.join(", ")}`
+            );
+
+            setSelectedSeats([]);
+            await loadExistingBookings();
+        } catch (error) {
+            console.error("handleUnblockSelectedSeats error:", error);
+            showAppToast("error", error.message || "Failed to unblock selected seats");
+        } finally {
+            setUnblockingSeats(false);
         }
     };
 
@@ -320,11 +400,14 @@ export default function BookingProcessPanel({
 
             setEditLoading(true);
 
-            const res = await fetch(`/api/admin/bookings/${selectedBookingDetail.booking._id}`, {
-                method: "PUT",
-                headers: getAuthHeaders(),
-                body: JSON.stringify(updatedValues),
-            });
+            const res = await fetch(
+                `/api/admin/bookings/${selectedBookingDetail.booking._id}`,
+                {
+                    method: "PUT",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(updatedValues),
+                }
+            );
 
             const data = await res.json();
 
@@ -350,11 +433,14 @@ export default function BookingProcessPanel({
 
             setCancelLoading(true);
 
-            const res = await fetch(`/api/admin/bookings/${selectedBookingDetail.booking._id}/cancel`, {
-                method: "POST",
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ actionType }),
-            });
+            const res = await fetch(
+                `/api/admin/bookings/${selectedBookingDetail.booking._id}/cancel`,
+                {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ actionType }),
+                }
+            );
 
             const data = await res.json();
 
@@ -367,6 +453,9 @@ export default function BookingProcessPanel({
             setCancelModalOpen(false);
             setSeatDetailModalOpen(false);
             setSelectedBookingDetail(null);
+            setSelectedSeats((prev) =>
+                prev.filter((seat) => seat !== selectedBookingDetail?.seatNo)
+            );
 
             await loadExistingBookings();
         } catch (error) {
@@ -377,10 +466,50 @@ export default function BookingProcessPanel({
         }
     };
 
+    const handleUnblockBooking = async () => {
+        try {
+            if (!selectedBookingDetail?.bookingId) return;
+
+            setCancelLoading(true);
+
+            const res = await fetch(
+                `/api/admin/bookings/${selectedBookingDetail.bookingId}`,
+                {
+                    method: "DELETE",
+                    headers: getAuthHeaders(),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || !data?.success) {
+                throw new Error(data?.message || "Failed to unblock seat");
+            }
+
+            showAppToast("success", data?.message || "Seat unblocked successfully");
+
+            setSeatDetailModalOpen(false);
+            setSelectedBookingDetail(null);
+            setSelectedSeats((prev) =>
+                prev.filter((seat) => seat !== selectedBookingDetail?.seatNo)
+            );
+
+            await loadExistingBookings();
+        } catch (error) {
+            console.error("handleUnblockBooking error:", error);
+            showAppToast("error", error.message || "Failed to unblock seat");
+        } finally {
+            setCancelLoading(false);
+        }
+    };
+
     if (!selectedBus) return null;
 
     const totalSeats = Number(selectedBus?.seatLayout || 39);
-    const availableCount = Math.max(totalSeats - bookedSeats.length - blockedSeats.length, 0);
+    const availableCount = Math.max(
+        totalSeats - bookedSeats.length - blockedSeats.length,
+        0
+    );
 
     return (
         <>
@@ -389,7 +518,7 @@ export default function BookingProcessPanel({
                 <div className="border-b border-slate-200 px-4 py-4 sm:px-5 sm:py-5">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                         <div className="min-w-0">
-                            <div className="mb-1.5 text-[11px] font-bold tracking-[0.28em] text-[#0B5D5A] uppercase">
+                            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.28em] text-[#0B5D5A]">
                                 Seat Layout View
                             </div>
 
@@ -404,15 +533,6 @@ export default function BookingProcessPanel({
                         </div>
 
                         <div className="flex flex-wrap gap-2.5">
-                            <button
-                                type="button"
-                                onClick={() => setBlockModalOpen(true)}
-                                className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-orange-300 bg-orange-50 px-4 text-sm font-semibold text-orange-700 transition-all duration-200 hover:bg-orange-100"
-                            >
-
-                                Block Seat
-                            </button>
-
                             <button
                                 type="button"
                                 onClick={() => setPrintModalOpen(true)}
@@ -443,7 +563,7 @@ export default function BookingProcessPanel({
                 </div>
 
                 {/* Top Stats */}
-                <div className="grid grid-cols-1 gap-3 border-b border-slate-200 px-4 py-4 sm:grid-cols-2 xl:grid-cols-4 sm:px-5">
+                <div className="grid grid-cols-1 gap-3 border-b border-slate-200 px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-4">
                     <TopInfoCard
                         icon={<BusFront className="h-5 w-5" />}
                         label="Bus Number"
@@ -455,7 +575,7 @@ export default function BookingProcessPanel({
                         value={`${totalSeats} Seats`}
                     />
                     <TopInfoCard
-                        icon={<Printer className="h-5 w-5" />}
+                        icon={<CalendarDays className="h-5 w-5" />}
                         label="Date"
                         value={travelDate}
                     />
@@ -467,12 +587,12 @@ export default function BookingProcessPanel({
                 </div>
 
                 {/* Main Layout */}
-                <div className="grid grid-cols-1 gap-5 p-4 xl:grid-cols-[1.5fr_0.9fr] sm:p-5">
+                <div className="grid grid-cols-1 gap-5 p-4 sm:p-5 xl:grid-cols-[1.5fr_0.9fr]">
                     {/* LEFT */}
                     <div className="space-y-5">
                         {/* Seat Layout */}
                         <div className="rounded-[22px] border border-[#D7ECEA] bg-[#F8FCFC] p-4 sm:p-5">
-                            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">
                                         Bus Seat Layout
@@ -482,26 +602,62 @@ export default function BookingProcessPanel({
                                     </p>
                                 </div>
 
-                                <div className="rounded-full border border-[#CFE5E3] bg-white px-4 py-1.5 text-sm font-bold text-[#0B5D5A]">
-                                    Available: {availableCount}
+                                <div className="flex flex-wrap gap-2">
+                                    <span className="rounded-full border border-[#CFE5E3] bg-white px-4 py-1.5 text-sm font-bold text-[#0B5D5A]">
+                                        Available: {availableCount}
+                                    </span>
+                                    <span className="rounded-full border border-orange-200 bg-orange-50 px-4 py-1.5 text-sm font-bold text-orange-700">
+                                        Blocked: {blockedSeats.length}
+                                    </span>
                                 </div>
                             </div>
 
-                            <SeatLayout
-                                layout={String(selectedBus?.seatLayout || 39)}
-                                bookedSeats={bookedSeats}
-                                blockedSeats={blockedSeats}
-                                bookedMap={bookedMap}
-                                selectedSeats={selectedSeats}
-                                onSelect={handleSeatSelect}
-                                onViewBooking={handleViewBooking}
-                                onBlockedSeat={(seatNo) =>
-                                    showAppToast(
-                                        "warning",
-                                        `Seat ${seatNo} is blocked. Use the blocked seat list to manage it.`
-                                    )
-                                }
-                            />
+                            <div className="mb-4 flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleBlockSelectedSeats}
+                                    disabled={blockingSeats || selectedFreshSeats.length === 0}
+                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] bg-[#EAB308] px-4 text-sm font-bold text-white transition hover:bg-[#CA8A04] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <Ban className="h-4 w-4" />
+                                    {blockingSeats ? "Blocking..." : "Block Selected Seats"}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleUnblockSelectedSeats}
+                                    disabled={
+                                        unblockingSeats || selectedBlockedSeats.length === 0
+                                    }
+                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <Ban className="h-4 w-4" />
+                                    {unblockingSeats ? "Unblocking..." : "Unblock Selected Seats"}
+                                </button>
+                            </div>
+
+                            <div className="rounded-[20px] border border-slate-200 bg-white p-3 sm:p-4">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                    <div className="text-lg font-bold text-slate-900">
+                                        Seat Layout ({totalSeats})
+                                    </div>
+
+                                    <div className="rounded-full bg-slate-50 px-3 py-1.5 text-sm font-bold text-[#0B5D5A]">
+                                        Selected: {selectedSeats.length}
+                                    </div>
+                                </div>
+
+                                <SeatLayout
+                                    layout={String(selectedBus?.seatLayout || 39)}
+                                    bookedSeats={bookedSeats}
+                                    blockedSeats={blockedSeats}
+                                    bookedMap={bookedMap}
+                                    selectedSeats={selectedSeats}
+                                    onSelect={handleSeatSelect}
+                                    onViewBooking={handleViewBooking}
+                                    onBlockedSeat={handleViewBlockedSeat}
+                                />
+                            </div>
                         </div>
 
                         {/* Passenger Details */}
@@ -581,7 +737,9 @@ export default function BookingProcessPanel({
                                     <div className="text-sm font-semibold text-slate-500">
                                         Selected Seat(s):{" "}
                                         <span className="font-bold text-slate-900">
-                                            {selectedSeats.length > 0 ? selectedSeats.join(", ") : "—"}
+                                            {selectedSeats.length > 0
+                                                ? selectedSeats.join(", ")
+                                                : "—"}
                                         </span>
                                     </div>
                                 </div>
@@ -639,20 +797,28 @@ export default function BookingProcessPanel({
                         loading={loadingBookings}
                         bookings={existingBookings}
                         onViewBooking={(booking) => {
-                            const firstSeat = Array.isArray(booking?.seats) ? booking.seats[0] : "";
+                            const firstSeat = Array.isArray(booking?.seats)
+                                ? booking.seats[0]
+                                : "";
+
                             setSelectedBookingDetail({
                                 seatNo: String(firstSeat || ""),
                                 booking,
                                 bookingId: booking?._id,
                                 status:
-                                    booking?.bookingStatus === "CANCELLED" ? "blocked" : "booked",
+                                    booking?.bookingStatus === "CANCELLED" ||
+                                        booking?.seatStatus === "blocked"
+                                        ? "blocked"
+                                        : "booked",
                                 customerName: booking?.customerName || "",
                                 customerPhone: booking?.customerPhone || "",
                                 customerEmail: booking?.customerEmail || "",
                                 pickupName: booking?.pickupName || pickupStop?.name || "",
                                 dropName: booking?.dropName || dropStop?.name || "",
-                                pickupMarathi: booking?.pickupMarathi || pickupStop?.marathiName || "",
-                                dropMarathi: booking?.dropMarathi || dropStop?.marathiName || "",
+                                pickupMarathi:
+                                    booking?.pickupMarathi || pickupStop?.marathiName || "",
+                                dropMarathi:
+                                    booking?.dropMarathi || dropStop?.marathiName || "",
                                 pickupTime: booking?.pickupTime || pickupStop?.time || "",
                                 dropTime: booking?.dropTime || dropStop?.time || "",
                                 fare: booking?.finalPayableAmount || booking?.fare || 0,
@@ -660,6 +826,7 @@ export default function BookingProcessPanel({
                                 paymentStatus: booking?.paymentStatus || "UNPAID",
                                 paymentMethod: booking?.paymentMethod || "UNPAID",
                             });
+
                             setSeatDetailModalOpen(true);
                         }}
                         onViewBlockedSeat={handleViewBlockedSeat}
@@ -667,10 +834,11 @@ export default function BookingProcessPanel({
                 </div>
             </section>
 
+            {/* Seat detail modal */}
             <SeatBookingDetailsModal
                 open={seatDetailModalOpen}
                 data={selectedBookingDetail}
-                loading={editLoading}
+                loading={cancelLoading || editLoading}
                 onClose={() => {
                     setSeatDetailModalOpen(false);
                     setSelectedBookingDetail(null);
@@ -679,8 +847,10 @@ export default function BookingProcessPanel({
                 onCancel={() => {
                     setCancelModalOpen(true);
                 }}
+                onUnblock={handleUnblockBooking}
             />
 
+            {/* Cancel modal */}
             <CancelBookingModal
                 open={cancelModalOpen}
                 seatNo={selectedBookingDetail?.seatNo}
@@ -691,6 +861,7 @@ export default function BookingProcessPanel({
                 onMarkCancelled={() => handleCancelBooking("NO_REFUND")}
             />
 
+            {/* Print modal */}
             <PrintSeatTemplateModal
                 open={printModalOpen}
                 onClose={() => setPrintModalOpen(false)}
@@ -699,86 +870,6 @@ export default function BookingProcessPanel({
                 bookings={existingBookings}
                 seatLayout={String(selectedBus?.seatLayout || 39)}
             />
-
-            {blockModalOpen && (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-lg rounded-[28px] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <div className="text-xs font-bold uppercase tracking-[0.24em] text-orange-600">
-                                    Block Seat
-                                </div>
-                                <h3 className="mt-1 text-2xl font-bold text-slate-900">
-                                    Select seat number to block
-                                </h3>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    This will create a blocked seat entry for the selected bus/date.
-                                </p>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => setBlockModalOpen(false)}
-                                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        <div className="mt-5 space-y-4">
-                            <div>
-                                <label className="mb-2 block text-sm font-semibold text-slate-800">
-                                    Seat Number
-                                </label>
-                                <select
-                                    value={blockSeatNo}
-                                    onChange={(e) => setBlockSeatNo(e.target.value)}
-                                    className="h-12 w-full rounded-[16px] border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 outline-none focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
-                                >
-                                    <option value="">Select seat number</option>
-                                    {Array.from({ length: totalSeats }, (_, index) => String(index + 1)).map((seat) => (
-                                        <option key={seat} value={seat}>
-                                            Seat {seat}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="mb-2 block text-sm font-semibold text-slate-800">
-                                    Reason / Note
-                                </label>
-                                <textarea
-                                    value={blockReason}
-                                    onChange={(e) => setBlockReason(e.target.value)}
-                                    placeholder="Optional reason for blocking"
-                                    rows={4}
-                                    className="w-full rounded-[16px] border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-6 flex flex-wrap justify-end gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setBlockModalOpen(false)}
-                                className="inline-flex h-11 items-center justify-center rounded-[16px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleBlockSeat}
-                                disabled={blockLoading}
-                                className="inline-flex h-11 items-center justify-center rounded-[16px] bg-orange-600 px-5 text-sm font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {blockLoading ? "Blocking..." : "Block Seat"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 }
@@ -807,12 +898,12 @@ function MiniInfoCard({ title, value, highlight = false }) {
     return (
         <div
             className={`rounded-[16px] border p-4 ${highlight
-                ? "border-[#CFE5E3] bg-[#F8FCFC]"
-                : "border-slate-200 bg-slate-50"
+                    ? "border-[#CFE5E3] bg-[#F8FCFC]"
+                    : "border-slate-200 bg-slate-50"
                 }`}
         >
             <div
-                className={`text-[11px] font-bold tracking-[0.18em] uppercase ${highlight ? "text-[#0B5D5A]" : "text-slate-500"
+                className={`text-[11px] font-bold uppercase tracking-[0.18em] ${highlight ? "text-[#0B5D5A]" : "text-slate-500"
                     }`}
             >
                 {title}
