@@ -1,16 +1,10 @@
-import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
+import { getStopNameMarathi, normalizeStopName } from "@/lib/fare";
 import Bus from "@/models/bus.model";
-import { normalizeStopName, getStopNameMarathi } from "@/lib/fare";
+import { NextResponse } from "next/server";
 
 function cleanString(v) {
     return String(v || "").trim();
-}
-
-function toDate(v) {
-    if (!v) return null;
-    const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function normalizePoint(point, index) {
@@ -73,50 +67,6 @@ function autoGenerateReturnTrip(forwardTrip, existingReturnTrip = null) {
     };
 }
 
-function getTripByDirection(payload, direction) {
-    return direction === "RETURN" ? payload.returnTrip : payload.forwardTrip;
-}
-
-function normalizeFareRule(rule, index, payload) {
-    const direction = cleanString(rule?.tripDirection || "FORWARD").toUpperCase();
-    const tripDirection = direction === "RETURN" ? "RETURN" : "FORWARD";
-
-    const trip = getTripByDirection(payload, tripDirection);
-    if (!trip) return null;
-
-    const pickup = normalizeStopName(cleanString(rule?.pickup));
-    const drop = normalizeStopName(cleanString(rule?.drop));
-
-    const pickupList = trip.pickupPoints || [];
-    const dropList = trip.dropPoints || [];
-
-    const pickupPoint = pickupList.find((p) => p.name === pickup);
-    const dropPoint = dropList.find((p) => p.name === drop);
-
-    if (!pickupPoint || !dropPoint) return null;
-
-    const startDate = toDate(rule?.startDate);
-    const endDate = toDate(rule?.endDate);
-
-    if (!startDate || !endDate) return null;
-
-    return {
-        tripDirection,
-        pickup,
-        pickupMr: getStopNameMarathi(pickup) || cleanString(rule?.pickupMr),
-        pickupOrder: pickupPoint.order,
-        drop,
-        dropMr: getStopNameMarathi(drop) || cleanString(rule?.dropMr),
-        dropOrder: dropPoint.order,
-        fare: Number(rule?.fare || 0),
-        startDate,
-        endDate,
-        applyToNextPickups: Boolean(rule?.applyToNextPickups),
-        applyToPreviousDrops: Boolean(rule?.applyToPreviousDrops),
-        isActive: rule?.isActive !== false,
-    };
-}
-
 function normalizePayload(body = {}) {
     const forwardTrip = normalizeTrip(body.forwardTrip);
 
@@ -149,10 +99,6 @@ function normalizePayload(body = {}) {
             })),
     };
 
-    payload.fareRules = (body.fareRules || [])
-        .map((rule, i) => normalizeFareRule(rule, i, payload))
-        .filter(Boolean);
-
     return payload;
 }
 
@@ -167,12 +113,6 @@ function validatePayload(payload) {
     if (payload.tripType === "RETURN") {
         if (!payload.returnTrip?.from) return "Return start point is required";
         if (!payload.returnTrip?.to) return "Return end point is required";
-    }
-
-    for (const rule of payload.fareRules) {
-        if (rule.endDate < rule.startDate) {
-            return `Fare rule date range invalid for ${rule.pickup} → ${rule.drop}`;
-        }
     }
 
     return null;

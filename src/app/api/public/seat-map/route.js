@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import Schedule from "@/models/schedule.model";
-import Booking from "@/models/booking.model";
+import Booking from "@/models/booking.model.model";
 import Bus from "@/models/bus.model";
+import Schedule from "@/models/schedule.model";
+import { NextResponse } from "next/server";
 
 function normalizeDateOnly(dateInput) {
     const date = new Date(dateInput);

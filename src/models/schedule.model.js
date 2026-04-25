@@ -116,13 +116,13 @@ const ScheduleSchema = new mongoose.Schema(
 
         busType: {
             type: String,
-            enum: ["AC", "NON_AC"],
+            enum: ["NON_AC", "AC", "SLEEPER", "SEMI_SLEEPER", "SEATER"],
             required: true,
         },
 
         seatLayout: {
             type: Number,
-            enum: [21, 31, 35, 39],
+            enum: [21, 32, 35, 39],
             required: true,
         },
 
@@ -299,5 +299,16 @@ ScheduleSchema.index({
     status: 1,
 });
 
-export default mongoose.models.Schedule ||
-    mongoose.model("Schedule", ScheduleSchema);
+const existingScheduleModel = mongoose.models.Schedule;
+
+if (existingScheduleModel) {
+    const enumValues = existingScheduleModel.schema.path("seatLayout")?.options?.enum || [];
+    const hasExpectedSeatLayout = Array.isArray(enumValues) && enumValues.includes(32);
+
+    // In dev, Next.js + Mongoose model caching can keep old enum values (e.g. 31 instead of 32).
+    if (!hasExpectedSeatLayout) {
+        delete mongoose.models.Schedule;
+    }
+}
+
+export default mongoose.models.Schedule || mongoose.model("Schedule", ScheduleSchema);

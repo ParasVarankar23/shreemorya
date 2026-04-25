@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import Booking from "@/models/booking.model.model";
 import Schedule from "@/models/schedule.model";
-import Booking from "@/models/booking.model";
 import SeatHold from "@/models/seat-hold.model";
+import { NextResponse } from "next/server";
 
 function hasDuplicates(arr = []) {
     return new Set(arr).size !== arr.length;

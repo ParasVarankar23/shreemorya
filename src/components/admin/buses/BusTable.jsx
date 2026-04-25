@@ -1,6 +1,6 @@
 "use client";
 
-import { BusFront, Pencil, Trash2, Eye, MapPinned } from "lucide-react";
+import { BusFront, Eye, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function BusTable({
@@ -116,7 +116,7 @@ export default function BusTable({
                                 {/* Fare Rules */}
                                 <td className="px-6 py-5 align-top">
                                     <span className="inline-flex rounded-full border border-[#0B5D5A]/15 bg-[#0B5D5A]/10 px-3.5 py-1.5 text-xs font-bold text-[#0B5D5A]">
-                                        {bus.fareRules?.length || 0} Rules
+                                        Managed Separately
                                     </span>
                                 </td>
 
@@ -191,7 +191,7 @@ export default function BusTable({
                                     {String(bus.busType || "").replaceAll("_", " ")}
                                 </span>
                                 <span className="rounded-full border border-[#0B5D5A]/15 bg-[#0B5D5A]/10 px-2.5 py-1 text-[11px] font-semibold text-[#0B5D5A]">
-                                    {bus.fareRules?.length || 0} fare rules
+                                    Fares managed separately
                                 </span>
                             </div>
                         </div>

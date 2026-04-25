@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import Booking from "@/models/booking.model";
-import Payment from "@/models/payment.model";
 import { createRazorpayOrder } from "@/lib/razorpay";
+import Booking from "@/models/booking.model.model";
+import Payment from "@/models/payment.model";
+import { NextResponse } from "next/server";
 
 export async function POST(request) {
     try {

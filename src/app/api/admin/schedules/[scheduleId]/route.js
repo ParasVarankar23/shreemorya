@@ -55,7 +55,7 @@ export async function GET(request, { params }) {
 
 /* ------------------------------------------
    PUT /api/admin/schedules/[scheduleId]
-   Admin: update schedule
+   Simple Edit
 ------------------------------------------- */
 export async function PUT(request, { params }) {
     try {
@@ -92,19 +92,12 @@ export async function PUT(request, { params }) {
         const oldValues = schedule.toObject();
 
         const allowedFields = [
-            "startPoint",
+            "travelDate",
             "startTime",
-            "endPoint",
             "endTime",
-            "pickupPoints",
-            "dropPoints",
             "baseFare",
             "effectiveFare",
-            "fareType",
-            "seatRules",
             "status",
-            "isBookingOpen",
-            "notes",
         ];
 
         for (const key of allowedFields) {
@@ -113,18 +106,6 @@ export async function PUT(request, { params }) {
             }
         }
 
-        // Auto set bookingClosedAt
-        if ("isBookingOpen" in body) {
-            if (body.isBookingOpen === false && !schedule.bookingClosedAt) {
-                schedule.bookingClosedAt = new Date();
-            }
-
-            if (body.isBookingOpen === true) {
-                schedule.bookingClosedAt = null;
-            }
-        }
-
-        // If cancelled from update
         if (body.status === "CANCELLED") {
             schedule.isBookingOpen = false;
             schedule.bookingClosedAt = new Date();
@@ -141,7 +122,7 @@ export async function PUT(request, { params }) {
                 action: "UPDATE_SCHEDULE",
                 entityType: "SCHEDULE",
                 entityId: schedule._id,
-                entityCode: `${schedule.busNumber} | ${schedule.tripDirection}`,
+                entityCode: `${schedule.busNumber}`,
                 message: `Updated schedule ${schedule._id}`,
                 oldValues,
                 newValues: schedule.toObject(),
@@ -171,7 +152,6 @@ export async function PUT(request, { params }) {
 
 /* ------------------------------------------
    DELETE /api/admin/schedules/[scheduleId]
-   Admin: soft cancel schedule
 ------------------------------------------- */
 export async function DELETE(request, { params }) {
     try {
@@ -221,7 +201,7 @@ export async function DELETE(request, { params }) {
                 action: "DELETE_SCHEDULE",
                 entityType: "SCHEDULE",
                 entityId: schedule._id,
-                entityCode: `${schedule.busNumber} | ${schedule.tripDirection}`,
+                entityCode: `${schedule.busNumber}`,
                 message: `Cancelled schedule ${schedule._id}`,
                 oldValues,
                 newValues: schedule.toObject(),
@@ -233,13 +213,13 @@ export async function DELETE(request, { params }) {
 
         return NextResponse.json({
             success: true,
-            message: "Schedule cancelled successfully",
+            message: "Schedule deleted successfully",
         });
     } catch (error) {
         console.error("DELETE /api/admin/schedules/[scheduleId] error:", error);
 
         return NextResponse.json(
-            { success: false, message: "Failed to cancel schedule" },
+            { success: false, message: "Failed to delete schedule" },
             { status: 500 }
         );
     }

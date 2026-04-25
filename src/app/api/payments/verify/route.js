@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import Booking from "@/models/booking.model";
-import Payment from "@/models/payment.model";
-import SeatHold from "@/models/seat-hold.model";
-import Schedule from "@/models/schedule.model";
-import Voucher from "@/models/voucher.model";
+import {
+    fetchRazorpayPayment,
+    verifyRazorpayPaymentSignature,
+} from "@/lib/razorpay";
+import Booking from "@/models/booking.model.model";
 import Coupon from "@/models/coupon.model";
 import Notification from "@/models/notification.model";
-import {
-    verifyRazorpayPaymentSignature,
-    fetchRazorpayPayment,
-} from "@/lib/razorpay";
+import Payment from "@/models/payment.model";
+import Schedule from "@/models/schedule.model";
+import SeatHold from "@/models/seat-hold.model";
+import Voucher from "@/models/voucher.model";
+import { NextResponse } from "next/server";
 
 // Optional-safe import pattern (if you already have email helper)
 import { sendBookingConfirmationEmail } from "@/lib/sendEmail";

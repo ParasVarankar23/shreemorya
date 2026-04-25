@@ -1,10 +1,20 @@
 import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
-import Booking from "@/models/booking.model";
+import Booking from "@/models/booking.model.model";
 import Bus from "@/models/bus.model";
 import Schedule from "@/models/schedule.model";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
 import { NextResponse } from "next/server";
+
+function isBusAvailableForScheduling(bus) {
+    if (!bus) return false;
+
+    if (typeof bus.isActive === "boolean") {
+        return bus.isActive;
+    }
+
+    return String(bus.status || "").toUpperCase() === "ACTIVE";
+}
 
 export async function POST(request, { params }) {
     try {
@@ -36,7 +46,7 @@ export async function POST(request, { params }) {
 
         const newBus = await Bus.findById(newBusId);
 
-        if (!newBus || !newBus.isActive) {
+        if (!isBusAvailableForScheduling(newBus)) {
             return NextResponse.json({ success: false, message: "New bus not found" }, { status: 404 });
         }
 

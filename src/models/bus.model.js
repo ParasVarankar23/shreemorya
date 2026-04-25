@@ -46,36 +46,6 @@ const CabinSchema = new mongoose.Schema(
     { _id: false }
 );
 
-const FareRuleSchema = new mongoose.Schema(
-    {
-        tripDirection: {
-            type: String,
-            enum: ["FORWARD", "RETURN"],
-            required: true,
-            default: "FORWARD",
-        },
-
-        pickup: { type: String, required: true, trim: true },
-        pickupMr: { type: String, default: "", trim: true },
-        pickupOrder: { type: Number, required: true, min: 1 },
-
-        drop: { type: String, required: true, trim: true },
-        dropMr: { type: String, default: "", trim: true },
-        dropOrder: { type: Number, required: true, min: 1 },
-
-        fare: { type: Number, required: true, min: 0 },
-
-        startDate: { type: Date, required: true },
-        endDate: { type: Date, required: true },
-
-        applyToNextPickups: { type: Boolean, default: false },
-        applyToPreviousDrops: { type: Boolean, default: false },
-
-        isActive: { type: Boolean, default: true },
-    },
-    { _id: true }
-);
-
 const BusSchema = new mongoose.Schema(
     {
         busNumber: {
@@ -153,10 +123,6 @@ const BusSchema = new mongoose.Schema(
             },
         },
 
-        fareRules: {
-            type: [FareRuleSchema],
-            default: [],
-        },
     },
     {
         timestamps: true,
@@ -165,6 +131,5 @@ const BusSchema = new mongoose.Schema(
 
 BusSchema.index({ busNumber: 1 });
 BusSchema.index({ routeName: 1, tripType: 1, status: 1 });
-BusSchema.index({ "fareRules.tripDirection": 1, "fareRules.startDate": 1, "fareRules.endDate": 1 });
 
 export default mongoose.models.Bus || mongoose.model("Bus", BusSchema);

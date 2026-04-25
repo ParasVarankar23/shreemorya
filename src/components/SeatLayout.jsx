@@ -7,43 +7,18 @@ function toStr(value) {
     return String(value || "");
 }
 
-/**
- * Supported layouts:
- * 21, 32, 35, 39
- *
- * Row formats:
- * {
- *   left: number | number[] | null,
- *   center: number | null,
- *   right: number | number[] | null,
- *   isFront?: boolean,
- *   isBack?: boolean,
- *   bottom?: number[],
- *   onlyBottom?: boolean,
- * }
- */
 export function getSeatRows(total) {
     const seatMaps = {
-        // =========================
-        // 21 SEAT LAYOUT
-        // Front: 20, 21
-        // Back: 19,18,17,16
-        // =========================
         21: [
             { left: [20, 21], right: null, isFront: true },
-
             { left: 1, right: [2, 3] },
             { left: 6, right: [5, 4] },
             { left: 7, right: [8, 9] },
             { left: 12, right: [11, 10] },
             { left: 13, right: [14, 15] },
-
             { bottom: [19, 18, 17, 16], onlyBottom: true },
         ],
 
-        // =========================
-        // 32 SEAT LAYOUT
-        // =========================
         32: [
             { left: 32, right: null },
             { left: null, right: [1, 2] },
@@ -53,13 +28,9 @@ export function getSeatRows(total) {
             { left: [15, 16], right: [17, 18] },
             { left: [22, 21], right: [20, 19] },
             { left: [23, 24], right: [25, 26] },
-
             { bottom: [31, 30, 29, 28, 27], onlyBottom: true },
         ],
 
-        // =========================
-        // 35 SEAT LAYOUT
-        // =========================
         35: [
             { left: null, right: [1, 2] },
             { left: [6, 5], right: [4, 3] },
@@ -69,13 +40,9 @@ export function getSeatRows(total) {
             { left: [22, 21], right: [20, 19] },
             { left: [23, 24], right: [25, 26] },
             { left: [30, 29], right: [28, 27] },
-
             { bottom: [31, 32, 33, 34, 35], onlyBottom: true },
         ],
 
-        // =========================
-        // 39 SEAT LAYOUT
-        // =========================
         39: [
             { left: null, right: [1, 2] },
             { left: [6, 5], right: [4, 3] },
@@ -86,7 +53,6 @@ export function getSeatRows(total) {
             { left: [23, 24], right: [25, 26] },
             { left: [30, 29], right: [28, 27] },
             { left: [31, 32], right: [33, 34] },
-
             { bottom: [39, 38, 37, 36, 35], onlyBottom: true },
         ],
     };
@@ -101,6 +67,7 @@ export default function SeatLayout({
     selectedSeats = [],
     onSelect,
     onViewBooking,
+    onBlockedSeat,
     compact = false,
     cabins = [],
     tables = [],
@@ -110,7 +77,6 @@ export default function SeatLayout({
     const totalSeats = Number(String(layout || "39")) || 39;
     const rows = getSeatRows(totalSeats);
 
-    // Cabin max 10
     const safeCabins = Array.isArray(cabins) ? cabins.slice(0, cabinLimit) : [];
     const cabinSeatIds = safeCabins.map((c, i) => ({
         seatId: String(c?.seatNo || c?.label || `CB${i + 1}`),
@@ -143,15 +109,15 @@ export default function SeatLayout({
             : "h-9 min-w-[36px] px-2 text-[11px] sm:h-10 sm:min-w-[42px] sm:text-xs md:h-11 md:min-w-[48px] md:text-sm";
 
         const cls = clsx(base, sizeCls, {
-            "bg-red-100 border-red-300 text-red-700 cursor-pointer":
+            "bg-red-200 border-red-400 text-red-900 cursor-pointer":
                 isBooked && !isBlocked,
-            "bg-amber-100 border-amber-300 text-amber-700 cursor-pointer":
+            "bg-amber-100 border-amber-300 text-amber-900 cursor-not-allowed opacity-90":
                 isBlocked,
-            "bg-[#f97316] border-[#ea580c] text-white shadow-md scale-[1.02]":
+            "bg-[#0B5D5A] border-[#094B49] text-white shadow-md scale-[1.02]":
                 isSelected && !isBooked && !isBlocked,
-            "bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-50 cursor-pointer":
+            "bg-sky-100 border-sky-300 text-sky-900 hover:bg-sky-200 cursor-pointer":
                 isCabin && !isBooked && !isBlocked && !isSelected,
-            "bg-white border-slate-300 text-slate-800 hover:bg-orange-50 hover:border-orange-300 cursor-pointer":
+            "bg-white border-slate-300 text-slate-800 hover:bg-[#0B5D5A]/5 hover:border-[#0B5D5A]/30 cursor-pointer":
                 !isBooked && !isBlocked && !isSelected && !isCabin,
         });
 
@@ -160,10 +126,18 @@ export default function SeatLayout({
                 key={id}
                 type="button"
                 onClick={() => {
-                    if (isBooked || isBlocked) {
+                    if (isBlocked) {
+                        if (onBlockedSeat) {
+                            return onBlockedSeat(id, booking);
+                        }
+                        return;
+                    }
+
+                    if (isBooked) {
                         if (onViewBooking) return onViewBooking(id, booking);
                         return;
                     }
+
                     if (onSelect) onSelect(id);
                 }}
                 className={cls}
@@ -191,45 +165,34 @@ export default function SeatLayout({
 
     return (
         <div className="w-full">
-            {/* Header */}
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-sm font-bold text-slate-800 sm:text-base md:text-lg">
                     Seat Layout ({totalSeats})
                 </div>
 
-                <div className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-semibold text-orange-700">
+                <div className="rounded-full border border-[#0B5D5A]/20 bg-[#0B5D5A]/5 px-3 py-1 text-[11px] font-semibold text-[#0B5D5A]">
                     Cabin Limit: {cabinSeatIds.length}/{cabinLimit}
                 </div>
             </div>
 
-            {/* Bus Container */}
             <div className="rounded-[28px] border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-3 shadow-sm sm:p-4 md:p-5">
-                {/* Driver */}
                 <div className="mb-4 flex justify-end">
                     <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-4">
-                        <Bus className="h-4 w-4 text-orange-600 sm:h-5 sm:w-5" />
+                        <Bus className="h-4 w-4 text-[#0B5D5A] sm:h-5 sm:w-5" />
                         <span className="text-[11px] font-semibold text-slate-700 sm:text-xs md:text-sm">
                             Driver
                         </span>
                     </div>
                 </div>
 
-                {/* Seat Layout */}
                 <div className="overflow-x-auto">
-                    <div
-                        className={clsx(
-                            compact
-                                ? "min-w-0"
-                                : "min-w-[320px] sm:min-w-[420px] md:min-w-[560px]"
-                        )}
-                    >
+                    <div className={clsx(compact ? "min-w-0" : "min-w-[320px] sm:min-w-[420px] md:min-w-[560px]")}>
                         <div className="space-y-2.5 sm:space-y-3">
                             {rows.map((row, index) => {
                                 const isFront = !!row.isFront;
                                 const isBack = !!row.isBack;
                                 const onlyBottom = !!row.onlyBottom;
 
-                                // Front row support (like 20,21 in 21 layout)
                                 if (isFront) {
                                     return (
                                         <div key={index} className="mb-2 flex justify-start sm:mb-3">
@@ -240,7 +203,6 @@ export default function SeatLayout({
                                     );
                                 }
 
-                                // Bottom full row support
                                 if (onlyBottom && Array.isArray(row.bottom)) {
                                     return (
                                         <div key={index} className="pt-2">
@@ -265,10 +227,8 @@ export default function SeatLayout({
                                                     : "grid-cols-[1fr_minmax(40px,1.1fr)_1fr]"
                                         )}
                                     >
-                                        {/* Left block */}
                                         <div className="flex justify-start">{renderSeatGroup(row.left)}</div>
 
-                                        {/* Center / aisle */}
                                         <div className="flex justify-center">
                                             {row.center ? (
                                                 renderSeat(row.center)
@@ -277,7 +237,6 @@ export default function SeatLayout({
                                             )}
                                         </div>
 
-                                        {/* Right block */}
                                         <div className="flex justify-end">{renderSeatGroup(row.right)}</div>
                                     </div>
                                 );
@@ -286,20 +245,19 @@ export default function SeatLayout({
                     </div>
                 </div>
 
-                {/* Cabin Seats */}
                 {cabinSeatIds.length > 0 && (
                     <div className="mt-5 border-t border-slate-200 pt-4">
                         <div className="mb-3 flex items-center justify-between">
-                            <div className="text-xs font-semibold text-slate-700 sm:text-sm">
-                                Cabin Seats
-                            </div>
+                            <div className="text-xs font-semibold text-slate-700 sm:text-sm">Cabin Seats</div>
                             <div className="text-[11px] text-slate-500">Max 10 only</div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5">
                             {cabinSeatIds.map((cabin) => (
                                 <div key={cabin.displayLabel} className="flex flex-col items-center gap-1">
-                                    <div className="text-[10px] font-semibold text-slate-500">{cabin.displayLabel}</div>
+                                    <div className="rounded-full border border-sky-300 bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900">
+                                        {cabin.displayLabel}
+                                    </div>
                                     {renderSeat(cabin.seatId, true)}
                                 </div>
                             ))}
@@ -307,23 +265,20 @@ export default function SeatLayout({
                     </div>
                 )}
 
-                {/* Table Seats */}
                 {tableLabels.length > 0 && (
                     <div className="mt-5 border-t border-slate-200 pt-4">
                         <div className="mb-3 flex items-center justify-between">
-                            <div className="text-xs font-semibold text-slate-700 sm:text-sm">
-                                Table Seats
-                            </div>
+                            <div className="text-xs font-semibold text-slate-700 sm:text-sm">Table Seats</div>
                             <div className="text-[11px] text-slate-500">Max 10 only</div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5">
                             {tableLabels.map((table) => (
                                 <div key={table.displayLabel} className="flex flex-col items-center gap-1">
-                                    <div className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                    <div className="rounded-full border border-violet-300 bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-900">
                                         {table.displayLabel}
                                     </div>
-                                    <div className="flex items-center justify-center rounded-xl border border-emerald-300 bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-800 shadow-sm">
+                                    <div className="flex items-center justify-center rounded-xl border border-violet-300 bg-violet-100 px-3 py-2 text-xs font-semibold text-violet-900 shadow-sm">
                                         {table.seatId}
                                     </div>
                                 </div>
@@ -332,27 +287,30 @@ export default function SeatLayout({
                     </div>
                 )}
 
-                {/* Legend */}
-                <div className="mt-5 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-3 md:grid-cols-5 sm:text-[11px]">
-                    <div className="flex items-center gap-1.5">
-                        <span className="h-3 w-3 rounded border border-slate-300 bg-white" />
+                <div className="mt-5 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-3 md:grid-cols-6 sm:text-[11px]">
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm">
+                        <span className="h-3.5 w-3.5 rounded-full border border-slate-300 bg-white" />
                         Available
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        <span className="h-3 w-3 rounded bg-[#f97316]" />
+                    <div className="flex items-center gap-2 rounded-2xl border border-[#0B5D5A] bg-[#0B5D5A] px-3 py-2 text-white shadow-sm">
+                        <span className="h-3.5 w-3.5 rounded-full bg-white" />
                         Selected
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        <span className="h-3 w-3 rounded border border-red-300 bg-red-100" />
+                    <div className="flex items-center gap-2 rounded-2xl border border-red-400 bg-red-100 px-3 py-2 text-red-900 shadow-sm">
+                        <span className="h-3.5 w-3.5 rounded-full bg-red-400" />
                         Booked
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        <span className="h-3 w-3 rounded border border-slate-300 bg-slate-100" />
+                    <div className="flex items-center gap-2 rounded-2xl border border-sky-400 bg-sky-100 px-3 py-2 text-sky-900 shadow-sm">
+                        <span className="h-3.5 w-3.5 rounded-full bg-sky-400" />
                         Cabin
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        <span className="h-3 w-3 rounded border border-amber-300 bg-amber-100" />
+                    <div className="flex items-center gap-2 rounded-2xl border border-amber-400 bg-amber-100 px-3 py-2 text-amber-900 shadow-sm">
+                        <span className="h-3.5 w-3.5 rounded-full bg-amber-400" />
                         Blocked
+                    </div>
+                    <div className="flex items-center gap-2 rounded-2xl border border-violet-400 bg-violet-100 px-3 py-2 text-violet-900 shadow-sm">
+                        <span className="h-3.5 w-3.5 rounded-full bg-violet-400" />
+                        Table
                     </div>
                 </div>
             </div>
