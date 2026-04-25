@@ -22,7 +22,7 @@ import {
     X,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -232,6 +232,25 @@ const getStatusTone = (status) => {
 };
 
 export default function AdminFarePage() {
+    return (
+        <Suspense fallback={<AdminFarePageFallback />}>
+            <AdminFarePageContent />
+        </Suspense>
+    );
+}
+
+function AdminFarePageFallback() {
+    return (
+        <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-[#0B5D5A]/10 via-white to-[#DFF2EE] p-4">
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading fare management...
+            </div>
+        </div>
+    );
+}
+
+function AdminFarePageContent() {
     const { triggerRefresh } = useAutoRefresh();
     const searchParams = useSearchParams();
 
