@@ -137,8 +137,9 @@ export async function GET(request) {
                 seatLayout: Number(schedule?.seatLayout || 39),
                 fare: Number(schedule?.effectiveFare || schedule?.baseFare || 0),
                 bookedCount,
-                blockedCount: 0,
+                blockedCount,
                 cabinCount: Number(schedule?.cabinCount || 0),
+                tableCount: Number(schedule?.tableCount || 0),
             });
         }
 
