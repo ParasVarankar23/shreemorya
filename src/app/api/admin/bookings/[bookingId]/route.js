@@ -52,6 +52,7 @@ export async function GET(request, { params }) {
         );
     }
 }
+
 /* ------------------------------------------
    DELETE /api/admin/bookings/[bookingId]
 ------------------------------------------- */
@@ -85,11 +86,14 @@ export async function DELETE(request, { params }) {
             );
         }
 
-        if (booking.bookingStatus !== "CANCELLED" || booking.seatStatus !== "blocked") {
+        if (
+            booking.bookingStatus !== "CANCELLED" ||
+            !["blocked", "cancelled"].includes(booking.seatStatus)
+        ) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Only blocked seats can be unblocked",
+                    message: "Only blocked or cancelled seats can be removed",
                 },
                 { status: 400 }
             );
@@ -99,7 +103,7 @@ export async function DELETE(request, { params }) {
 
         return NextResponse.json({
             success: true,
-            message: "Blocked seat removed successfully",
+            message: "Blocked/cancelled seat removed successfully",
         });
     } catch (error) {
         console.error("DELETE /api/admin/bookings/[bookingId] error:", error);
@@ -110,6 +114,7 @@ export async function DELETE(request, { params }) {
         );
     }
 }
+
 /* ------------------------------------------
    PUT /api/admin/bookings/[bookingId]
 ------------------------------------------- */

@@ -529,10 +529,10 @@ export async function sendBookingCancellation(email, name, booking = {}) {
     const startTime = safeText(booking.pickupTime || booking.startTime || "");
     const endTime = safeText(booking.dropTime || booking.endTime || "");
     const fareAmount = Number(booking.fare ?? booking.finalPayableAmount ?? 0);
-    const refundAmount = Number(booking?.refund?.amount || 0);
-    const retainedAmount = Number.isFinite(fareAmount)
-        ? Math.max(fareAmount - refundAmount, 0)
-        : null;
+
+    const hasRefundObject = booking?.refund && typeof booking.refund === "object";
+    const refundAmount = Number(hasRefundObject ? booking?.refund?.amount || 0 : 0);
+    const retainedAmount = Math.max(fareAmount - refundAmount, 0);
     const paymentMethod = safeText(booking.paymentMethod || "Online Payment");
 
     const bookingDetailsHtml = card(
@@ -547,38 +547,42 @@ export async function sendBookingCancellation(email, name, booking = {}) {
                 ${infoRow(
             "Seat Number",
             safeText(
-                booking.seatNo || (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")
+                booking.seatNo ||
+                (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")
             )
         )}
-                ${infoRow("Pickup Point", formatStopWithTime(pickup, startTime, booking.pickupMarathi))}
-                ${infoRow("Drop Point", formatStopWithTime(drop, endTime, booking.dropMarathi))}
+                ${infoRow(
+            "Pickup Point",
+            formatStopWithTime(pickup, startTime, booking.pickupMarathi)
+        )}
+                ${infoRow(
+            "Drop Point",
+            formatStopWithTime(drop, endTime, booking.dropMarathi)
+        )}
             </table>
         `
     );
 
-    let paymentDetails = `
+    const refundStatusText =
+        refundAmount > 0
+            ? "Refund has been processed successfully."
+            : "No refund applicable for this cancellation.";
+
+    const paymentDetails = `
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
             ${infoRow("Fare", formatCurrency(fareAmount), true)}
             ${infoRow("Payment Method", paymentMethod)}
-        </table>
-    `;
-
-    if (booking?.refund) {
-        const refundHtmlParts = [
-            `Refund Amount: <strong>${escapeHtml(formatCurrency(refundAmount))}</strong>`,
-        ];
-
-        if (retainedAmount !== null) {
-            refundHtmlParts.push(
-                `Amount Retained: <strong>${escapeHtml(formatCurrency(retainedAmount))}</strong>`
-            );
+            ${infoRow("Refund Amount", formatCurrency(refundAmount), refundAmount > 0)}
+            ${infoRow("Amount Retained", formatCurrency(retainedAmount))}
+            ${booking?.refund?.mode
+            ? infoRow("Refund Mode", safeText(booking.refund.mode))
+            : infoRow("Refund Mode", refundAmount > 0 ? "Manual / Original Payment Source" : "No Refund")
         }
-
-        paymentDetails += `<div style="margin-top:12px;">${alertBox(
-            refundHtmlParts.join("<br />"),
-            "warning"
-        )}</div>`;
-    }
+        </table>
+        <div style="margin-top:12px;">
+            ${alertBox(refundStatusText, refundAmount > 0 ? "success" : "warning")}
+        </div>
+    `;
 
     const html = createEmailTemplate({
         preheader: "Your booking has been cancelled",
@@ -587,7 +591,7 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         badgeText: "CANCELLED",
         introTitle: `Hello ${getBookingPartyName(name)},`,
         introText:
-            "Your booking has been cancelled successfully. Please review the cancelled booking details below.",
+            "Your booking has been cancelled successfully. Please review the cancelled booking and refund details below.",
         bodyHtml: `
             ${bookingDetailsHtml}
             ${card("Payment Details", paymentDetails)}

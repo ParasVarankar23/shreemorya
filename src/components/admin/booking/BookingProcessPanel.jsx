@@ -76,13 +76,26 @@ export default function BookingProcessPanel({
             const seats = Array.isArray(booking?.seats) ? booking.seats : [];
 
             seats.forEach((seatNo) => {
+                const normalizedSeatStatus = String(booking?.seatStatus || "").toLowerCase();
+                const normalizedBookingStatus = String(booking?.bookingStatus || "").toUpperCase();
+
+                // ✅ IMPORTANT:
+                // blocked  => blocked seat
+                // cancelled => available again (do not add in map as occupied)
+                // confirmed/pending booked => booked
+                if (
+                    normalizedSeatStatus === "cancelled" ||
+                    (normalizedBookingStatus === "CANCELLED" && normalizedSeatStatus !== "blocked")
+                ) {
+                    return; // seat becomes available again
+                }
+
+                const resolvedStatus =
+                    normalizedSeatStatus === "blocked" ? "blocked" : "booked";
+
                 map[String(seatNo)] = {
                     bookingId: booking?._id,
-                    status:
-                        booking?.bookingStatus === "CANCELLED" ||
-                            booking?.seatStatus === "blocked"
-                            ? "blocked"
-                            : "booked",
+                    status: resolvedStatus,
                     customerName: booking?.customerName || "",
                     customerPhone: booking?.customerPhone || "",
                     customerEmail: booking?.customerEmail || "",
@@ -98,6 +111,8 @@ export default function BookingProcessPanel({
                     bookingCode: booking?.bookingCode || "",
                     paymentStatus: booking?.paymentStatus || "UNPAID",
                     paymentMethod: booking?.paymentMethod || "UNPAID",
+                    bookingStatus: booking?.bookingStatus || "",
+                    seatStatus: booking?.seatStatus || "",
                 };
             });
         });

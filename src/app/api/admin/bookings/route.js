@@ -216,7 +216,6 @@ export async function POST(request) {
         const perSeatFare = Number(fare || 0);
 
         if (perSeatFare <= 0 && !blockSeatMode) {
-            // Warn but don't reject - allow 0 fare bookings
             console.warn(`Warning: Booking with 0 fare for seats: ${normalizedSeats.join(", ")}`);
         }
 
@@ -245,7 +244,8 @@ export async function POST(request) {
             })
         );
 
-        if (booking.customerEmail) {
+        // ✅ Send confirmation email only for CONFIRMED bookings
+        if (booking.customerEmail && booking.bookingStatus === "CONFIRMED") {
             try {
                 const bookingPayload = {
                     ...(booking.toObject ? booking.toObject() : booking),

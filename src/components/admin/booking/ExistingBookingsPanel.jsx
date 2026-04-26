@@ -6,18 +6,56 @@ import { formatCurrency } from "./bookingHelpers";
 
 export default function ExistingBookingsPanel({
     bookings = [],
-    blockedSeats = [],
     loading = false,
     onViewBooking,
     onViewBlockedSeat,
 }) {
     const [query, setQuery] = useState("");
 
+    // ✅ Separate real bookings from blocked bookings
+    const { activeBookings, blockedBookingItems } = useMemo(() => {
+        const active = [];
+        const blocked = [];
+
+        bookings.forEach((booking) => {
+            const seatStatus = String(booking?.seatStatus || "").toLowerCase();
+            const bookingStatus = String(booking?.bookingStatus || "").toUpperCase();
+
+            // ✅ Only real blocked seats go to blocked section
+            if (seatStatus === "blocked") {
+                const seats = Array.isArray(booking?.seats) ? booking.seats : [];
+                seats.forEach((seatNo) => {
+                    blocked.push({
+                        seatNo: String(seatNo),
+                        booking,
+                    });
+                });
+                return;
+            }
+
+            // ✅ Cancelled bookings should NOT appear anywhere in panel
+            if (
+                seatStatus === "cancelled" ||
+                (bookingStatus === "CANCELLED" && seatStatus !== "blocked")
+            ) {
+                return;
+            }
+
+            // ✅ Only active bookings show in Existing Bookings
+            active.push(booking);
+        });
+
+        return {
+            activeBookings: active,
+            blockedBookingItems: blocked,
+        };
+    }, [bookings]);
+
     const filteredBookings = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return bookings;
+        if (!q) return activeBookings;
 
-        return bookings.filter((booking) => {
+        return activeBookings.filter((booking) => {
             const seatText = (booking?.seats || []).join(",").toLowerCase();
             const name = String(booking?.customerName || "").toLowerCase();
             const phone = String(booking?.customerPhone || "").toLowerCase();
@@ -34,14 +72,18 @@ export default function ExistingBookingsPanel({
                 code.includes(q)
             );
         });
-    }, [bookings, query]);
+    }, [activeBookings, query]);
 
     const filteredBlocked = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return blockedSeats;
+        if (!q) return blockedBookingItems;
 
-        return blockedSeats.filter((seatNo) => String(seatNo).toLowerCase().includes(q));
-    }, [blockedSeats, query]);
+        return blockedBookingItems.filter((item) => {
+            const seatText = String(item?.seatNo || "").toLowerCase();
+            const code = String(item?.booking?.bookingCode || "").toLowerCase();
+            return seatText.includes(q) || code.includes(q);
+        });
+    }, [blockedBookingItems, query]);
 
     return (
         <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
@@ -142,11 +184,11 @@ export default function ExistingBookingsPanel({
                                             </div>
 
                                             <div className="space-y-2">
-                                                {filteredBlocked.map((seatNo) => (
+                                                {filteredBlocked.map((item) => (
                                                     <button
-                                                        key={seatNo}
+                                                        key={`${item.booking?._id}-${item.seatNo}`}
                                                         type="button"
-                                                        onClick={() => onViewBlockedSeat?.(seatNo)}
+                                                        onClick={() => onViewBlockedSeat?.(item.seatNo)}
                                                         className="flex w-full items-center justify-between rounded-[18px] border border-orange-200 bg-orange-50 px-3 py-3 text-left transition hover:bg-orange-100"
                                                     >
                                                         <div className="flex items-center gap-3">
@@ -156,7 +198,7 @@ export default function ExistingBookingsPanel({
 
                                                             <div>
                                                                 <div className="text-sm font-bold text-[#C2410C]">
-                                                                    Seat {seatNo}
+                                                                    Seat {item.seatNo}
                                                                 </div>
                                                                 <div className="text-xs text-orange-700">
                                                                     Blocked seat
