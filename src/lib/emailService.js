@@ -122,10 +122,12 @@ function moneyTag(amount) {
     `;
 }
 
-function formatStopWithTime(name, time) {
+function formatStopWithTime(name, time, marathi = "") {
     const stopName = safeText(name);
     const stopTime = safeText(time, "");
-    return stopTime ? `${stopName} (${stopTime})` : stopName;
+    const marathiName = safeText(marathi, "");
+    const displayName = marathiName && marathiName !== stopName ? `${stopName} (${marathiName})` : stopName;
+    return stopTime ? `${displayName} (${stopTime})` : displayName;
 }
 
 function createEmailTemplate({
@@ -394,11 +396,13 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             `
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                         ${infoRow("Passenger Name", getBookingPartyName(name))}
-                        ${infoRow("Bus", getRouteLabel(booking))}
+                        ${infoRow("Ticket Number", safeText(booking.bookingCode || booking.bookingId || "--"), true)}
+                        ${infoRow("Bus", safeText(booking.busNumber || "--"))}
+                        ${infoRow("Route", safeText(booking.routeName || "--"))}
                         ${infoRow("Travel Date", safeText(booking.date || booking.travelDate || "--"))}
                         ${infoRow("Seat Number", safeText(booking.seatNo || (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")))}
-                        ${infoRow("Pickup Point", formatStopWithTime(pickup, startTime))}
-                        ${infoRow("Drop Point", formatStopWithTime(drop, endTime))}
+                        ${infoRow("Pickup Point", formatStopWithTime(pickup, startTime, booking.pickupMarathi))}
+                        ${infoRow("Drop Point", formatStopWithTime(drop, endTime, booking.dropMarathi))}
                     </table>
                 `
         )}
@@ -441,11 +445,12 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         `
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 ${infoRow("Passenger Name", getBookingPartyName(name))}
-                ${infoRow("Bus", getRouteLabel(booking))}
+                ${infoRow("Bus", safeText(booking.busNumber || "--"))}
+                ${infoRow("Route", safeText(booking.routeName || "--"))}
                 ${infoRow("Travel Date", safeText(booking.date || booking.travelDate || "--"))}
                 ${infoRow("Seat Number", safeText(booking.seatNo || (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")))}
-                ${infoRow("Pickup Point", formatStopWithTime(pickup, startTime))}
-                ${infoRow("Drop Point", formatStopWithTime(drop, endTime))}
+                ${infoRow("Pickup Point", formatStopWithTime(pickup, startTime, booking.pickupMarathi))}
+                ${infoRow("Drop Point", formatStopWithTime(drop, endTime, booking.dropMarathi))}
             </table>
         `
     );

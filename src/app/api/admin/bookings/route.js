@@ -1,15 +1,8 @@
+import { generateBookingCode } from "@/lib/bookingCode";
 import { sendBookingConfirmation } from "@/lib/emailService";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import { NextResponse } from "next/server";
-
-function generateBookingCode() {
-    const now = new Date();
-    const dd = String(now.getDate()).padStart(2, "0");
-    const mon = now.toLocaleString("en-US", { month: "short" }).toUpperCase();
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    return `${dd}${mon}${rand}`;
-}
 
 function isBlockSeatRequest(payload = {}) {
     return Boolean(
@@ -93,7 +86,7 @@ function buildBookingPayload({
         scheduleId,
         travelDate,
         seats: normalizedSeats,
-        bookingCode: generateBookingCode(),
+        bookingCode: generateBookingCode(travelDate),
         customerName: blockSeatMode ? "Blocked Seat" : customerName.trim(),
         customerPhone: blockSeatMode ? "BLOCKED" : customerPhone.trim(),
         customerEmail: customerEmail.trim(),
@@ -226,6 +219,8 @@ export async function POST(request) {
             console.warn(`Warning: Booking with 0 fare for seats: ${normalizedSeats.join(", ")}`);
         }
 
+        const schedule = await Schedule.findById(scheduleId).lean();
+
         const booking = await Booking.create(
             buildBookingPayload({
                 scheduleId,
@@ -251,17 +246,23 @@ export async function POST(request) {
 
         if (booking.customerEmail) {
             try {
+                const bookingPayload = {
+                    ...(booking.toObject ? booking.toObject() : booking),
+                    busNumber: schedule?.busNumber || "",
+                    routeName: schedule?.routeName || "",
+                    travelDate: booking.travelDate,
+                    seats: booking.seats,
+                    fare: booking.fare,
+                    paymentMethod: booking.paymentMethod,
+                    paymentId: String(booking._id),
+                    pickupMarathi: booking.pickupMarathi || "",
+                    dropMarathi: booking.dropMarathi || "",
+                };
+
                 await sendBookingConfirmation(
                     booking.customerEmail,
                     booking.customerName || "Passenger",
-                    {
-                        ...booking.toObject?.(),
-                        travelDate: booking.travelDate,
-                        seats: booking.seats,
-                        fare: booking.fare,
-                        paymentMethod: booking.paymentMethod,
-                        paymentId: booking._id,
-                    }
+                    bookingPayload
                 );
             } catch (emailError) {
                 console.warn("ADMIN_BOOKING_CONFIRMATION_EMAIL_ERROR:", emailError.message);
