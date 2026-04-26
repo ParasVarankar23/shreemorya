@@ -1,3 +1,4 @@
+import { sendLoginEmail } from "@/lib/emailService";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
 import { errorResponse, successResponse } from "@/utils/apiResponse";
@@ -47,6 +48,22 @@ export async function POST(req) {
         const sessionId = createSessionId();
         const accessToken = generateAccessToken({ ...user.toObject(), sessionId });
         const refreshToken = generateRefreshToken(user, sessionId);
+
+        try {
+            const recipientEmail = user.email || (isEmail ? emailOrPhone.toLowerCase() : "");
+
+            if (recipientEmail) {
+                await sendLoginEmail({
+                    to: recipientEmail,
+                    fullName: user.fullName,
+                    loginTime: new Date(),
+                    loginMethod: "Password",
+                    ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "",
+                });
+            }
+        } catch (mailError) {
+            console.warn("LOGIN_EMAIL_ERROR:", mailError.message);
+        }
 
         return successResponse(
             {

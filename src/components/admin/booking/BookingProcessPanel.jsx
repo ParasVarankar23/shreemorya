@@ -118,7 +118,7 @@ export default function BookingProcessPanel({
     }, [bookedMap]);
 
     const selectedFare = useMemo(() => {
-        const perSeat = Number(selectedBus?.fare || 0);
+        const perSeat = Number(selectedBus?.fare || selectedBus?.amount || 0);
         return perSeat * selectedSeats.length;
     }, [selectedBus, selectedSeats]);
 
@@ -337,7 +337,7 @@ export default function BookingProcessPanel({
                 dropName: dropStop?.name || "",
                 dropMarathi: dropStop?.marathiName || "",
                 dropTime: dropStop?.time || "",
-                fare: Number(selectedBus?.fare || 0),
+                fare: Number(selectedBus?.fare || selectedBus?.amount || 0),
                 paymentMode,
             };
 
@@ -407,7 +407,7 @@ export default function BookingProcessPanel({
                 dropName: dropStop?.name || "",
                 dropMarathi: dropStop?.marathiName || "",
                 dropTime: dropStop?.time || "",
-                fare: Number(selectedBus?.fare || 0),
+                fare: Number(selectedBus?.fare || selectedBus?.amount || 0),
                 paymentMode: "ONLINE",
             };
 

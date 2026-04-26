@@ -1,6 +1,15 @@
 "use client";
 
 import { BusFront, Clock3, Eye, MapPin, Route } from "lucide-react";
+import PropTypes from "prop-types";
+
+function formatCurrency(amount) {
+    return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 0,
+    }).format(Number(amount || 0));
+}
 
 export default function AvailableBusCard({ bus, onViewSeats }) {
     const baseSeats = Number(bus?.seatLayout || 39);
@@ -12,7 +21,7 @@ export default function AvailableBusCard({ bus, onViewSeats }) {
     const available = Math.max(totalSeats - booked - blocked, 0);
 
     return (
-        <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)] transition-all duration-200 hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)] sm:p-5">
+        <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)] transition-all duration-200 hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)] sm:p-5">
             {/* Top Section */}
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 {/* Left */}
@@ -40,6 +49,10 @@ export default function AvailableBusCard({ bus, onViewSeats }) {
                             <span className="rounded-full bg-slate-100 px-4 py-1.5 text-sm font-semibold text-slate-700 sm:text-base">
                                 {bus?.busType || "NON_AC"}
                             </span>
+
+                            <span className="rounded-full bg-amber-50 px-4 py-1.5 text-sm font-bold text-amber-700 sm:text-base">
+                                Fare {formatCurrency(bus?.fare)}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -48,7 +61,7 @@ export default function AvailableBusCard({ bus, onViewSeats }) {
                 <button
                     type="button"
                     onClick={onViewSeats}
-                    className="inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-[18px] bg-gradient-to-r from-[#0B5D5A] to-[#0A524F] px-5 text-base font-bold text-white shadow-[0_8px_18px_rgba(11,93,90,0.18)] transition-all duration-200 hover:from-[#094B49] hover:to-[#083F3E] hover:shadow-[0_12px_22px_rgba(11,93,90,0.24)] xl:w-auto xl:min-w-[190px]"
+                    className="inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-[18px] bg-linear-to-r from-[#0B5D5A] to-[#0A524F] px-5 text-base font-bold text-white shadow-[0_8px_18px_rgba(11,93,90,0.18)] transition-all duration-200 hover:from-[#094B49] hover:to-[#083F3E] hover:shadow-[0_12px_22px_rgba(11,93,90,0.24)] xl:w-auto"
                 >
                     <Eye className="h-5 w-5" />
                     View Seats
@@ -89,6 +102,14 @@ export default function AvailableBusCard({ bus, onViewSeats }) {
                     value={`${bus?.startTime || "--:--"} → ${bus?.endTime || "--:--"}`}
                 />
             </div>
+
+            <div className="mt-3">
+                <InfoCard
+                    icon={<Eye className="h-4.5 w-4.5" />}
+                    label="FARE"
+                    value={formatCurrency(bus?.fare)}
+                />
+            </div>
         </div>
     );
 }
@@ -113,6 +134,12 @@ function StatCard({ label, value, tone = "slate" }) {
     );
 }
 
+StatCard.propTypes = {
+    label: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    tone: PropTypes.oneOf(["teal", "slate", "amber", "indigo", "violet", "green"]),
+};
+
 function InfoCard({ icon, label, value }) {
     return (
         <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4">
@@ -128,3 +155,30 @@ function InfoCard({ icon, label, value }) {
         </div>
     );
 }
+
+InfoCard.propTypes = {
+    icon: PropTypes.node.isRequired,
+    label: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+};
+
+AvailableBusCard.propTypes = {
+    bus: PropTypes.shape({
+        _id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        seatLayout: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        cabinCount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        tableCount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        bookedCount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        blockedCount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        busNumber: PropTypes.string,
+        operatorName: PropTypes.string,
+        busType: PropTypes.string,
+        fare: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        routeName: PropTypes.string,
+        pickupName: PropTypes.string,
+        dropName: PropTypes.string,
+        startTime: PropTypes.string,
+        endTime: PropTypes.string,
+    }).isRequired,
+    onViewSeats: PropTypes.func,
+};

@@ -1,5 +1,7 @@
 "use client";
 
+import { getStopDisplayName, getStopNameMarathi, normalizeStopName } from "@/lib/fare";
+
 export function getAuthHeaders(extra = {}) {
     let token = "";
 
@@ -104,13 +106,23 @@ export function normalizeStopsFromSchedules(schedules = []) {
             const name = stop?.name || "";
             if (!name) return;
 
-            const key = String(name).trim().toLowerCase();
+            const key = normalizeStopName(name).trim().toLowerCase();
 
             if (!map.has(key)) {
+                const normalizedName = normalizeStopName(name);
+                const fareMarathiName = getStopNameMarathi(normalizedName) || "";
+                const marathiName =
+                    fareMarathiName && fareMarathiName !== normalizedName
+                        ? fareMarathiName
+                        : stop?.marathiName || stop?.nameMr || "";
                 map.set(key, {
-                    value: name,
-                    name,
-                    marathiName: stop?.marathiName || "",
+                    value: normalizedName,
+                    name: normalizedName,
+                    label:
+                        marathiName && marathiName !== normalizedName
+                            ? `${normalizedName} (${marathiName})`
+                            : getStopDisplayName(normalizedName),
+                    marathiName,
                     time: stop?.time || "",
                     order: typeof stop?.order === "number" ? stop.order : 0,
                 });

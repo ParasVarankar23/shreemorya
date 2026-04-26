@@ -1,7 +1,11 @@
 "use client";
 
+/* eslint-disable jsx-a11y/label-has-associated-control, no-nested-ternary */
+
 import EditScheduleModal from "@/components/admin/schedule/EditScheduleModal";
+import { showAppToast } from "@/lib/toast";
 import { CalendarDays, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import PropTypes from "prop-types";
 import { useEffect, useState } from "react";
 
 /* =========================
@@ -91,7 +95,7 @@ async function apiFetch(url, options = {}) {
     if (res.status === 401) {
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
-        alert("Session expired. Please login again.");
+        showAppToast("error", "Session expired. Please login again.");
     }
 
     return res;
@@ -109,6 +113,10 @@ function Input({ className = "", ...props }) {
     );
 }
 
+Input.propTypes = {
+    className: PropTypes.string,
+};
+
 function Select({ className = "", children, ...props }) {
     return (
         <select
@@ -119,6 +127,11 @@ function Select({ className = "", children, ...props }) {
         </select>
     );
 }
+
+Select.propTypes = {
+    className: PropTypes.string,
+    children: PropTypes.node,
+};
 
 function StatusBadge({ status }) {
     const styles = {
@@ -137,6 +150,10 @@ function StatusBadge({ status }) {
         </span>
     );
 }
+
+StatusBadge.propTypes = {
+    status: PropTypes.string,
+};
 
 /* =========================
    PAGE
@@ -180,11 +197,11 @@ export default function SchedulePage() {
 
                 setBuses(activeBuses);
             } else {
-                alert(data.message || "Failed to fetch buses");
+                showAppToast("error", data.message || "Failed to fetch buses");
             }
         } catch (error) {
             console.error(error);
-            alert("Failed to fetch buses");
+            showAppToast("error", "Failed to fetch buses");
         }
     };
 
@@ -197,11 +214,11 @@ export default function SchedulePage() {
             if (res.ok && data.success) {
                 setSchedules(data.data || []);
             } else {
-                alert(data.message || "Failed to fetch schedules");
+                showAppToast("error", data.message || "Failed to fetch schedules");
             }
         } catch (error) {
             console.error(error);
-            alert("Failed to fetch schedules");
+            showAppToast("error", "Failed to fetch schedules");
         } finally {
             setLoading(false);
         }
@@ -214,17 +231,17 @@ export default function SchedulePage() {
 
     const handleCreate = async () => {
         if (!busId) {
-            alert("Please select bus");
+            showAppToast("error", "Please select bus");
             return;
         }
 
         if (dateMode === "single" && !travelDate) {
-            alert("Please select date");
+            showAppToast("error", "Please select date");
             return;
         }
 
         if (dateMode === "range" && (!startDate || !endDate)) {
-            alert("Please select start date and end date");
+            showAppToast("error", "Please select start date and end date");
             return;
         }
 
@@ -251,11 +268,11 @@ export default function SchedulePage() {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
-                alert(data.message || "Failed to create schedule");
+                showAppToast("error", data.message || "Failed to create schedule");
                 return;
             }
 
-            alert(data.message || "Schedule created successfully");
+            showAppToast("success", data.message || "Schedule created successfully");
 
             setBusId("");
             setDateMode("single");
@@ -266,7 +283,7 @@ export default function SchedulePage() {
             fetchSchedules();
         } catch (error) {
             console.error(error);
-            alert("Failed to create schedule");
+            showAppToast("error", "Failed to create schedule");
         } finally {
             setCreating(false);
         }
@@ -313,24 +330,24 @@ export default function SchedulePage() {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
-                alert(data.message || "Failed to update schedule");
+                showAppToast("error", data.message || "Failed to update schedule");
                 return;
             }
 
-            alert("Schedule updated successfully");
+            showAppToast("success", "Schedule updated successfully");
             setEditOpen(false);
             setSelectedSchedule(null);
             fetchSchedules();
         } catch (error) {
             console.error(error);
-            alert("Failed to update schedule");
+            showAppToast("error", "Failed to update schedule");
         } finally {
             setSaving(false);
         }
     };
 
     const handleDelete = async (scheduleId) => {
-        const ok = window.confirm("Are you sure you want to delete this schedule?");
+        const ok = globalThis.confirm("Are you sure you want to delete this schedule?");
         if (!ok) return;
 
         try {
@@ -341,17 +358,100 @@ export default function SchedulePage() {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
-                alert(data.message || "Failed to delete schedule");
+                showAppToast("error", data.message || "Failed to delete schedule");
                 return;
             }
 
-            alert("Schedule deleted successfully");
+            showAppToast("success", "Schedule deleted successfully");
             fetchSchedules();
         } catch (error) {
             console.error(error);
-            alert("Failed to delete schedule");
+            showAppToast("error", "Failed to delete schedule");
         }
     };
+
+    let scheduleTableContent;
+
+    if (loading) {
+        scheduleTableContent = (
+            <div className="p-8 text-center text-sm text-slate-500">Loading schedules...</div>
+        );
+    } else if (schedules.length === 0) {
+        scheduleTableContent = (
+            <div className="p-8 text-center text-sm text-slate-500">No schedules found</div>
+        );
+    } else {
+        scheduleTableContent = (
+            <div className="overflow-x-auto">
+                <table className="min-w-full">
+                    <thead className="bg-slate-50">
+                        <tr className="border-b border-slate-200">
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Bus</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Route</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Date</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Start</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">End</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Fare</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Status</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold uppercase text-slate-500">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {schedules.map((item) => (
+                            <tr key={item._id} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="px-4 py-4 text-sm font-semibold text-slate-900">
+                                    {item.busNumber}
+                                    <div className="text-xs font-normal text-slate-500">{item.busName}</div>
+                                </td>
+
+                                <td className="px-4 py-4 text-sm text-slate-700">
+                                    {item.routeName || `${item.startPoint} → ${item.endPoint}`}
+                                </td>
+
+                                <td className="px-4 py-4 text-sm text-slate-700">
+                                    {item.travelDate
+                                        ? new Date(item.travelDate).toLocaleDateString("en-GB")
+                                        : "-"}
+                                </td>
+
+                                <td className="px-4 py-4 text-sm text-slate-700">{item.startTime || "--:--"}</td>
+                                <td className="px-4 py-4 text-sm text-slate-700">{item.endTime || "--:--"}</td>
+
+                                <td className="px-4 py-4 text-sm font-semibold text-slate-900">
+                                    ₹ {Number(item.effectiveFare || item.baseFare || 0)}
+                                </td>
+
+                                <td className="px-4 py-4">
+                                    <StatusBadge status={item.status} />
+                                </td>
+
+                                <td className="px-4 py-4">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <button
+                                            onClick={() => openEditModal(item)}
+                                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                            Edit
+                                        </button>
+
+                                        <button
+                                            onClick={() => handleDelete(item._id)}
+                                            className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-6">
@@ -453,80 +553,7 @@ export default function SchedulePage() {
                     <h2 className="text-lg font-bold text-slate-900">Schedule Table</h2>
                 </div>
 
-                {loading ? (
-                    <div className="p-8 text-center text-sm text-slate-500">Loading schedules...</div>
-                ) : schedules.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-slate-500">No schedules found</div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full">
-                            <thead className="bg-slate-50">
-                                <tr className="border-b border-slate-200">
-                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Bus</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Route</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Start</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">End</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Fare</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-500">Status</th>
-                                    <th className="px-4 py-3 text-center text-xs font-bold uppercase text-slate-500">Actions</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {schedules.map((item) => (
-                                    <tr key={item._id} className="border-b border-slate-100 hover:bg-slate-50">
-                                        <td className="px-4 py-4 text-sm font-semibold text-slate-900">
-                                            {item.busNumber}
-                                            <div className="text-xs font-normal text-slate-500">{item.busName}</div>
-                                        </td>
-
-                                        <td className="px-4 py-4 text-sm text-slate-700">
-                                            {item.routeName || `${item.startPoint} → ${item.endPoint}`}
-                                        </td>
-
-                                        <td className="px-4 py-4 text-sm text-slate-700">
-                                            {item.travelDate
-                                                ? new Date(item.travelDate).toLocaleDateString("en-GB")
-                                                : "-"}
-                                        </td>
-
-                                        <td className="px-4 py-4 text-sm text-slate-700">{item.startTime || "--:--"}</td>
-                                        <td className="px-4 py-4 text-sm text-slate-700">{item.endTime || "--:--"}</td>
-
-                                        <td className="px-4 py-4 text-sm font-semibold text-slate-900">
-                                            ₹ {Number(item.effectiveFare || item.baseFare || 0)}
-                                        </td>
-
-                                        <td className="px-4 py-4">
-                                            <StatusBadge status={item.status} />
-                                        </td>
-
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button
-                                                    onClick={() => openEditModal(item)}
-                                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                    Edit
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleDelete(item._id)}
-                                                    className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                {scheduleTableContent}
             </div>
 
             <EditScheduleModal
@@ -539,6 +566,7 @@ export default function SchedulePage() {
                 setForm={setEditForm}
                 onSave={handleSaveEdit}
                 saving={saving}
+                toast={showAppToast}
             />
         </div>
     );

@@ -1,3 +1,12 @@
+import {
+    BUS_TYPES,
+    ROUTES,
+    getDefaultFareAmountByRoute,
+    getFare,
+    isCityStop,
+    isVillageStop,
+    normalizeStopName as normalizeFareStopName,
+} from "@/lib/fare";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import Bus from "@/models/bus.model";
@@ -22,6 +31,62 @@ function normalizeStopName(value) {
         .trim()
         .toLowerCase()
         .replaceAll(/\s+/g, " ");
+}
+
+function normalizeBusType(busType) {
+    const value = String(busType || "").trim().toUpperCase();
+
+    if (value === "AC SLEEPER" || value === "AC_SLEEPER") return BUS_TYPES.AC_SLEEPER;
+    if (value === "NON-AC SLEEPER" || value === "NON_AC_SLEEPER") return BUS_TYPES.NON_AC_SLEEPER;
+    if (value === "AC") return BUS_TYPES.AC;
+    return BUS_TYPES.NON_AC;
+}
+
+function inferRouteFromStops(pickup, drop) {
+    const normalizedPickup = normalizeFareStopName(pickup);
+    const normalizedDrop = normalizeFareStopName(drop);
+
+    if (isVillageStop(normalizedPickup) && isCityStop(normalizedDrop)) {
+        return ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR;
+    }
+
+    if (isCityStop(normalizedPickup) && isVillageStop(normalizedDrop)) {
+        return ROUTES.BORIVALI_VIRAR_TO_BORLI_SHRIVARDHAN;
+    }
+
+    return null;
+}
+
+function resolveFareAmount({ pickup, drop, busType, schedule }) {
+    const normalizedBusType = normalizeBusType(busType);
+    const route = inferRouteFromStops(pickup, drop);
+
+    if (route) {
+        const fareResult = getFare({
+            route,
+            pickup,
+            drop,
+            busType: normalizedBusType,
+        });
+
+        if (fareResult?.isValid && Number.isFinite(fareResult.amount)) {
+            return {
+                amount: Number(fareResult.amount),
+                fare: Number(fareResult.amount),
+                route,
+                fareSource: "fare.js",
+            };
+        }
+    }
+
+    const fallbackFare = getDefaultFareAmountByRoute(route || ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR, normalizedBusType);
+
+    return {
+        amount: fallbackFare,
+        fare: fallbackFare,
+        route,
+        fareSource: "fallback",
+    };
 }
 
 function getScheduleStops(schedule) {
@@ -147,10 +212,7 @@ export async function GET(request) {
 
             const allBookings = await Booking.find({
                 scheduleId: schedule._id,
-                travelDate: {
-                    $gte: dateRange.start,
-                    $lte: dateRange.end,
-                },
+                travelDate: date,
             }).lean();
 
             const bookedCount = allBookings.reduce((acc, item) => {
@@ -196,7 +258,12 @@ export async function GET(request) {
                     schedule?.endTime ||
                     "--:--",
                 seatLayout: Number(schedule?.seatLayout || 39),
-                fare: Number(schedule?.effectiveFare || schedule?.baseFare || schedule?.fare || 100),
+                ...resolveFareAmount({
+                    pickup: stops[pickupIndex]?.name || pickup,
+                    drop: stops[dropIndex]?.name || drop,
+                    busType: schedule?.busType,
+                    schedule,
+                }),
                 bookedCount,
                 blockedCount,
                 cabinCount: Number(schedule?.cabinCount || 0),

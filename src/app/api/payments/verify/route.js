@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/db";
+import { sendBookingConfirmation } from "@/lib/emailService";
 import {
     fetchRazorpayPayment,
     verifyRazorpayPaymentSignature,
@@ -11,9 +12,6 @@ import Schedule from "@/models/schedule.model";
 import SeatHold from "@/models/seat-hold.model";
 import Voucher from "@/models/voucher.model";
 import { NextResponse } from "next/server";
-
-// Optional-safe import pattern (if you already have email helper)
-import { sendBookingConfirmationEmail } from "@/lib/sendEmail";
 
 export async function POST(request) {
     try {
@@ -300,11 +298,15 @@ export async function POST(request) {
 
         // Email (optional-safe)
         try {
-            if (booking.contactDetails?.email) {
-                await sendBookingConfirmationEmail({
-                    booking,
-                    schedule,
-                    payment,
+            const recipientEmail = booking.contactDetails?.email || booking.customerEmail || "";
+
+            if (recipientEmail) {
+                await sendBookingConfirmation(recipientEmail, booking.contactDetails?.fullName || booking.customerName || "Passenger", {
+                    ...booking,
+                    date: booking.travelDate,
+                    seats: (booking.passengers || []).map((p) => String(p.seatNumber)),
+                    fare: booking.finalPayableAmount,
+                    paymentId: payment?._id ? String(payment._id) : "",
                 });
             }
         } catch (emailError) {

@@ -1,7 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Loader2, MapPin, Search, X } from "lucide-react";
+import PropTypes from "prop-types";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+function getStopLabel(item) {
+    const label = item?.label ?? item?.name ?? "";
+    const marathiName = item?.marathiName || item?.nameMr || "";
+
+    if (marathiName && !String(label).includes(marathiName)) {
+        return `${label} (${marathiName})`;
+    }
+
+    return label;
+}
+
+function getStopSearchText(item) {
+    return [item?.label, item?.name, item?.marathiName, item?.nameMr]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+}
 
 export default function StopSearchDropdown({
     label,
@@ -43,16 +62,66 @@ export default function StopSearchDropdown({
             if (!item) return false;
 
             const itemValue = item?.value ?? item?._id ?? item?.id ?? item?.name ?? "";
-            const itemLabel = item?.label ?? item?.name ?? "";
 
             if (excludeValue && itemValue === excludeValue) return false;
             if (!q) return true;
 
-            return itemLabel.toLowerCase().includes(q);
+            return getStopSearchText(item).includes(q);
         });
     }, [options, search, excludeValue]);
 
-    const displayText = value?.label || "";
+    const displayText = getStopLabel(value);
+    let optionsContent = null;
+
+    if (loading) {
+        optionsContent = (
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading stops...
+            </div>
+        );
+    } else if (filteredOptions.length === 0) {
+        optionsContent = (
+            <div className="py-6 text-center text-sm text-slate-500">No stops found</div>
+        );
+    } else {
+        optionsContent = filteredOptions.map((item, index) => {
+            const itemValue = item?.value ?? item?._id ?? item?.id ?? item?.name ?? "";
+            const itemLabel = getStopLabel(item);
+            const isSelected = value?.value === itemValue;
+
+            return (
+                <button
+                    key={`${itemValue}-${index}`}
+                    type="button"
+                    onClick={() => {
+                        onChange({
+                            value: itemValue,
+                            label: itemLabel,
+                            marathiName: item?.marathiName || item?.nameMr || "",
+                            name: item?.name || itemLabel,
+                        });
+                        setSearch("");
+                        setOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-left transition-all duration-150 ${isSelected
+                            ? "bg-[#0B5D5A]/10 text-[#0B5D5A]"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                >
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span className="flex min-w-0 flex-col text-left">
+                        <span className="truncate text-sm font-medium">{item?.name ?? itemLabel}</span>
+                        {item?.marathiName || item?.nameMr ? (
+                            <span className="truncate text-xs text-slate-500">
+                                {item?.marathiName || item?.nameMr}
+                            </span>
+                        ) : null}
+                    </span>
+                </button>
+            );
+        });
+    }
 
     return (
         <div ref={wrapperRef} className="relative w-full">
@@ -81,7 +150,7 @@ export default function StopSearchDropdown({
 
             {/* Dropdown */}
             {open && (
-                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
                     {/* Search box */}
                     <div className="border-b border-slate-100 p-3">
                         <div className="relative">
@@ -107,51 +176,25 @@ export default function StopSearchDropdown({
                     </div>
 
                     {/* Options */}
-                    <div className="max-h-64 overflow-y-auto p-2">
-                        {loading ? (
-                            <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Loading stops...
-                            </div>
-                        ) : filteredOptions.length === 0 ? (
-                            <div className="py-6 text-center text-sm text-slate-500">
-                                No stops found
-                            </div>
-                        ) : (
-                            filteredOptions.map((item, index) => {
-                                const itemValue =
-                                    item?.value ?? item?._id ?? item?.id ?? item?.name ?? "";
-                                const itemLabel = item?.label ?? item?.name ?? "";
-                                const isSelected = value?.value === itemValue;
-
-                                return (
-                                    <button
-                                        key={`${itemValue}-${index}`}
-                                        type="button"
-                                        onClick={() => {
-                                            onChange({
-                                                value: itemValue,
-                                                label: itemLabel,
-                                            });
-                                            setSearch("");
-                                            setOpen(false);
-                                        }}
-                                        className={`flex w-full items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-left transition-all duration-150 ${isSelected
-                                                ? "bg-[#0B5D5A]/10 text-[#0B5D5A]"
-                                                : "text-slate-700 hover:bg-slate-50"
-                                            }`}
-                                    >
-                                        <MapPin className="h-4 w-4 shrink-0" />
-                                        <span className="truncate text-sm font-medium">
-                                            {itemLabel}
-                                        </span>
-                                    </button>
-                                );
-                            })
-                        )}
-                    </div>
+                    <div className="max-h-64 overflow-y-auto p-2">{optionsContent}</div>
                 </div>
             )}
         </div>
     );
 }
+
+StopSearchDropdown.propTypes = {
+    label: PropTypes.string.isRequired,
+    placeholder: PropTypes.string,
+    value: PropTypes.shape({
+        value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        label: PropTypes.string,
+        marathiName: PropTypes.string,
+        name: PropTypes.string,
+        nameMr: PropTypes.string,
+    }),
+    onChange: PropTypes.func.isRequired,
+    options: PropTypes.arrayOf(PropTypes.object),
+    loading: PropTypes.bool,
+    excludeValue: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+};

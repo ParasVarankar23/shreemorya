@@ -1,3 +1,4 @@
+import { sendBookingCancellation } from "@/lib/emailService";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import { NextResponse } from "next/server";
@@ -30,6 +31,23 @@ export async function POST(request, { params }) {
         }
 
         await booking.save();
+
+        try {
+            const recipientEmail = booking.contactDetails?.email || booking.customerEmail || "";
+
+            if (recipientEmail) {
+                await sendBookingCancellation(recipientEmail, booking.contactDetails?.fullName || booking.customerName || "Passenger", {
+                    ...booking.toObject(),
+                    date: booking.travelDate,
+                    seats: Array.isArray(booking.seats) ? booking.seats : [],
+                    refund: actionType === "REFUND_ORIGINAL"
+                        ? { amount: Number(booking.finalPayableAmount || booking.fare || 0), success: true }
+                        : null,
+                });
+            }
+        } catch (mailError) {
+            console.warn("BOOKING_CANCELLATION_EMAIL_ERROR:", mailError.message);
+        }
 
         return NextResponse.json({
             success: true,

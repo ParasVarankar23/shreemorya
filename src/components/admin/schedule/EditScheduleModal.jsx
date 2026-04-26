@@ -1,6 +1,9 @@
 "use client";
+/* eslint-disable jsx-a11y/label-has-associated-control */
 
+import { showAppToast } from "@/lib/toast";
 import { X } from "lucide-react";
+import PropTypes from "prop-types";
 
 function Input({ className = "", ...props }) {
     return (
@@ -10,6 +13,10 @@ function Input({ className = "", ...props }) {
         />
     );
 }
+
+Input.propTypes = {
+    className: PropTypes.string,
+};
 
 function Select({ className = "", children, ...props }) {
     return (
@@ -22,6 +29,11 @@ function Select({ className = "", children, ...props }) {
     );
 }
 
+Select.propTypes = {
+    className: PropTypes.string,
+    children: PropTypes.node,
+};
+
 export default function EditScheduleModal({
     open,
     onClose,
@@ -29,8 +41,21 @@ export default function EditScheduleModal({
     setForm,
     onSave,
     saving,
+    toast,
 }) {
     if (!open) return null;
+
+    const notify = toast || showAppToast;
+
+    const handleClose = () => {
+        notify("info", "Edit schedule modal closed");
+        onClose?.();
+    };
+
+    const handleSave = () => {
+        notify("info", "Saving schedule changes");
+        onSave?.();
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -42,7 +67,7 @@ export default function EditScheduleModal({
                     </div>
 
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100"
                     >
                         <X className="h-5 w-5" />
@@ -144,7 +169,7 @@ export default function EditScheduleModal({
                     </button>
 
                     <button
-                        onClick={onSave}
+                        onClick={handleSave}
                         disabled={saving}
                         className="rounded-2xl bg-[#0B5D5A] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#094B49] disabled:opacity-60"
                     >
@@ -155,3 +180,20 @@ export default function EditScheduleModal({
         </div>
     );
 }
+
+EditScheduleModal.propTypes = {
+    open: PropTypes.bool,
+    onClose: PropTypes.func,
+    form: PropTypes.shape({
+        travelDate: PropTypes.string,
+        startTime: PropTypes.string,
+        endTime: PropTypes.string,
+        baseFare: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        effectiveFare: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        status: PropTypes.string,
+    }),
+    setForm: PropTypes.func,
+    onSave: PropTypes.func,
+    saving: PropTypes.bool,
+    toast: PropTypes.func,
+};
