@@ -1,7 +1,21 @@
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
+import Bus from "@/models/bus.model";
 import Schedule from "@/models/schedule.model";
 import { NextResponse } from "next/server";
+
+function normalizeDateOnly(dateInput) {
+    const date = new Date(dateInput);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+}
 
 function normalizeStopName(value) {
     return String(value || "")
@@ -12,8 +26,19 @@ function normalizeStopName(value) {
 
 function getScheduleStops(schedule) {
     const forward = schedule?.forwardTrip || null;
-    const pickupPoints = Array.isArray(schedule?.pickupPoints) ? schedule.pickupPoints : [];
-    const dropPoints = Array.isArray(schedule?.dropPoints) ? schedule.dropPoints : [];
+
+    // Support both structures:
+    // 1. pickupPoints/dropPoints at root level (Schedule model)
+    // 2. pickupPoints/dropPoints inside forwardTrip (Bus model)
+    let pickupPoints = Array.isArray(schedule?.pickupPoints) ? schedule.pickupPoints : [];
+    if (!pickupPoints.length && forward?.pickupPoints) {
+        pickupPoints = Array.isArray(forward.pickupPoints) ? forward.pickupPoints : [];
+    }
+
+    let dropPoints = Array.isArray(schedule?.dropPoints) ? schedule.dropPoints : [];
+    if (!dropPoints.length && forward?.dropPoints) {
+        dropPoints = Array.isArray(forward.dropPoints) ? forward.dropPoints : [];
+    }
 
     const stops = [];
 
@@ -68,7 +93,40 @@ export async function GET(request) {
             );
         }
 
-        const schedules = await Schedule.find({ isActive: true }).lean();
+        const dateRange = normalizeDateOnly(date);
+        if (!dateRange) {
+            return NextResponse.json(
+                { success: false, message: "Invalid date format" },
+                { status: 400 }
+            );
+        }
+
+        // Try querying Schedule first
+        let schedules = await Schedule.find({
+            isActive: true,
+            travelDate: {
+                $gte: dateRange.start,
+                $lte: dateRange.end,
+            },
+        }).lean();
+
+        // If no Schedule documents found, try Bus documents
+        // This handles the case where buses are added without schedules
+        if (schedules.length === 0) {
+            const buses = await Bus.find({
+                status: "ACTIVE",
+            }).lean();
+
+            // Convert Bus documents to schedule-like format for processing
+            schedules = buses.map((bus) => ({
+                ...bus,
+                _id: bus._id,
+                travelDate: new Date(date), // Use the requested date
+                isActive: true,
+                busNumber: bus.busNumber,
+                seatLayout: bus.seatLayout,
+            }));
+        }
 
         const filtered = [];
 
@@ -89,7 +147,10 @@ export async function GET(request) {
 
             const allBookings = await Booking.find({
                 scheduleId: schedule._id,
-                travelDate: date,
+                travelDate: {
+                    $gte: dateRange.start,
+                    $lte: dateRange.end,
+                },
             }).lean();
 
             const bookedCount = allBookings.reduce((acc, item) => {
@@ -135,7 +196,7 @@ export async function GET(request) {
                     schedule?.endTime ||
                     "--:--",
                 seatLayout: Number(schedule?.seatLayout || 39),
-                fare: Number(schedule?.effectiveFare || schedule?.baseFare || 0),
+                fare: Number(schedule?.effectiveFare || schedule?.baseFare || schedule?.fare || 100),
                 bookedCount,
                 blockedCount,
                 cabinCount: Number(schedule?.cabinCount || 0),

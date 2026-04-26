@@ -23,6 +23,8 @@ import {
     showAppToast,
 } from "./bookingHelpers";
 
+let razorpayLoadPromise = null;
+
 export default function BookingProcessPanel({
     selectedBus,
     travelDate,
@@ -34,6 +36,7 @@ export default function BookingProcessPanel({
     const [existingBookings, setExistingBookings] = useState([]);
     const [loadingBookings, setLoadingBookings] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [onlinePaymentProcessing, setOnlinePaymentProcessing] = useState(false);
 
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
@@ -59,6 +62,12 @@ export default function BookingProcessPanel({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus?._id, travelDate]);
+
+    useEffect(() => {
+        loadRazorpayScript().catch((error) => {
+            console.warn("Razorpay preload failed:", error);
+        });
+    }, []);
 
     const bookedMap = useMemo(() => {
         const map = {};
@@ -218,7 +227,76 @@ export default function BookingProcessPanel({
         setCustomerEmail("");
     };
 
+    const loadRazorpayScript = () => {
+        if (typeof globalThis === "undefined") {
+            return Promise.reject(new Error("Razorpay is not available in this environment"));
+        }
+
+        if (globalThis.Razorpay) {
+            return Promise.resolve(globalThis.Razorpay);
+        }
+
+        if (razorpayLoadPromise) {
+            return razorpayLoadPromise;
+        }
+
+        razorpayLoadPromise = new Promise((resolve, reject) => {
+            const existingScript = document.querySelector(
+                'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+            );
+
+            const resolveRazorpay = () => {
+                if (globalThis.Razorpay) {
+                    resolve(globalThis.Razorpay);
+                } else {
+                    reject(new Error("Razorpay checkout script loaded but Razorpay object is missing"));
+                }
+            };
+
+            if (existingScript) {
+                if (globalThis.Razorpay) {
+                    return resolveRazorpay();
+                }
+
+                existingScript.addEventListener("load", resolveRazorpay, { once: true });
+                existingScript.addEventListener(
+                    "error",
+                    () => reject(new Error("Failed to load Razorpay checkout")),
+                    { once: true }
+                );
+                return;
+            }
+
+            const script = document.createElement("script");
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.async = true;
+            script.onload = resolveRazorpay;
+            script.onerror = () => reject(new Error("Failed to load Razorpay checkout"));
+            document.body.appendChild(script);
+        });
+
+        return razorpayLoadPromise;
+    };
+
+    const verifyRazorpayPayment = async (payload) => {
+        const res = await fetch("/api/payments/verify", {
+            method: "POST",
+            headers: {
+                ...getAuthHeaders(),
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        return data;
+    };
+
     const handleCreateBooking = async (paymentMode) => {
+        if (paymentMode === "ONLINE") {
+            return handleCreateOnlineBooking();
+        }
+
         try {
             if (!selectedBus?._id) {
                 return showAppToast("error", "Please select a bus first");
@@ -283,6 +361,187 @@ export default function BookingProcessPanel({
             showAppToast("error", error.message || "Failed to create booking");
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleCreateOnlineBooking = async () => {
+        try {
+            if (!selectedBus?._id) {
+                return showAppToast("error", "Please select a bus first");
+            }
+
+            if (!travelDate) {
+                return showAppToast("error", "Please select travel date");
+            }
+
+            if (!pickupStop || !dropStop) {
+                return showAppToast("error", "Pickup and drop are required");
+            }
+
+            if (selectedFreshSeats.length === 0) {
+                return showAppToast("error", "Please select at least one available seat");
+            }
+
+            if (!customerName.trim()) {
+                return showAppToast("error", "Passenger name is required");
+            }
+
+            if (!customerPhone.trim()) {
+                return showAppToast("error", "Phone number is required");
+            }
+
+            setSubmitting(true);
+            setOnlinePaymentProcessing(true);
+
+            // STEP 1: Create booking as ONLINE pending booking
+            const bookingPayload = {
+                scheduleId: selectedBus._id,
+                travelDate,
+                seats: selectedFreshSeats,
+                customerName: customerName.trim(),
+                customerPhone: customerPhone.trim(),
+                customerEmail: customerEmail.trim(),
+                pickupName: pickupStop?.name || "",
+                pickupMarathi: pickupStop?.marathiName || "",
+                pickupTime: pickupStop?.time || "",
+                dropName: dropStop?.name || "",
+                dropMarathi: dropStop?.marathiName || "",
+                dropTime: dropStop?.time || "",
+                fare: Number(selectedBus?.fare || 0),
+                paymentMode: "ONLINE",
+            };
+
+            const bookingRes = await fetch("/api/admin/bookings", {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify(bookingPayload),
+            });
+
+            const bookingData = await bookingRes.json();
+
+            if (!bookingRes.ok || !bookingData?.success) {
+                throw new Error(bookingData?.message || "Failed to create online booking");
+            }
+
+            const booking = bookingData?.data;
+
+            if (!booking?._id) {
+                throw new Error("Booking created but booking ID missing");
+            }
+
+            // STEP 2: If amount is zero, no Razorpay needed
+            if (Number(booking.finalPayableAmount || 0) <= 0) {
+                showAppToast("success", "Booking created successfully. No payment required.");
+                resetForm();
+                await loadExistingBookings();
+                return;
+            }
+
+            // STEP 3: Create Razorpay order
+            const orderRes = await fetch("/api/payments/create-order", {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ bookingId: booking._id }),
+            });
+
+            const orderData = await orderRes.json();
+
+            if (!orderRes.ok || !orderData?.success) {
+                throw new Error(orderData?.message || "Failed to create Razorpay order");
+            }
+
+            if (!orderData?.data?.key || !orderData?.data?.razorpayOrderId) {
+                throw new Error("Invalid Razorpay order response. Please check server configuration.");
+            }
+
+            // STEP 4: Load Razorpay script
+            const RazorpayConstructor = await loadRazorpayScript();
+
+            if (!RazorpayConstructor) {
+                throw new Error("Razorpay checkout constructor is not available");
+            }
+
+            const passengerName = customerName.trim();
+            const passengerPhone = customerPhone.trim();
+            const passengerEmail = customerEmail.trim();
+
+            const options = {
+                key: orderData.data.key,
+                amount: orderData.data.razorpayAmount,
+                currency: orderData.data.razorpayCurrency || orderData.data.currency || "INR",
+                name: selectedBus?.operatorName || "SA Tours & Travels",
+                description: `Booking ${booking.bookingCode || booking._id}`,
+                order_id: orderData.data.razorpayOrderId,
+                handler: async function (response) {
+                    try {
+                        const verifyRes = await verifyRazorpayPayment({
+                            bookingId: booking._id,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                        });
+
+                        if (!verifyRes?.success) {
+                            throw new Error(verifyRes?.message || "Payment verification failed");
+                        }
+
+                        showAppToast("success", "Payment successful and booking confirmed");
+                        resetForm();
+                        await loadExistingBookings();
+                    } catch (err) {
+                        console.error("Razorpay verification error:", err);
+                        showAppToast("error", err.message || "Payment verification failed");
+                        await loadExistingBookings();
+                    } finally {
+                        setSubmitting(false);
+                        setOnlinePaymentProcessing(false);
+                    }
+                },
+                modal: {
+                    ondismiss: async function () {
+                        console.warn("Razorpay popup closed by user");
+                        showAppToast("error", "Payment cancelled / popup closed");
+                        await loadExistingBookings();
+                        setSubmitting(false);
+                        setOnlinePaymentProcessing(false);
+                    },
+                },
+                prefill: {
+                    name: passengerName,
+                    email: passengerEmail,
+                    contact: passengerPhone,
+                },
+                theme: {
+                    color: "#0B5D5A",
+                },
+            };
+
+            console.log("Razorpay options:", options);
+
+            const rzp = new RazorpayConstructor(options);
+
+            if (typeof rzp.open !== "function") {
+                throw new TypeError("Razorpay instance is invalid or checkout script failed to initialize");
+            }
+
+            rzp.on("payment.failed", async function (response) {
+                console.error("Razorpay payment failed:", response);
+                showAppToast("error", "Razorpay payment failed. Please try again.");
+                await loadExistingBookings();
+                setSubmitting(false);
+                setOnlinePaymentProcessing(false);
+            });
+
+            // Important: slight delay helps popup in some browsers/admin panels
+            setTimeout(() => {
+                rzp.open();
+            }, 150);
+        } catch (error) {
+            console.error("handleCreateOnlineBooking error:", error);
+            showAppToast("error", error.message || "Failed to process online booking");
+            await loadExistingBookings();
+            setSubmitting(false);
+            setOnlinePaymentProcessing(false);
         }
     };
 
@@ -766,25 +1025,47 @@ export default function BookingProcessPanel({
                                     <PaymentButton
                                         label="Online"
                                         color="teal"
-                                        disabled={submitting}
+                                        disabled={
+                                            submitting ||
+                                            onlinePaymentProcessing ||
+                                            selectedFreshSeats.length === 0 ||
+                                            !customerName.trim() ||
+                                            !customerPhone.trim()
+                                        }
+                                        loading={onlinePaymentProcessing}
                                         onClick={() => handleCreateBooking("ONLINE")}
                                     />
                                     <PaymentButton
                                         label="Cash"
                                         color="orange"
-                                        disabled={submitting}
+                                        disabled={
+                                            submitting ||
+                                            selectedFreshSeats.length === 0 ||
+                                            !customerName.trim() ||
+                                            !customerPhone.trim()
+                                        }
                                         onClick={() => handleCreateBooking("OFFLINE_CASH")}
                                     />
                                     <PaymentButton
                                         label="UPI"
                                         color="slate"
-                                        disabled={submitting}
+                                        disabled={
+                                            submitting ||
+                                            selectedFreshSeats.length === 0 ||
+                                            !customerName.trim() ||
+                                            !customerPhone.trim()
+                                        }
                                         onClick={() => handleCreateBooking("OFFLINE_UPI")}
                                     />
                                     <PaymentButton
                                         label="Unpaid"
                                         color="red"
-                                        disabled={submitting}
+                                        disabled={
+                                            submitting ||
+                                            selectedFreshSeats.length === 0 ||
+                                            !customerName.trim() ||
+                                            !customerPhone.trim()
+                                        }
                                         onClick={() => handleCreateBooking("OFFLINE_UNPAID")}
                                     />
                                 </div>
@@ -898,8 +1179,8 @@ function MiniInfoCard({ title, value, highlight = false }) {
     return (
         <div
             className={`rounded-[16px] border p-4 ${highlight
-                    ? "border-[#CFE5E3] bg-[#F8FCFC]"
-                    : "border-slate-200 bg-slate-50"
+                ? "border-[#CFE5E3] bg-[#F8FCFC]"
+                : "border-slate-200 bg-slate-50"
                 }`}
         >
             <div
@@ -918,7 +1199,7 @@ function MiniInfoCard({ title, value, highlight = false }) {
     );
 }
 
-function PaymentButton({ label, color, onClick, disabled }) {
+function PaymentButton({ label, color, onClick, disabled, loading = false }) {
     const styles = {
         teal: "bg-gradient-to-r from-[#0B5D5A] to-[#0A524F] text-white hover:from-[#094B49] hover:to-[#083F3E] shadow-[0_8px_16px_rgba(11,93,90,0.18)]",
         orange:
@@ -935,7 +1216,7 @@ function PaymentButton({ label, color, onClick, disabled }) {
             onClick={onClick}
             className={`inline-flex h-11 items-center justify-center rounded-[16px] px-4 text-sm font-bold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${styles[color]}`}
         >
-            {disabled ? "Please wait..." : label}
+            {loading ? "Processing..." : label}
         </button>
     );
 }

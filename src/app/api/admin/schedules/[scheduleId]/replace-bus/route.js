@@ -1,6 +1,6 @@
 import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
-import Booking from "@/models/booking.model.model";
+import Booking from "@/models/booking.model";
 import Bus from "@/models/bus.model";
 import Schedule from "@/models/schedule.model";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";

@@ -21,8 +21,12 @@ function isBlockSeatRequest(payload = {}) {
 function resolvePaymentStatus(paymentMode, isBlockSeat) {
     if (isBlockSeat) return "UNPAID";
 
-    if (["ONLINE", "OFFLINE_CASH", "OFFLINE_UPI"].includes(paymentMode)) {
+    if (["OFFLINE_CASH", "OFFLINE_UPI"].includes(paymentMode)) {
         return "PAID";
+    }
+
+    if (paymentMode === "ONLINE") {
+        return "UNPAID";
     }
 
     return "UNPAID";
@@ -50,6 +54,40 @@ function buildBookingPayload({
 }) {
     const blockSeatMode = Boolean(isBlockSeat);
 
+    let resolvedBookingStatus = bookingStatus;
+    let resolvedPaymentStatus = resolvePaymentStatus(paymentMode, blockSeatMode);
+    let resolvedPaymentMethod = paymentMode;
+    let resolvedSeatStatus = seatStatus;
+    let expiresAt = null;
+
+    if (blockSeatMode) {
+        resolvedSeatStatus = "blocked";
+        resolvedBookingStatus = "CANCELLED";
+        resolvedPaymentMethod = "OFFLINE_UNPAID";
+        resolvedPaymentStatus = "UNPAID";
+    } else if (paymentMode === "ONLINE") {
+        resolvedSeatStatus = "booked";
+        resolvedBookingStatus = "PENDING";
+        resolvedPaymentMethod = "ONLINE";
+        resolvedPaymentStatus = "UNPAID";
+        expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+    } else if (paymentMode === "OFFLINE_CASH") {
+        resolvedSeatStatus = "booked";
+        resolvedBookingStatus = "CONFIRMED";
+        resolvedPaymentMethod = "OFFLINE_CASH";
+        resolvedPaymentStatus = "PAID";
+    } else if (paymentMode === "OFFLINE_UPI") {
+        resolvedSeatStatus = "booked";
+        resolvedBookingStatus = "CONFIRMED";
+        resolvedPaymentMethod = "OFFLINE_UPI";
+        resolvedPaymentStatus = "PAID";
+    } else if (paymentMode === "OFFLINE_UNPAID") {
+        resolvedSeatStatus = "booked";
+        resolvedBookingStatus = "CONFIRMED";
+        resolvedPaymentMethod = "OFFLINE_UNPAID";
+        resolvedPaymentStatus = "UNPAID";
+    }
+
     return {
         scheduleId,
         travelDate,
@@ -66,11 +104,12 @@ function buildBookingPayload({
         dropTime,
         fare: perSeatFare,
         finalPayableAmount: perSeatFare * normalizedSeats.length,
-        seatStatus: blockSeatMode ? "blocked" : seatStatus,
-        bookingStatus: blockSeatMode ? "CANCELLED" : bookingStatus,
-        paymentMethod: blockSeatMode ? "OFFLINE_UNPAID" : paymentMode,
-        paymentStatus: resolvePaymentStatus(paymentMode, blockSeatMode),
+        seatStatus: resolvedSeatStatus,
+        bookingStatus: resolvedBookingStatus,
+        paymentMethod: resolvedPaymentMethod,
+        paymentStatus: resolvedPaymentStatus,
         cancelActionType: blockSeatMode ? (cancelActionType || "NO_REFUND") : cancelActionType,
+        expiresAt,
     };
 }
 
@@ -180,6 +219,11 @@ export async function POST(request) {
         }
 
         const perSeatFare = Number(fare || 0);
+
+        if (perSeatFare <= 0 && !blockSeatMode) {
+            // Warn but don't reject - allow 0 fare bookings
+            console.warn(`Warning: Booking with 0 fare for seats: ${normalizedSeats.join(", ")}`);
+        }
 
         const booking = await Booking.create(
             buildBookingPayload({

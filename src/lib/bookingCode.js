@@ -1,5 +1,5 @@
 import { connectDB } from "@/lib/db";
-import Booking from "@/models/booking.model.model";
+import Booking from "@/models/booking.model";
 
 const MONTH_SHORT_NAMES = [
     "JAN",

@@ -29,11 +29,21 @@ export function showAppToast(type = "info", message = "") {
 export function normalizeStopsFromSchedules(schedules = []) {
     const map = new Map();
 
-    schedules.forEach((schedule) => {
+    console.log("normalizeStopsFromSchedules input count:", schedules.length);
+
+    schedules.forEach((schedule, idx) => {
         const busStops = [];
 
         const forwardTrip = schedule?.forwardTrip || schedule?.trip || null;
         const returnTrip = schedule?.returnTrip || null;
+
+        console.log(`Processing bus ${idx}:`, {
+            busNumber: schedule?.busNumber,
+            hasForwardTrip: !!forwardTrip,
+            forwardTripKeys: forwardTrip ? Object.keys(forwardTrip) : [],
+            pickupPointsCount: forwardTrip?.pickupPoints?.length || 0,
+            dropPointsCount: forwardTrip?.dropPoints?.length || 0,
+        });
 
         const addTripStops = (trip) => {
             if (!trip) return;
@@ -88,6 +98,8 @@ export function normalizeStopsFromSchedules(schedules = []) {
         addTripStops(forwardTrip);
         addTripStops(returnTrip);
 
+        console.log(`Bus ${idx} collected ${busStops.length} stops`);
+
         busStops.forEach((stop) => {
             const name = stop?.name || "";
             if (!name) return;
@@ -106,7 +118,9 @@ export function normalizeStopsFromSchedules(schedules = []) {
         });
     });
 
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const result = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    console.log("normalizeStopsFromSchedules result:", result.length, "stops");
+    return result;
 }
 
 export function formatCurrency(amount) {

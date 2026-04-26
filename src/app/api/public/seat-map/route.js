@@ -1,5 +1,5 @@
 import { connectDB } from "@/lib/db";
-import Booking from "@/models/booking.model.model";
+import Booking from "@/models/booking.model";
 import Bus from "@/models/bus.model";
 import Schedule from "@/models/schedule.model";
 import { NextResponse } from "next/server";

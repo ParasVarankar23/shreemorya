@@ -3,7 +3,7 @@ import {
     fetchRazorpayPayment,
     verifyRazorpayPaymentSignature,
 } from "@/lib/razorpay";
-import Booking from "@/models/booking.model.model";
+import Booking from "@/models/booking.model";
 import Coupon from "@/models/coupon.model";
 import Notification from "@/models/notification.model";
 import Payment from "@/models/payment.model";
@@ -190,7 +190,7 @@ export async function POST(request) {
         // Update booking
         booking.paymentStatus = "PAID";
         booking.bookingStatus = "CONFIRMED";
-        booking.paymentMethod = "RAZORPAY";
+        booking.paymentMethod = "ONLINE";
         booking.expiresAt = null;
         booking.confirmedAt = new Date();
         await booking.save();

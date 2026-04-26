@@ -1,12 +1,23 @@
 import { connectDB } from "@/lib/db";
 import { createRazorpayOrder } from "@/lib/razorpay";
-import Booking from "@/models/booking.model.model";
+import Booking from "@/models/booking.model";
 import Payment from "@/models/payment.model";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
     try {
         await connectDB();
+
+        if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message:
+                        "Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+                },
+                { status: 500 }
+            );
+        }
 
         const body = await request.json();
         const { bookingId } = body;
@@ -27,23 +38,16 @@ export async function POST(request) {
             );
         }
 
-        if (booking.bookingSource !== "ONLINE") {
+        if (!["ONLINE", "RAZORPAY"].includes(booking.paymentMethod)) {
             return NextResponse.json(
                 { success: false, message: "Only online bookings can create Razorpay order" },
                 { status: 400 }
             );
         }
 
-        if (booking.paymentMethod !== "RAZORPAY") {
+        if (booking.paymentStatus === "PAID") {
             return NextResponse.json(
-                { success: false, message: "Booking payment method is not Razorpay" },
-                { status: 400 }
-            );
-        }
-
-        if (booking.bookingStatus === "CONFIRMED") {
-            return NextResponse.json(
-                { success: false, message: "Booking is already confirmed" },
+                { success: false, message: "Booking is already paid" },
                 { status: 400 }
             );
         }
@@ -62,31 +66,31 @@ export async function POST(request) {
             );
         }
 
-        if (!booking.finalPayableAmount || booking.finalPayableAmount < 0) {
+        const finalAmount = Number(booking.finalPayableAmount || 0);
+
+        if (finalAmount < 0) {
             return NextResponse.json(
                 { success: false, message: "Invalid payable amount" },
                 { status: 400 }
             );
         }
 
-        // If fully covered by voucher/coupon, no Razorpay needed
-        if (booking.finalPayableAmount === 0) {
+        if (finalAmount === 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Final payable amount is 0. No Razorpay order needed. Confirm directly in verify-free flow (optional).",
+                    message: "Final payable amount is 0. No Razorpay order required.",
                 },
                 { status: 400 }
             );
         }
 
         const razorpayOrder = await createRazorpayOrder({
-            amount: booking.finalPayableAmount,
-            receipt: booking.bookingCode,
+            amount: finalAmount,
+            receipt: booking.bookingCode || `booking_${booking._id}`,
             notes: {
                 bookingId: String(booking._id),
-                bookingCode: booking.bookingCode,
+                bookingCode: booking.bookingCode || "",
             },
         });
 
@@ -97,8 +101,8 @@ export async function POST(request) {
             payment.method = "ONLINE";
             payment.paymentStatus = "CREATED";
             payment.gatewayOrderId = razorpayOrder.id;
-            payment.amount = booking.finalPayableAmount;
-            payment.currency = "INR";
+            payment.amount = finalAmount;
+            payment.currency = razorpayOrder.currency || "INR";
             payment.gatewayResponse = razorpayOrder;
             await payment.save();
         } else {
@@ -108,8 +112,8 @@ export async function POST(request) {
                 provider: "RAZORPAY",
                 method: "ONLINE",
                 paymentStatus: "CREATED",
-                amount: booking.finalPayableAmount,
-                currency: "INR",
+                amount: finalAmount,
+                currency: razorpayOrder.currency || "INR",
                 gatewayOrderId: razorpayOrder.id,
                 gatewayResponse: razorpayOrder,
             });
@@ -121,11 +125,11 @@ export async function POST(request) {
             data: {
                 bookingId: booking._id,
                 bookingCode: booking.bookingCode,
-                amount: booking.finalPayableAmount,
-                currency: "INR",
+                amount: finalAmount,
+                currency: razorpayOrder.currency || "INR",
                 razorpayOrderId: razorpayOrder.id,
                 razorpayAmount: razorpayOrder.amount,
-                razorpayCurrency: razorpayOrder.currency,
+                razorpayCurrency: razorpayOrder.currency || "INR",
                 key: process.env.RAZORPAY_KEY_ID,
                 paymentId: payment._id,
             },
@@ -133,7 +137,11 @@ export async function POST(request) {
     } catch (error) {
         console.error("PAYMENTS_CREATE_ORDER_ERROR:", error);
         return NextResponse.json(
-            { success: false, message: "Failed to create Razorpay order", error: error.message },
+            {
+                success: false,
+                message: "Failed to create Razorpay order",
+                error: error.message,
+            },
             { status: 500 }
         );
     }

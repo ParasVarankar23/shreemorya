@@ -1,5 +1,5 @@
 import connectDB from "@/lib/mongodb";
-import Booking from "@/models/booking.model.model";
+import Booking from "@/models/booking.model";
 import Payment from "@/models/payment.model";
 import Schedule from "@/models/schedule.model";
 import Voucher from "@/models/voucher.model";

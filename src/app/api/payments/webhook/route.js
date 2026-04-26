@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
-import Booking from "@/models/booking.model.model";
+import Booking from "@/models/booking.model";
 import Notification from "@/models/notification.model";
 import Payment from "@/models/payment.model";
 import { NextResponse } from "next/server";
