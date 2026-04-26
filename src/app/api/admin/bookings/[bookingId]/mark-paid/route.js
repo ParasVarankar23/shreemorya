@@ -1,4 +1,4 @@
-import connectDB from "@/lib/connectDB";
+import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import { NextResponse } from "next/server";
 
