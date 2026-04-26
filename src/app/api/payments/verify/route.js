@@ -6,7 +6,7 @@ import {
 } from "@/lib/razorpay";
 import Booking from "@/models/booking.model";
 import Coupon from "@/models/coupon.model";
-import Notification from "@/models/notification.model";
+import Notification from "@/models/Notification.model";
 import Payment from "@/models/payment.model";
 import Schedule from "@/models/schedule.model";
 import SeatHold from "@/models/seat-hold.model";

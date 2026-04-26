@@ -49,7 +49,7 @@ export async function POST(request) {
             await connectDB();
 
             const user = await User.findById(decoded.userId)
-                .select("_id role isGuest authProvider")
+                .select("_id role isGuest authProvider sessionId")
                 .lean();
 
             if (!user) {
@@ -59,17 +59,32 @@ export async function POST(request) {
                 );
             }
 
+            // Optional strict session validation
+            if (user.sessionId && decoded.sid && user.sessionId !== decoded.sid) {
+                return Response.json(
+                    { success: false, message: "Session expired. Please login again." },
+                    { status: 401 }
+                );
+            }
+
             tokenUser = {
                 id: String(user._id),
                 role: user.role,
                 isGuest: Boolean(user.isGuest),
                 authProvider: user.authProvider || "local",
+                sessionId: user.sessionId || decoded.sid || "",
             };
         }
 
-        const nextSessionId = decoded.sid || createSessionId();
+        const nextSessionId = tokenUser.sessionId || decoded.sid || createSessionId();
         const nextAccessToken = generateAccessToken({ ...tokenUser, sessionId: nextSessionId });
         const nextRefreshToken = generateRefreshToken(tokenUser, nextSessionId);
+
+        // Save sessionId back to DB for non-guest
+        if (String(decoded.userId) !== "guest-user") {
+            await connectDB();
+            await User.findByIdAndUpdate(decoded.userId, { sessionId: nextSessionId });
+        }
 
         return Response.json(
             {

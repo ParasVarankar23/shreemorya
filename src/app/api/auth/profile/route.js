@@ -5,7 +5,8 @@ import { successResponse, errorResponse } from "@/utils/apiResponse";
 import { uploadAssetToCloudinary, deleteCloudinaryImage } from "@/lib/cloudinary";
 
 async function getUserFromToken(req) {
-    const authHeader = req.headers.get("authorization");
+    const authHeader =
+        req.headers.get("authorization") || req.headers.get("Authorization");
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
         throw new Error("Unauthorized. Token missing.");
@@ -16,7 +17,7 @@ async function getUserFromToken(req) {
     let decoded;
     try {
         decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (error) {
+    } catch {
         throw new Error("Invalid or expired token");
     }
 
@@ -86,7 +87,6 @@ export async function PUT(req) {
 
         const formData = await req.formData();
 
-        // Editable fields
         const fullName = String(formData.get("fullName") ?? user.fullName ?? "").trim();
         const gender = String(formData.get("gender") ?? user.gender ?? "").trim().toLowerCase();
         const dateOfBirth = String(formData.get("dateOfBirth") ?? user.dateOfBirth ?? "").trim();
@@ -95,13 +95,8 @@ export async function PUT(req) {
         const state = String(formData.get("state") ?? user.state ?? "").trim();
         const pincode = String(formData.get("pincode") ?? user.pincode ?? "").trim();
 
-        // NOT editable fields (ignore even if sent)
-        // const email = formData.get("email");
-        // const phoneNumber = formData.get("phoneNumber");
-
         const imageFile = formData.get("profileImage");
 
-        // Validations
         if (!fullName) {
             return errorResponse("Full name is required", 400);
         }
@@ -114,8 +109,7 @@ export async function PUT(req) {
             return errorResponse("Pincode must be 6 digits", 400);
         }
 
-        // Update text fields
-        user.fullName = fullName; // editable now
+        user.fullName = fullName;
         user.gender = gender;
         user.dateOfBirth = dateOfBirth;
         user.address = address;
@@ -123,7 +117,6 @@ export async function PUT(req) {
         user.state = state;
         user.pincode = pincode;
 
-        // Handle image upload if new file is provided
         if (imageFile && typeof imageFile === "object" && imageFile.size > 0) {
             const mimeType = imageFile.type || "image/jpeg";
 
@@ -131,7 +124,6 @@ export async function PUT(req) {
                 return errorResponse("Only image files are allowed for profile image", 400);
             }
 
-            // 5MB limit
             if (imageFile.size > 5 * 1024 * 1024) {
                 return errorResponse("Profile image must be less than 5MB", 400);
             }
@@ -146,7 +138,6 @@ export async function PUT(req) {
                 resourceType: "image",
             });
 
-            // Delete old image after successful upload
             if (user.profileImagePublicId) {
                 try {
                     await deleteCloudinaryImage(user.profileImagePublicId);
@@ -166,8 +157,8 @@ export async function PUT(req) {
                 user: {
                     id: user._id,
                     fullName: user.fullName || "",
-                    email: user.email || "", // readonly
-                    phoneNumber: user.phoneNumber || "", // readonly
+                    email: user.email || "",
+                    phoneNumber: user.phoneNumber || "",
                     profileImage: user.profileImage || "",
                     gender: user.gender || "",
                     dateOfBirth: user.dateOfBirth || "",

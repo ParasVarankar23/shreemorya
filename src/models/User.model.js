@@ -106,6 +106,12 @@ const UserSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+        sessionId: {
+            type: String,
+            default: "",
+            index: true,
+        },
     },
     {
         timestamps: true,

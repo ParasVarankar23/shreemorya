@@ -5,25 +5,32 @@ import jwt from "jsonwebtoken";
 export function generateRandomPassword(fullName = "User") {
     const safeName = String(fullName || "User").trim();
 
-    // Take first name only
-    const firstName = safeName
-        .split(" ")[0]
-        .replace(/[^a-zA-Z]/g, "") || "User";
+    const firstName =
+        safeName.split(" ")[0].replace(/[^a-zA-Z]/g, "") || "User";
 
-    // Capitalize first letter
     const cleanName =
         firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 
-    // 4 random digits
     const randomNumbers = Math.floor(1000 + Math.random() * 9000);
 
-    // 1 random special character
     const specialChars = "!@#$%";
     const randomSpecial =
         specialChars[Math.floor(Math.random() * specialChars.length)];
 
-    // Example: Paras2341@
     return `${cleanName}${randomNumbers}${randomSpecial}`;
+}
+
+export function createSessionId() {
+    try {
+        if (
+            typeof crypto !== "undefined" &&
+            typeof crypto.randomUUID === "function"
+        ) {
+            return crypto.randomUUID();
+        }
+    } catch { }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 export function generateAccessToken(user) {
@@ -31,7 +38,7 @@ export function generateAccessToken(user) {
 
     return jwt.sign(
         {
-            userId: user._id || user.id,
+            userId: user?._id || user?.id,
             sid: sessionId,
         },
         process.env.JWT_SECRET,
@@ -42,11 +49,12 @@ export function generateAccessToken(user) {
 }
 
 export function generateRefreshToken(user, sessionIdInput) {
-    const sessionId = sessionIdInput || user?.sessionId || user?.sid || createSessionId();
+    const sessionId =
+        sessionIdInput || user?.sessionId || user?.sid || createSessionId();
 
     return jwt.sign(
         {
-            userId: user._id || user.id,
+            userId: user?._id || user?.id,
             sid: sessionId,
         },
         process.env.JWT_REFRESH_SECRET,
@@ -56,34 +64,18 @@ export function generateRefreshToken(user, sessionIdInput) {
     );
 }
 
-export function createSessionId() {
-    try {
-        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-            return crypto.randomUUID();
-        }
-    } catch {
-        // Fallback handled below
-    }
-
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-// Extract authenticated user payload from Bearer token in Next.js Request
-// Returns null if missing/invalid.
-// Resolves authorization fields from database so JWT can stay minimal.
 export async function getAuthUserFromRequest(request) {
     try {
-        const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+        const authHeader =
+            request.headers.get("authorization") ||
+            request.headers.get("Authorization");
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return null;
         }
 
         const token = authHeader.split(" ")[1];
-
-        if (!token) {
-            return null;
-        }
+        if (!token) return null;
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
@@ -108,16 +100,28 @@ export async function getAuthUserFromRequest(request) {
             authProvider: user.authProvider || "local",
             sid: decoded.sid || null,
         };
-    } catch (error) {
+    } catch {
         return null;
     }
 }
 
-// Check if user role is in allowed roles
 export function hasRole(user, allowedRoles = []) {
-    if (!user || !user.role || !Array.isArray(allowedRoles) || allowedRoles.length === 0) {
+    if (
+        !user ||
+        !user.role ||
+        !Array.isArray(allowedRoles) ||
+        allowedRoles.length === 0
+    ) {
         return false;
     }
 
     return allowedRoles.includes(user.role);
+}
+
+export function verifyRefreshToken(token) {
+    try {
+        return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    } catch {
+        return null;
+    }
 }
