@@ -2,6 +2,7 @@ import { generateBookingCode } from "@/lib/bookingCode";
 import { sendBookingConfirmation } from "@/lib/emailService";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
+import Schedule from "@/models/schedule.model";
 import { NextResponse } from "next/server";
 
 function isBlockSeatRequest(payload = {}) {
@@ -26,7 +27,7 @@ function resolvePaymentStatus(paymentMode, isBlockSeat) {
     return "UNPAID";
 }
 
-function buildBookingPayload({
+async function buildBookingPayload({
     scheduleId,
     travelDate,
     normalizedSeats,
@@ -86,7 +87,7 @@ function buildBookingPayload({
         scheduleId,
         travelDate,
         seats: normalizedSeats,
-        bookingCode: generateBookingCode(travelDate),
+        bookingCode: await generateBookingCode(travelDate),
         customerName: blockSeatMode ? "Blocked Seat" : customerName.trim(),
         customerPhone: blockSeatMode ? "BLOCKED" : customerPhone.trim(),
         customerEmail: customerEmail.trim(),
@@ -222,7 +223,7 @@ export async function POST(request) {
         const schedule = await Schedule.findById(scheduleId).lean();
 
         const booking = await Booking.create(
-            buildBookingPayload({
+            await buildBookingPayload({
                 scheduleId,
                 travelDate,
                 normalizedSeats,

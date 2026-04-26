@@ -15,7 +15,7 @@ export default function CancelBookingModal({
 
     return (
         <div
-            className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-900/55 p-4"
+            className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-900/55 p-4"
             onClick={onClose}
         >
             <div

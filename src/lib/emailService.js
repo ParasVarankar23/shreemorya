@@ -4,8 +4,12 @@ const APP_NAME = "Morya Travels";
 const APP_FULL_NAME = "Shree Morya Travels";
 const SUPPORT_PHONE = "+91 88881 57744";
 const SUPPORT_EMAIL = process.env.SMTP_EMAIL || "";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://shreemorya.vercel.app";
+const APP_URL =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://shreemorya.vercel.app";
 const LOGIN_URL = `${APP_URL.replace(/\/$/, "")}/login`;
+
 const BRAND = {
     teal: "#0B5D5A",
     tealDark: "#0A4F4D",
@@ -126,7 +130,8 @@ function formatStopWithTime(name, time, marathi = "") {
     const stopName = safeText(name);
     const stopTime = safeText(time, "");
     const marathiName = safeText(marathi, "");
-    const displayName = marathiName && marathiName !== stopName ? `${stopName} (${marathiName})` : stopName;
+    const displayName =
+        marathiName && marathiName !== stopName ? `${stopName} (${marathiName})` : stopName;
     return stopTime ? `${displayName} (${stopTime})` : displayName;
 }
 
@@ -151,36 +156,59 @@ function createEmailTemplate({
   <title>${escapeHtml(title)}</title>
 </head>
 <body style="margin:0; padding:0; background:${BRAND.surface}; font-family:Arial, Helvetica, sans-serif; color:${BRAND.text};">
-  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">${escapeHtml(preheader || subtitle || title)}</div>
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">${escapeHtml(
+        preheader || subtitle || title
+    )}</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${BRAND.surface}; padding:24px 12px;">
     <tr>
       <td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:680px; background:${BRAND.white}; border:1px solid ${BRAND.border}; border-radius:24px; overflow:hidden; box-shadow:0 16px 40px rgba(15,23,42,0.08);">
           <tr>
             <td style="background:linear-gradient(135deg, ${BRAND.teal} 0%, ${BRAND.tealDark} 70%, ${BRAND.tealDeep} 100%); padding:34px 28px; text-align:center;">
-              <div style="display:inline-block; background:${BRAND.amber}; color:${BRAND.tealDeep}; font-size:12px; font-weight:900; letter-spacing:0.18em; text-transform:uppercase; border-radius:999px; padding:7px 14px;">${escapeHtml(badgeText || APP_NAME)}</div>
-              <div style="margin-top:16px; font-size:30px; font-weight:900; color:${BRAND.white}; line-height:1.2;">${escapeHtml(APP_FULL_NAME)}</div>
-              <div style="margin-top:8px; font-size:15px; color:rgba(255,255,255,0.9); line-height:1.7;">${escapeHtml(subtitle || "Premium bus booking")}</div>
+              <div style="display:inline-block; background:${BRAND.amber}; color:${BRAND.tealDeep}; font-size:12px; font-weight:900; letter-spacing:0.18em; text-transform:uppercase; border-radius:999px; padding:7px 14px;">${escapeHtml(
+        badgeText || APP_NAME
+    )}</div>
+              <div style="margin-top:16px; font-size:30px; font-weight:900; color:${BRAND.white}; line-height:1.2;">${escapeHtml(
+        APP_FULL_NAME
+    )}</div>
+              <div style="margin-top:8px; font-size:15px; color:rgba(255,255,255,0.9); line-height:1.7;">${escapeHtml(
+        subtitle || "Premium bus booking"
+    )}</div>
             </td>
           </tr>
           <tr>
             <td style="padding:34px 28px 28px;">
-              <div style="font-size:18px; line-height:1.8; color:${BRAND.ink}; font-weight:700;">${escapeHtml(introTitle || "Hello,")}</div>
-              <div style="font-size:15px; line-height:1.9; color:${BRAND.text}; margin-top:12px;">${escapeHtml(introText || "")}</div>
+              <div style="font-size:18px; line-height:1.8; color:${BRAND.ink}; font-weight:700;">${escapeHtml(
+        introTitle || "Hello,"
+    )}</div>
+              <div style="font-size:15px; line-height:1.9; color:${BRAND.text}; margin-top:12px;">${escapeHtml(
+        introText || ""
+    )}</div>
               <div style="margin-top:24px;">${bodyHtml || ""}</div>
 
-              ${buttonText && buttonUrl ? `
+              ${buttonText && buttonUrl
+            ? `
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:26px;">
                 <tr>
                   <td align="center">
-                    <a href="${escapeHtml(buttonUrl)}" target="_blank" style="display:inline-block; background:${BRAND.teal}; color:${BRAND.white}; text-decoration:none; font-size:16px; font-weight:800; padding:14px 30px; border-radius:14px; box-shadow:0 10px 24px rgba(11,93,90,0.2);">${escapeHtml(buttonText)}</a>
+                    <a href="${escapeHtml(
+                buttonUrl
+            )}" target="_blank" style="display:inline-block; background:${BRAND.teal}; color:${BRAND.white}; text-decoration:none; font-size:16px; font-weight:800; padding:14px 30px; border-radius:14px; box-shadow:0 10px 24px rgba(11,93,90,0.2);">${escapeHtml(
+                buttonText
+            )}</a>
                   </td>
                 </tr>
               </table>
-              ` : ""}
+              `
+            : ""
+        }
 
               <div style="margin-top:18px; text-align:center; font-size:13px; line-height:1.8; color:${BRAND.muted};">
-                <a href="${escapeHtml(buttonUrl || LOGIN_URL)}" target="_blank" style="color:${BRAND.teal}; text-decoration:none; font-weight:700;">${escapeHtml(buttonUrl || LOGIN_URL)}</a>
+                <a href="${escapeHtml(
+            buttonUrl || LOGIN_URL
+        )}" target="_blank" style="color:${BRAND.teal}; text-decoration:none; font-weight:700;">${escapeHtml(
+            buttonUrl || LOGIN_URL
+        )}</a>
               </div>
 
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:26px;">
@@ -188,15 +216,28 @@ function createEmailTemplate({
                   <td style="background:${BRAND.surface}; border:1px solid ${BRAND.border}; border-radius:18px; padding:18px;">
                     <div style="font-size:15px; font-weight:800; color:${BRAND.ink};">Need help?</div>
                     <div style="font-size:14px; color:${BRAND.muted}; margin-top:6px; line-height:1.7;">Customer Support</div>
-                    <div style="font-size:18px; font-weight:900; color:${BRAND.teal}; margin-top:8px;">${escapeHtml(SUPPORT_PHONE)}</div>
+                    <div style="font-size:18px; font-weight:900; color:${BRAND.teal}; margin-top:8px;">${escapeHtml(
+            SUPPORT_PHONE
+        )}</div>
+                    ${SUPPORT_EMAIL
+            ? `<div style="font-size:13px; color:${BRAND.muted}; margin-top:6px;">${escapeHtml(
+                SUPPORT_EMAIL
+            )}</div>`
+            : ""
+        }
                   </td>
                 </tr>
               </table>
 
-              <div style="margin-top:24px; font-size:14px; line-height:1.8; color:${BRAND.text};">Warm regards,<br /><strong>${escapeHtml(APP_FULL_NAME)} Team</strong></div>
+              <div style="margin-top:24px; font-size:14px; line-height:1.8; color:${BRAND.text};">Warm regards,<br /><strong>${escapeHtml(
+            APP_FULL_NAME
+        )} Team</strong></div>
 
               <div style="height:1px; background:${BRAND.border}; margin:24px 0 16px;"></div>
-              <div style="font-size:12px; color:${BRAND.muted}; line-height:1.8; text-align:center;">${escapeHtml(footerNote || `This is an automated email from ${APP_FULL_NAME}. Please do not reply directly.`)}</div>
+              <div style="font-size:12px; color:${BRAND.muted}; line-height:1.8; text-align:center;">${escapeHtml(
+            footerNote ||
+            `This is an automated email from ${APP_FULL_NAME}. Please do not reply directly.`
+        )}</div>
             </td>
           </tr>
         </table>
@@ -230,7 +271,13 @@ async function sendTemplateMail({ to, subject, html, attachments = [] }) {
     });
 }
 
-export async function sendWelcomePasswordEmail({ to, fullName, email, phoneNumber, password }) {
+export async function sendWelcomePasswordEmail({
+    to,
+    fullName,
+    email,
+    phoneNumber,
+    password,
+}) {
     const html = createEmailTemplate({
         preheader: "Your account is ready",
         title: "Welcome to Morya Travels",
@@ -327,7 +374,13 @@ export async function sendForgotPasswordEmail(email, otp) {
     });
 }
 
-export async function sendLoginNotificationEmail({ to, fullName, loginTime, loginMethod = "Password", ipAddress = "" }) {
+export async function sendLoginNotificationEmail({
+    to,
+    fullName,
+    loginTime,
+    loginMethod = "Password",
+    ipAddress = "",
+}) {
     const html = createEmailTemplate({
         preheader: "Login notification",
         title: "Login Successful",
@@ -370,10 +423,34 @@ function getBookingPartyName(value) {
     return safeText(value, "Passenger");
 }
 
+function getBusNumber(booking = {}) {
+    return safeText(
+        booking.busNumber ||
+        booking?.schedule?.busNumber ||
+        booking?.scheduleId?.busNumber ||
+        booking?.bus?.busNumber ||
+        "--"
+    );
+}
+
+function getRouteName(booking = {}) {
+    return safeText(
+        booking.routeName ||
+        booking?.schedule?.routeName ||
+        booking?.scheduleId?.routeName ||
+        booking?.bus?.routeName ||
+        "--"
+    );
+}
+
+function getTicketNumber(booking = {}) {
+    return safeText(booking.bookingCode || booking.ticketNumber || booking.bookingId || "--");
+}
+
 function getRouteLabel(booking = {}) {
-    const busNumber = safeText(booking.busNumber, "--");
-    const routeName = safeText(booking.routeName, "");
-    return routeName ? `${busNumber} - ${routeName}` : busNumber;
+    const busNumber = getBusNumber(booking);
+    const routeName = getRouteName(booking);
+    return routeName && routeName !== "--" ? `${busNumber} - ${routeName}` : busNumber;
 }
 
 export async function sendBookingConfirmation(email, name, booking = {}) {
@@ -389,20 +466,33 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
         subtitle: "Your seat has been reserved successfully",
         badgeText: "CONFIRMED",
         introTitle: `Hello ${getBookingPartyName(name)},`,
-        introText: "Great news! Your booking has been confirmed successfully. Please review the trip details below and keep this email for reference.",
+        introText:
+            "Great news! Your booking has been confirmed successfully. Please review the trip details below and keep this email for reference.",
         bodyHtml: `
             ${card(
             "Booking Details",
             `
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                         ${infoRow("Passenger Name", getBookingPartyName(name))}
-                        ${infoRow("Ticket Number", safeText(booking.bookingCode || booking.bookingId || "--"), true)}
-                        ${infoRow("Bus", safeText(booking.busNumber || "--"))}
-                        ${infoRow("Route", safeText(booking.routeName || "--"))}
+                        ${infoRow("Ticket Number", getTicketNumber(booking), true)}
+                        ${infoRow("Bus Number", getBusNumber(booking))}
+                        ${infoRow("Route Name", getRouteName(booking))}
                         ${infoRow("Travel Date", safeText(booking.date || booking.travelDate || "--"))}
-                        ${infoRow("Seat Number", safeText(booking.seatNo || (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")))}
-                        ${infoRow("Pickup Point", formatStopWithTime(pickup, startTime, booking.pickupMarathi))}
-                        ${infoRow("Drop Point", formatStopWithTime(drop, endTime, booking.dropMarathi))}
+                        ${infoRow(
+                "Seat Number",
+                safeText(
+                    booking.seatNo ||
+                    (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")
+                )
+            )}
+                        ${infoRow(
+                "Pickup Point",
+                formatStopWithTime(pickup, startTime, booking.pickupMarathi)
+            )}
+                        ${infoRow(
+                "Drop Point",
+                formatStopWithTime(drop, endTime, booking.dropMarathi)
+            )}
                     </table>
                 `
         )}
@@ -416,7 +506,10 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
                     </table>
                 `
         )}
-            ${alertBox("Please arrive at your pickup point 10-15 minutes before departure.", "success")}
+            ${alertBox(
+            "Please arrive at your pickup point 10-15 minutes before departure.",
+            "success"
+        )}
         `,
         buttonText: "View My Bookings",
         buttonUrl: APP_URL,
@@ -425,7 +518,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
 
     return sendTemplateMail({
         to: email,
-        subject: `Booking Confirmed - ${safeText(booking.busNumber, APP_FULL_NAME)}`,
+        subject: `Booking Confirmed - ${getBusNumber(booking)}`,
         html,
     });
 }
@@ -437,7 +530,9 @@ export async function sendBookingCancellation(email, name, booking = {}) {
     const endTime = safeText(booking.dropTime || booking.endTime || "");
     const fareAmount = Number(booking.fare ?? booking.finalPayableAmount ?? 0);
     const refundAmount = Number(booking?.refund?.amount || 0);
-    const retainedAmount = Number.isFinite(fareAmount) ? Math.max(fareAmount - refundAmount, 0) : null;
+    const retainedAmount = Number.isFinite(fareAmount)
+        ? Math.max(fareAmount - refundAmount, 0)
+        : null;
     const paymentMethod = safeText(booking.paymentMethod || "Online Payment");
 
     const bookingDetailsHtml = card(
@@ -445,10 +540,16 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         `
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 ${infoRow("Passenger Name", getBookingPartyName(name))}
-                ${infoRow("Bus", safeText(booking.busNumber || "--"))}
-                ${infoRow("Route", safeText(booking.routeName || "--"))}
+                ${infoRow("Ticket Number", getTicketNumber(booking), true)}
+                ${infoRow("Bus Number", getBusNumber(booking))}
+                ${infoRow("Route Name", getRouteName(booking))}
                 ${infoRow("Travel Date", safeText(booking.date || booking.travelDate || "--"))}
-                ${infoRow("Seat Number", safeText(booking.seatNo || (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")))}
+                ${infoRow(
+            "Seat Number",
+            safeText(
+                booking.seatNo || (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")
+            )
+        )}
                 ${infoRow("Pickup Point", formatStopWithTime(pickup, startTime, booking.pickupMarathi))}
                 ${infoRow("Drop Point", formatStopWithTime(drop, endTime, booking.dropMarathi))}
             </table>
@@ -473,7 +574,10 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             );
         }
 
-        paymentDetails += `<div style="margin-top:12px;">${alertBox(refundHtmlParts.join("<br />"), "warning")}</div>`;
+        paymentDetails += `<div style="margin-top:12px;">${alertBox(
+            refundHtmlParts.join("<br />"),
+            "warning"
+        )}</div>`;
     }
 
     const html = createEmailTemplate({
@@ -482,11 +586,15 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         subtitle: "Your reservation has been cancelled",
         badgeText: "CANCELLED",
         introTitle: `Hello ${getBookingPartyName(name)},`,
-        introText: "Your booking has been cancelled successfully. Please review the cancelled booking details below.",
+        introText:
+            "Your booking has been cancelled successfully. Please review the cancelled booking details below.",
         bodyHtml: `
             ${bookingDetailsHtml}
             ${card("Payment Details", paymentDetails)}
-            ${alertBox("If you need to rebook or have questions about a refund, please contact support.", "warning")}
+            ${alertBox(
+            "If you need to rebook or have questions about a refund, please contact support.",
+            "warning"
+        )}
         `,
         buttonText: "View My Bookings",
         buttonUrl: APP_URL,
@@ -495,11 +603,17 @@ export async function sendBookingCancellation(email, name, booking = {}) {
 
     return sendTemplateMail({
         to: email,
-        subject: `Booking Cancelled - ${safeText(booking.busNumber, APP_FULL_NAME)}`,
+        subject: `Booking Cancelled - ${getBusNumber(booking)}`,
         html,
     });
 }
 
-export async function sendBookingLoginEmail({ to, fullName, loginTime, loginMethod, ipAddress }) {
+export async function sendBookingLoginEmail({
+    to,
+    fullName,
+    loginTime,
+    loginMethod,
+    ipAddress,
+}) {
     return sendLoginNotificationEmail({ to, fullName, loginTime, loginMethod, ipAddress });
 }

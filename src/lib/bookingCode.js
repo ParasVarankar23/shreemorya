@@ -41,10 +41,11 @@ export async function generateBookingCode(travelDate = null) {
 
     const prefix = `${yearShort}${monthShort}`;
 
-    // Find all codes for same month prefix
+    // Find all ACTIVE codes for same month prefix (exclude cancelled)
     // Example: 26APR0001, 26APR0002...
     const lastBooking = await Booking.findOne({
         bookingCode: { $regex: `^${prefix}\\d{4}$` },
+        bookingStatus: { $ne: "CANCELLED" },
     })
         .sort({ bookingCode: -1 })
         .select("bookingCode")

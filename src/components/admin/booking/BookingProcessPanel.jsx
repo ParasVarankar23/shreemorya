@@ -174,17 +174,28 @@ export default function BookingProcessPanel({
         });
     };
 
-    const handleViewBooking = (seatNo, bookingData) => {
-        if (!bookingData) return;
+    const handleViewBooking = (seatNoOrBooking, bookingData) => {
+        const booking = bookingData || (typeof seatNoOrBooking === "object" ? seatNoOrBooking : null);
+        let seatNo = "";
 
-        const matchedBooking = existingBookings.find((booking) =>
-            (booking?.seats || []).map(String).includes(String(seatNo))
+        if (bookingData) {
+            seatNo = String(seatNoOrBooking || "");
+        } else if (Array.isArray(booking?.seats)) {
+            seatNo = String(booking.seats[0] ?? "");
+        }
+
+        if (!booking) return;
+
+        const matchedBooking = existingBookings.find((existing) =>
+            (existing?.seats || []).map(String).includes(String(seatNo))
         );
 
         setSelectedBookingDetail({
-            seatNo: String(seatNo),
-            ...bookingData,
+            seatNo: String(seatNo || ""),
+            ...booking,
             booking: matchedBooking || null,
+            // Ensure bookingId is always available as fallback
+            bookingId: matchedBooking?._id || booking?.bookingId || null,
         });
         setSeatDetailModalOpen(true);
     };
@@ -688,12 +699,17 @@ export default function BookingProcessPanel({
 
     const handleCancelBooking = async (actionType) => {
         try {
-            if (!selectedBookingDetail?.booking?._id) return;
+            const bookingId = selectedBookingDetail?.booking?._id || selectedBookingDetail?.bookingId;
+
+            if (!bookingId) {
+                showAppToast("error", "Booking ID not found");
+                return;
+            }
 
             setCancelLoading(true);
 
             const res = await fetch(
-                `/api/admin/bookings/${selectedBookingDetail.booking._id}/cancel`,
+                `/api/admin/bookings/${bookingId}/cancel`,
                 {
                     method: "POST",
                     headers: getAuthHeaders(),
