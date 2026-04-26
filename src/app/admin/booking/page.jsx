@@ -213,8 +213,8 @@ export default function BookingPage() {
 
             {/* ✅ MODAL OVERLAY */}
             {selectedBus && (
-                <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-900/55 p-3 sm:p-5">
-                    <div className="relative h-[96vh] w-full max-w-[1450px] overflow-hidden rounded-[28px] bg-white shadow-[0_30px_80px_rgba(2,8,23,0.35)]">
+                <div className="fixed inset-0 z-100 flex items-start justify-center bg-slate-900/55 p-3 sm:p-5">
+                    <div className="relative h-[96vh] w-full max-w-362.5 overflow-hidden rounded-[28px] bg-white shadow-[0_30px_80px_rgba(2,8,23,0.35)]">
                         <div className="h-full overflow-y-auto">
                             {/* Booking Process */}
                             <BookingProcessPanel

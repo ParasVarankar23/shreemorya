@@ -1,3 +1,4 @@
+import { sendBookingConfirmation } from "@/lib/emailService";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import { NextResponse } from "next/server";
@@ -247,6 +248,25 @@ export async function POST(request) {
                 isBlockSeat,
             })
         );
+
+        if (booking.customerEmail) {
+            try {
+                await sendBookingConfirmation(
+                    booking.customerEmail,
+                    booking.customerName || "Passenger",
+                    {
+                        ...booking.toObject?.(),
+                        travelDate: booking.travelDate,
+                        seats: booking.seats,
+                        fare: booking.fare,
+                        paymentMethod: booking.paymentMethod,
+                        paymentId: booking._id,
+                    }
+                );
+            } catch (emailError) {
+                console.warn("ADMIN_BOOKING_CONFIRMATION_EMAIL_ERROR:", emailError.message);
+            }
+        }
 
         return NextResponse.json({
             success: true,

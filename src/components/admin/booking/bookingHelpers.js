@@ -1,6 +1,7 @@
 "use client";
 
 import { getStopDisplayName, getStopNameMarathi, normalizeStopName } from "@/lib/fare";
+import { showAppToast as sharedShowAppToast } from "@/lib/toast";
 
 export function getAuthHeaders(extra = {}) {
     let token = "";
@@ -19,13 +20,7 @@ export function getAuthHeaders(extra = {}) {
 export function showAppToast(type = "info", message = "") {
     if (globalThis.window === undefined) return;
 
-    // If you already use sonner / react-hot-toast, replace this here
-    // Example:
-    // if (type === "error") toast.error(message)
-    // else if (type === "success") toast.success(message)
-    // else toast(message)
-
-    console.log(`[${type.toUpperCase()}] ${message}`);
+    sharedShowAppToast(type, message);
 }
 
 export function normalizeStopsFromSchedules(schedules = []) {
