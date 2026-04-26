@@ -3,6 +3,7 @@ import { sendBookingConfirmation } from "@/lib/emailService";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import Schedule from "@/models/schedule.model";
+import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
 import { NextResponse } from "next/server";
 
 function isBlockSeatRequest(payload = {}) {
@@ -27,6 +28,42 @@ function resolvePaymentStatus(paymentMode, isBlockSeat) {
     return "UNPAID";
 }
 
+function resolveFareValues({
+    perSeatFare = 0,
+    normalizedSeats = [],
+    overrideTotalFare = null,
+    isBlockSeat = false,
+}) {
+    const seatCount = normalizedSeats.length || 0;
+    const basePerSeat = Number(perSeatFare || 0);
+
+    if (isBlockSeat) {
+        return {
+            resolvedPerSeatFare: 0,
+            resolvedFinalAmount: 0,
+        };
+    }
+
+    const parsedOverride =
+        overrideTotalFare === null ||
+            overrideTotalFare === undefined ||
+            overrideTotalFare === ""
+            ? null
+            : Number(overrideTotalFare);
+
+    if (parsedOverride !== null && !Number.isNaN(parsedOverride) && parsedOverride >= 0) {
+        return {
+            resolvedPerSeatFare: seatCount > 0 ? Number((parsedOverride / seatCount).toFixed(2)) : 0,
+            resolvedFinalAmount: Number(parsedOverride.toFixed(2)),
+        };
+    }
+
+    return {
+        resolvedPerSeatFare: basePerSeat,
+        resolvedFinalAmount: Number((basePerSeat * seatCount).toFixed(2)),
+    };
+}
+
 async function buildBookingPayload({
     scheduleId,
     travelDate,
@@ -41,6 +78,7 @@ async function buildBookingPayload({
     dropMarathi,
     dropTime,
     perSeatFare,
+    overrideTotalFare,
     paymentMode,
     seatStatus,
     bookingStatus,
@@ -65,7 +103,7 @@ async function buildBookingPayload({
         resolvedBookingStatus = "PENDING";
         resolvedPaymentMethod = "ONLINE";
         resolvedPaymentStatus = "UNPAID";
-        expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+        expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     } else if (paymentMode === "OFFLINE_CASH") {
         resolvedSeatStatus = "booked";
         resolvedBookingStatus = "CONFIRMED";
@@ -83,6 +121,13 @@ async function buildBookingPayload({
         resolvedPaymentStatus = "UNPAID";
     }
 
+    const { resolvedPerSeatFare, resolvedFinalAmount } = resolveFareValues({
+        perSeatFare,
+        normalizedSeats,
+        overrideTotalFare,
+        isBlockSeat: blockSeatMode,
+    });
+
     return {
         scheduleId,
         travelDate,
@@ -97,8 +142,8 @@ async function buildBookingPayload({
         dropName,
         dropMarathi,
         dropTime,
-        fare: perSeatFare,
-        finalPayableAmount: perSeatFare * normalizedSeats.length,
+        fare: resolvedPerSeatFare,
+        finalPayableAmount: resolvedFinalAmount,
         seatStatus: resolvedSeatStatus,
         bookingStatus: resolvedBookingStatus,
         paymentMethod: resolvedPaymentMethod,
@@ -111,6 +156,22 @@ async function buildBookingPayload({
 export async function GET(request) {
     try {
         await connectDB();
+
+        const authUser = await getAuthUserFromRequest(request);
+
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
+        if (!hasRole(authUser, ["admin", "staff"])) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Admin/Staff only" },
+                { status: 403 }
+            );
+        }
 
         const { searchParams } = new URL(request.url);
         const scheduleId = searchParams.get("scheduleId");
@@ -147,6 +208,22 @@ export async function POST(request) {
     try {
         await connectDB();
 
+        const authUser = await getAuthUserFromRequest(request);
+
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
+        if (!hasRole(authUser, ["admin", "staff"])) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Admin/Staff only" },
+                { status: 403 }
+            );
+        }
+
         const body = await request.json();
 
         const {
@@ -163,6 +240,7 @@ export async function POST(request) {
             dropMarathi = "",
             dropTime = "",
             fare = 0,
+            overrideTotalFare = null,
             paymentMode = "OFFLINE_UNPAID",
             seatStatus = "booked",
             bookingStatus = "CONFIRMED",
@@ -215,10 +293,6 @@ export async function POST(request) {
 
         const perSeatFare = Number(fare || 0);
 
-        if (perSeatFare <= 0 && !blockSeatMode) {
-            console.warn(`Warning: Booking with 0 fare for seats: ${normalizedSeats.join(", ")}`);
-        }
-
         const schedule = await Schedule.findById(scheduleId).lean();
 
         const booking = await Booking.create(
@@ -236,6 +310,7 @@ export async function POST(request) {
                 dropMarathi,
                 dropTime,
                 perSeatFare,
+                overrideTotalFare,
                 paymentMode,
                 seatStatus,
                 bookingStatus,
@@ -244,7 +319,6 @@ export async function POST(request) {
             })
         );
 
-        // ✅ Send confirmation email only for CONFIRMED bookings
         if (booking.customerEmail && booking.bookingStatus === "CONFIRMED") {
             try {
                 const bookingPayload = {

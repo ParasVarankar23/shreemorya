@@ -41,6 +41,7 @@ export default function BookingProcessPanel({
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
     const [customerEmail, setCustomerEmail] = useState("");
+    const [overrideTotalFare, setOverrideTotalFare] = useState("");
 
     const [seatDetailModalOpen, setSeatDetailModalOpen] = useState(false);
     const [selectedBookingDetail, setSelectedBookingDetail] = useState(null);
@@ -59,6 +60,7 @@ export default function BookingProcessPanel({
         } else {
             setExistingBookings([]);
             setSelectedSeats([]);
+            setOverrideTotalFare("");
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus?._id, travelDate]);
@@ -79,15 +81,13 @@ export default function BookingProcessPanel({
                 const normalizedSeatStatus = String(booking?.seatStatus || "").toLowerCase();
                 const normalizedBookingStatus = String(booking?.bookingStatus || "").toUpperCase();
 
-                // ✅ IMPORTANT:
-                // blocked  => blocked seat
-                // cancelled => available again (do not add in map as occupied)
-                // confirmed/pending booked => booked
+                // blocked => blocked seat
+                // cancelled => available again (except blocked records)
                 if (
                     normalizedSeatStatus === "cancelled" ||
                     (normalizedBookingStatus === "CANCELLED" && normalizedSeatStatus !== "blocked")
                 ) {
-                    return; // seat becomes available again
+                    return;
                 }
 
                 const resolvedStatus =
@@ -132,10 +132,30 @@ export default function BookingProcessPanel({
             .map(([seat]) => String(seat));
     }, [bookedMap]);
 
-    const selectedFare = useMemo(() => {
-        const perSeat = Number(selectedBus?.fare || selectedBus?.amount || 0);
-        return perSeat * selectedSeats.length;
-    }, [selectedBus, selectedSeats]);
+    const defaultPerSeatFare = useMemo(() => {
+        return Number(selectedBus?.fare || selectedBus?.amount || 0);
+    }, [selectedBus]);
+
+    const defaultTotalFare = useMemo(() => {
+        return defaultPerSeatFare * selectedSeats.length;
+    }, [defaultPerSeatFare, selectedSeats]);
+
+    const effectiveTotalFare = useMemo(() => {
+        const parsed = Number(overrideTotalFare);
+        if (
+            overrideTotalFare !== "" &&
+            !Number.isNaN(parsed) &&
+            parsed >= 0
+        ) {
+            return parsed;
+        }
+        return defaultTotalFare;
+    }, [overrideTotalFare, defaultTotalFare]);
+
+    const effectivePerSeatFare = useMemo(() => {
+        if (selectedSeats.length === 0) return defaultPerSeatFare;
+        return Number((effectiveTotalFare / selectedSeats.length).toFixed(2));
+    }, [effectiveTotalFare, selectedSeats.length, defaultPerSeatFare]);
 
     const selectedBlockedSeats = useMemo(() => {
         return selectedSeats.filter((seat) => blockedSeats.includes(String(seat)));
@@ -209,7 +229,6 @@ export default function BookingProcessPanel({
             seatNo: String(seatNo || ""),
             ...booking,
             booking: matchedBooking || null,
-            // Ensure bookingId is always available as fallback
             bookingId: matchedBooking?._id || booking?.bookingId || null,
         });
         setSeatDetailModalOpen(true);
@@ -251,6 +270,7 @@ export default function BookingProcessPanel({
         setCustomerName("");
         setCustomerPhone("");
         setCustomerEmail("");
+        setOverrideTotalFare("");
     };
 
     const loadRazorpayScript = () => {
@@ -363,7 +383,9 @@ export default function BookingProcessPanel({
                 dropName: dropStop?.name || "",
                 dropMarathi: dropStop?.marathiName || "",
                 dropTime: dropStop?.time || "",
-                fare: Number(selectedBus?.fare || selectedBus?.amount || 0),
+                fare: defaultPerSeatFare,
+                overrideTotalFare:
+                    overrideTotalFare !== "" ? Number(overrideTotalFare) : null,
                 paymentMode,
             };
 
@@ -419,7 +441,6 @@ export default function BookingProcessPanel({
             setSubmitting(true);
             setOnlinePaymentProcessing(true);
 
-            // STEP 1: Create booking as ONLINE pending booking
             const bookingPayload = {
                 scheduleId: selectedBus._id,
                 travelDate,
@@ -433,7 +454,9 @@ export default function BookingProcessPanel({
                 dropName: dropStop?.name || "",
                 dropMarathi: dropStop?.marathiName || "",
                 dropTime: dropStop?.time || "",
-                fare: Number(selectedBus?.fare || selectedBus?.amount || 0),
+                fare: defaultPerSeatFare,
+                overrideTotalFare:
+                    overrideTotalFare !== "" ? Number(overrideTotalFare) : null,
                 paymentMode: "ONLINE",
             };
 
@@ -455,7 +478,6 @@ export default function BookingProcessPanel({
                 throw new Error("Booking created but booking ID missing");
             }
 
-            // STEP 2: If amount is zero, no Razorpay needed
             if (Number(booking.finalPayableAmount || 0) <= 0) {
                 showAppToast("success", "Booking created successfully. No payment required.");
                 resetForm();
@@ -463,7 +485,6 @@ export default function BookingProcessPanel({
                 return;
             }
 
-            // STEP 3: Create Razorpay order
             const orderRes = await fetch("/api/payments/create-order", {
                 method: "POST",
                 headers: getAuthHeaders(),
@@ -480,7 +501,6 @@ export default function BookingProcessPanel({
                 throw new Error("Invalid Razorpay order response. Please check server configuration.");
             }
 
-            // STEP 4: Load Razorpay script
             const RazorpayConstructor = await loadRazorpayScript();
 
             if (!RazorpayConstructor) {
@@ -542,8 +562,6 @@ export default function BookingProcessPanel({
                 },
             };
 
-            console.log("Razorpay options:", options);
-
             const rzp = new RazorpayConstructor(options);
 
             if (typeof rzp.open !== "function") {
@@ -558,7 +576,6 @@ export default function BookingProcessPanel({
                 setOnlinePaymentProcessing(false);
             });
 
-            // Important: slight delay helps popup in some browsers/admin panels
             setTimeout(() => {
                 rzp.open();
             }, 150);
@@ -604,6 +621,7 @@ export default function BookingProcessPanel({
                     dropMarathi: dropStop?.marathiName || "",
                     dropTime: dropStop?.time || "",
                     fare: 0,
+                    overrideTotalFare: 0,
                     paymentMode: "OFFLINE_UNPAID",
                     seatStatus: "blocked",
                     bookingStatus: "CANCELLED",
@@ -624,6 +642,7 @@ export default function BookingProcessPanel({
             );
 
             setSelectedSeats([]);
+            setOverrideTotalFare("");
             await loadExistingBookings();
         } catch (error) {
             console.error("handleBlockSelectedSeats error:", error);
@@ -670,6 +689,7 @@ export default function BookingProcessPanel({
             );
 
             setSelectedSeats([]);
+            setOverrideTotalFare("");
             await loadExistingBookings();
         } catch (error) {
             console.error("handleUnblockSelectedSeats error:", error);
@@ -1046,9 +1066,66 @@ export default function BookingProcessPanel({
                                     />
                                     <MiniInfoCard
                                         title="TOTAL FARE"
-                                        value={formatCurrency(selectedFare)}
+                                        value={formatCurrency(effectiveTotalFare)}
                                         highlight
                                     />
+                                </div>
+
+                                {/* Admin Fare Control */}
+                                <div className="mt-4 rounded-[18px] border border-orange-200 bg-orange-50/40 p-4">
+                                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <div className="text-sm font-bold uppercase tracking-[0.14em] text-orange-700">
+                                                Admin Fare Control
+                                            </div>
+                                            <div className="mt-1 text-sm text-slate-600">
+                                                Override total fare manually for this booking.
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-bold text-orange-700">
+                                            Admin / Staff Access
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                                        <MiniInfoCard
+                                            title="FARE PER SEAT"
+                                            value={formatCurrency(defaultPerSeatFare)}
+                                        />
+
+                                        <MiniInfoCard
+                                            title="EFFECTIVE PER SEAT"
+                                            value={formatCurrency(effectivePerSeatFare)}
+                                            highlight
+                                        />
+
+                                        <div className="rounded-[16px] border border-orange-200 bg-white p-4">
+                                            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                                                OVERRIDE TOTAL FARE
+                                            </div>
+
+                                            <div className="mt-2">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={overrideTotalFare}
+                                                    onChange={(e) => setOverrideTotalFare(e.target.value)}
+                                                    placeholder="Enter total fare"
+                                                    className="h-12 w-full rounded-[14px] border border-slate-300 bg-white px-4 text-base font-semibold text-slate-900 outline-none transition-all duration-200 focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10"
+                                                />
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setOverrideTotalFare("")}
+                                                className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-700"
+                                            >
+                                                Reset to Auto Fare
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Payment Buttons */}
@@ -1210,8 +1287,8 @@ function MiniInfoCard({ title, value, highlight = false }) {
     return (
         <div
             className={`rounded-[16px] border p-4 ${highlight
-                ? "border-[#CFE5E3] bg-[#F8FCFC]"
-                : "border-slate-200 bg-slate-50"
+                    ? "border-[#CFE5E3] bg-[#F8FCFC]"
+                    : "border-slate-200 bg-slate-50"
                 }`}
         >
             <div

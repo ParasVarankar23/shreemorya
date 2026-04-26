@@ -1,6 +1,6 @@
 import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
-import Notification from "@/models/notification.model";
+import Notification from "@/models/Notification.model";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
 import { NextResponse } from "next/server";
 
