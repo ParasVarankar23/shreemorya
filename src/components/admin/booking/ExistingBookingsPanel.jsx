@@ -1,8 +1,33 @@
 "use client";
 
+import { Ban, Eye, Search, Ticket, User, VenusAndMars } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Ban, Eye, Search } from "lucide-react";
 import { formatCurrency } from "./bookingHelpers";
+
+function getSeatItemsFromBooking(booking = {}) {
+    if (Array.isArray(booking?.seatItems) && booking.seatItems.length > 0) {
+        return booking.seatItems;
+    }
+
+    const seats = Array.isArray(booking?.seats) ? booking.seats : [];
+    const topSeatStatus = String(booking?.seatStatus || "").toLowerCase();
+
+    const fallbackStatus =
+        topSeatStatus === "blocked"
+            ? "blocked"
+            : topSeatStatus === "cancelled"
+                ? "cancelled"
+                : "booked";
+
+    return seats.map((seatNo) => ({
+        seatNo: String(seatNo),
+        ticketNo: `${booking?.bookingCode || "BOOK"}-${String(seatNo)}`,
+        passengerName: booking?.customerName || "",
+        passengerGender: String(booking?.customerGender || "").toLowerCase(),
+        fare: booking?.fare || 0,
+        seatStatus: fallbackStatus,
+    }));
+}
 
 export default function ExistingBookingsPanel({
     bookings = [],
@@ -12,78 +37,95 @@ export default function ExistingBookingsPanel({
 }) {
     const [query, setQuery] = useState("");
 
-    // ✅ Separate real bookings from blocked bookings
-    const { activeBookings, blockedBookingItems } = useMemo(() => {
+    // NEW: make seat-wise rows
+    const { activeSeatRows, blockedSeatRows } = useMemo(() => {
         const active = [];
         const blocked = [];
 
         bookings.forEach((booking) => {
-            const seatStatus = String(booking?.seatStatus || "").toLowerCase();
             const bookingStatus = String(booking?.bookingStatus || "").toUpperCase();
+            const seatItems = getSeatItemsFromBooking(booking);
 
-            // ✅ Only real blocked seats go to blocked section
-            if (seatStatus === "blocked") {
-                const seats = Array.isArray(booking?.seats) ? booking.seats : [];
-                seats.forEach((seatNo) => {
-                    blocked.push({
-                        seatNo: String(seatNo),
-                        booking,
-                    });
-                });
-                return;
-            }
+            seatItems.forEach((seatItem) => {
+                const seatNo = String(seatItem?.seatNo || "");
+                if (!seatNo) return;
 
-            // ✅ Cancelled bookings should NOT appear anywhere in panel
-            if (
-                seatStatus === "cancelled" ||
-                (bookingStatus === "CANCELLED" && seatStatus !== "blocked")
-            ) {
-                return;
-            }
+                const seatStatus = String(seatItem?.seatStatus || booking?.seatStatus || "").toLowerCase();
 
-            // ✅ Only active bookings show in Existing Bookings
-            active.push(booking);
+                const row = {
+                    booking,
+                    seatNo,
+                    ticketNo: seatItem?.ticketNo || `${booking?.bookingCode || "BOOK"}-${seatNo}`,
+                    passengerName: seatItem?.passengerName || booking?.customerName || "Passenger",
+                    passengerGender:
+                        String(
+                            seatItem?.passengerGender || booking?.customerGender || ""
+                        ).toLowerCase(),
+                    fare: seatItem?.fare || booking?.fare || 0,
+                    bookingCode: booking?.bookingCode || "",
+                    customerPhone: booking?.customerPhone || "-",
+                    pickupName: booking?.pickupName || "-",
+                    pickupTime: booking?.pickupTime || "--:--",
+                    dropName: booking?.dropName || "-",
+                    dropTime: booking?.dropTime || "--:--",
+                    paymentStatus: booking?.paymentStatus || "UNPAID",
+                    paymentMethod: booking?.paymentMethod || "UNPAID",
+                };
+
+                // blocked seat
+                if (seatStatus === "blocked") {
+                    blocked.push(row);
+                    return;
+                }
+
+                // cancelled seat => don't show in active
+                if (
+                    seatStatus === "cancelled" ||
+                    (bookingStatus === "CANCELLED" && seatStatus !== "blocked")
+                ) {
+                    return;
+                }
+
+                // active seat
+                active.push(row);
+            });
         });
 
         return {
-            activeBookings: active,
-            blockedBookingItems: blocked,
+            activeSeatRows: active,
+            blockedSeatRows: blocked,
         };
     }, [bookings]);
 
-    const filteredBookings = useMemo(() => {
+    const filteredActive = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return activeBookings;
+        if (!q) return activeSeatRows;
 
-        return activeBookings.filter((booking) => {
-            const seatText = (booking?.seats || []).join(",").toLowerCase();
-            const name = String(booking?.customerName || "").toLowerCase();
-            const phone = String(booking?.customerPhone || "").toLowerCase();
-            const pickup = String(booking?.pickupName || "").toLowerCase();
-            const drop = String(booking?.dropName || "").toLowerCase();
-            const code = String(booking?.bookingCode || "").toLowerCase();
-
+        return activeSeatRows.filter((row) => {
             return (
-                seatText.includes(q) ||
-                name.includes(q) ||
-                phone.includes(q) ||
-                pickup.includes(q) ||
-                drop.includes(q) ||
-                code.includes(q)
+                String(row?.seatNo || "").toLowerCase().includes(q) ||
+                String(row?.ticketNo || "").toLowerCase().includes(q) ||
+                String(row?.passengerName || "").toLowerCase().includes(q) ||
+                String(row?.customerPhone || "").toLowerCase().includes(q) ||
+                String(row?.pickupName || "").toLowerCase().includes(q) ||
+                String(row?.dropName || "").toLowerCase().includes(q) ||
+                String(row?.bookingCode || "").toLowerCase().includes(q)
             );
         });
-    }, [activeBookings, query]);
+    }, [activeSeatRows, query]);
 
     const filteredBlocked = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return blockedBookingItems;
+        if (!q) return blockedSeatRows;
 
-        return blockedBookingItems.filter((item) => {
-            const seatText = String(item?.seatNo || "").toLowerCase();
-            const code = String(item?.booking?.bookingCode || "").toLowerCase();
-            return seatText.includes(q) || code.includes(q);
+        return blockedSeatRows.filter((row) => {
+            return (
+                String(row?.seatNo || "").toLowerCase().includes(q) ||
+                String(row?.ticketNo || "").toLowerCase().includes(q) ||
+                String(row?.bookingCode || "").toLowerCase().includes(q)
+            );
         });
-    }, [blockedBookingItems, query]);
+    }, [blockedSeatRows, query]);
 
     return (
         <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
@@ -94,12 +136,12 @@ export default function ExistingBookingsPanel({
                             Existing Bookings
                         </h3>
                         <p className="mt-1 text-sm text-slate-500 sm:text-base">
-                            {filteredBookings.length} booking(s) • {filteredBlocked.length} blocked
+                            {filteredActive.length} active seat(s) • {filteredBlocked.length} blocked
                         </p>
                     </div>
 
                     <div className="rounded-full bg-[#0B5D5A]/10 px-3 py-1.5 text-sm font-bold text-[#0B5D5A]">
-                        Total: {filteredBookings.length + filteredBlocked.length}
+                        Total: {filteredActive.length + filteredBlocked.length}
                     </div>
                 </div>
             </div>
@@ -111,7 +153,7 @@ export default function ExistingBookingsPanel({
                         type="text"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search seat, name, phone..."
+                        placeholder="Search seat, ticket, name, phone..."
                         className="h-12 w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
                     />
                 </div>
@@ -123,7 +165,7 @@ export default function ExistingBookingsPanel({
                         </div>
                     ) : (
                         <>
-                            {filteredBookings.length === 0 && filteredBlocked.length === 0 ? (
+                            {filteredActive.length === 0 && filteredBlocked.length === 0 ? (
                                 <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
                                     <div className="text-lg font-semibold text-slate-700">
                                         No bookings or blocked seats
@@ -134,39 +176,55 @@ export default function ExistingBookingsPanel({
                                 </div>
                             ) : (
                                 <>
-                                    {filteredBookings.map((booking) => (
+                                    {/* ACTIVE SEAT-WISE BOOKINGS */}
+                                    {filteredActive.map((row) => (
                                         <button
-                                            key={booking._id}
+                                            key={`${row.booking?._id}-${row.seatNo}-${row.ticketNo}`}
                                             type="button"
-                                            onClick={() => onViewBooking?.(booking)}
+                                            onClick={() => onViewBooking?.(row.booking, row.seatNo)}
                                             className="w-full rounded-[20px] border border-slate-200 bg-slate-50 p-3 text-left transition-all duration-200 hover:border-[#0B5D5A]/20 hover:bg-white"
                                         >
                                             <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
+                                                <div className="min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         <span className="rounded-full bg-[#0B5D5A]/10 px-2.5 py-1 text-[11px] font-bold text-[#0B5D5A]">
-                                                            Seat {Array.isArray(booking?.seats) ? booking.seats.join(", ") : "-"}
+                                                            Seat {row.seatNo}
                                                         </span>
-                                                        <span className="rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700">
-                                                            {booking?.bookingCode || "BOOKING"}
+
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700">
+                                                            <Ticket className="h-3 w-3" />
+                                                            {row.ticketNo || row.bookingCode || "TICKET"}
                                                         </span>
                                                     </div>
 
-                                                    <div className="mt-2 text-base font-bold text-slate-900">
-                                                        {booking?.customerName || "Passenger"}
+                                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                        <div className="text-base font-bold text-slate-900">
+                                                            {row.passengerName || "Passenger"}
+                                                        </div>
+
+                                                        {row.passengerGender && (
+                                                            <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-2.5 py-1 text-[11px] font-bold text-pink-700">
+                                                                <VenusAndMars className="h-3 w-3" />
+                                                                {row.passengerGender.charAt(0).toUpperCase() +
+                                                                    row.passengerGender.slice(1)}
+                                                            </span>
+                                                        )}
                                                     </div>
 
-                                                    <div className="mt-0.5 text-xs font-medium text-slate-500">
-                                                        {booking?.customerPhone || "-"}
+                                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+                                                        <span className="inline-flex items-center gap-1">
+                                                            <User className="h-3.5 w-3.5" />
+                                                            {row.customerPhone || "-"}
+                                                        </span>
                                                     </div>
 
                                                     <div className="mt-2 text-xs font-medium text-slate-500">
-                                                        {booking?.pickupName || "-"} ({booking?.pickupTime || "--:--"}) →{" "}
-                                                        {booking?.dropName || "-"} ({booking?.dropTime || "--:--"})
+                                                        {row.pickupName || "-"} ({row.pickupTime || "--:--"}) →{" "}
+                                                        {row.dropName || "-"} ({row.dropTime || "--:--"})
                                                     </div>
 
                                                     <div className="mt-2 text-sm font-bold text-slate-800">
-                                                        Fare: {formatCurrency(booking?.finalPayableAmount || booking?.fare || 0)}
+                                                        Fare: {formatCurrency(row?.fare || 0)}
                                                     </div>
                                                 </div>
 
@@ -177,6 +235,7 @@ export default function ExistingBookingsPanel({
                                         </button>
                                     ))}
 
+                                    {/* BLOCKED SEATS */}
                                     {filteredBlocked.length > 0 && (
                                         <div className="pt-1">
                                             <div className="mb-2 text-xs font-bold tracking-[0.2em] text-[#EA580C]">
@@ -184,22 +243,29 @@ export default function ExistingBookingsPanel({
                                             </div>
 
                                             <div className="space-y-2">
-                                                {filteredBlocked.map((item) => (
+                                                {filteredBlocked.map((row) => (
                                                     <button
-                                                        key={`${item.booking?._id}-${item.seatNo}`}
+                                                        key={`${row.booking?._id}-${row.seatNo}-${row.ticketNo}`}
                                                         type="button"
-                                                        onClick={() => onViewBlockedSeat?.(item.seatNo)}
+                                                        onClick={() => onViewBlockedSeat?.(row.seatNo)}
                                                         className="flex w-full items-center justify-between rounded-[18px] border border-orange-200 bg-orange-50 px-3 py-3 text-left transition hover:bg-orange-100"
                                                     >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-[#EA580C] shadow-sm">
+                                                        <div className="flex min-w-0 items-center gap-3">
+                                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-[#EA580C] shadow-sm">
                                                                 <Ban className="h-4 w-4" />
                                                             </div>
 
-                                                            <div>
-                                                                <div className="text-sm font-bold text-[#C2410C]">
-                                                                    Seat {item.seatNo}
+                                                            <div className="min-w-0">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <div className="text-sm font-bold text-[#C2410C]">
+                                                                        Seat {row.seatNo}
+                                                                    </div>
+
+                                                                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-[#C2410C]">
+                                                                        {row.ticketNo || row.bookingCode || "BLOCKED"}
+                                                                    </span>
                                                                 </div>
+
                                                                 <div className="text-xs text-orange-700">
                                                                     Blocked seat
                                                                 </div>

@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/db";
+import Counter from "@/models/counter.model";
 import Voucher from "@/models/voucher.model";
 
 const MONTH_SHORT_NAMES = [
@@ -33,6 +34,8 @@ export async function generateVoucherCode(issueDate = null) {
     const monthShort = MONTH_SHORT_NAMES[date.getMonth()];
     const prefix = `VCH${yearShort}${monthShort}`;
 
+    // To avoid duplicated codes when migrating from an older system,
+    // determine latest existing voucher serial for the prefix (if any)
     const lastVoucher = await Voucher.findOne({
         voucherCode: { $regex: `^${prefix}\\d{4}$` },
     })
@@ -40,15 +43,39 @@ export async function generateVoucherCode(issueDate = null) {
         .select("voucherCode")
         .lean();
 
-    let nextNumber = 1;
-
+    let lastSerial = 0;
     if (lastVoucher?.voucherCode) {
-        const lastSerial = parseInt(lastVoucher.voucherCode.slice(-4), 10);
-        if (!Number.isNaN(lastSerial)) {
-            nextNumber = lastSerial + 1;
-        }
+        const parsed = parseInt(lastVoucher.voucherCode.slice(-4), 10);
+        if (!Number.isNaN(parsed)) lastSerial = parsed;
     }
 
+    // Use an aggregation-pipeline update to atomically initialize and increment
+    // the counter without conflicting update operators. This works with MongoDB >=4.2.
+    const updatePipeline = [
+        { $set: { key: prefix } },
+        {
+            $set: {
+                seq: {
+                    $add: [
+                        { $ifNull: ["$seq", lastSerial || 0] },
+                        1,
+                    ],
+                },
+            },
+        },
+    ];
+
+    // Use the underlying native collection to run a pipeline-style update
+    // Mongoose's model.findOneAndUpdate may not accept an array update unless
+    // updatePipeline option is available; using the collection avoids that issue.
+    const result = await Counter.collection.findOneAndUpdate(
+        { key: prefix },
+        updatePipeline,
+        { returnDocument: "after", upsert: true }
+    );
+
+    const counterDoc = result && (result.value || result);
+    const nextNumber = Number(counterDoc?.seq || (lastSerial + 1));
     const serial = String(nextNumber).padStart(4, "0");
 
     return `${prefix}${serial}`;

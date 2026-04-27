@@ -26,9 +26,13 @@ export async function GET(request, { params }) {
 
         const { voucherId } = params;
 
-        const voucher = await Voucher.findById(voucherId);
+        const voucher = await Voucher.findById(voucherId)
+            .populate("sourceBookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+            .populate("issuedBy", "name email")
+            .populate("usedBookings.bookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+            .lean();
 
-        if (!voucher || !voucher.isActive) {
+        if (!voucher) {
             return NextResponse.json(
                 { success: false, message: "Voucher not found" },
                 { status: 404 }
@@ -43,7 +47,10 @@ export async function GET(request, { params }) {
     } catch (error) {
         console.error("GET /api/admin/vouchers/[voucherId] error:", error);
         return NextResponse.json(
-            { success: false, message: "Failed to fetch voucher" },
+            {
+                success: false,
+                message: error.message || "Failed to fetch voucher",
+            },
             { status: 500 }
         );
     }
@@ -74,7 +81,7 @@ export async function PUT(request, { params }) {
 
         const voucher = await Voucher.findById(voucherId);
 
-        if (!voucher || !voucher.isActive) {
+        if (!voucher) {
             return NextResponse.json(
                 { success: false, message: "Voucher not found" },
                 { status: 404 }
@@ -83,23 +90,22 @@ export async function PUT(request, { params }) {
 
         const oldValues = voucher.toObject();
 
-        const allowedFields = [
-            "status",
-            "expiryDate",
-            "issuedReason",
-        ];
+        // allowed update fields
+        const allowedFields = ["status", "issueReason", "notes", "expiresAt", "isActive"];
 
         for (const key of allowedFields) {
-            if (key in body) {
-                if (key === "expiryDate") {
-                    voucher[key] = new Date(body[key]);
-                } else {
-                    voucher[key] = body[key];
+            if (!(key in body)) continue;
+
+            if (key === "expiresAt") {
+                const parsedDate = new Date(body[key]);
+                if (!Number.isNaN(parsedDate.getTime())) {
+                    voucher.expiresAt = parsedDate;
                 }
+            } else {
+                voucher[key] = body[key];
             }
         }
 
-        voucher.updatedBy = authUser.userId;
         await voucher.save();
 
         try {
@@ -119,15 +125,24 @@ export async function PUT(request, { params }) {
             console.error("Audit log update voucher error:", auditError);
         }
 
+        const updatedVoucher = await Voucher.findById(voucher._id)
+            .populate("sourceBookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+            .populate("issuedBy", "name email")
+            .populate("usedBookings.bookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+            .lean();
+
         return NextResponse.json({
             success: true,
             message: "Voucher updated successfully",
-            data: voucher,
+            data: updatedVoucher,
         });
     } catch (error) {
         console.error("PUT /api/admin/vouchers/[voucherId] error:", error);
         return NextResponse.json(
-            { success: false, message: "Failed to update voucher" },
+            {
+                success: false,
+                message: error.message || "Failed to update voucher",
+            },
             { status: 500 }
         );
     }

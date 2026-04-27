@@ -24,6 +24,58 @@ const RefundSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const SeatItemSchema = new mongoose.Schema(
+    {
+        seatNo: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        ticketNo: {
+            type: String,
+            required: true,
+            unique: true,
+            index: true,
+            trim: true,
+        },
+        passengerName: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+        passengerGender: {
+            type: String,
+            enum: ["male", "female", "other", ""],
+            default: "",
+        },
+        fare: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+        seatStatus: {
+            type: String,
+            enum: ["booked", "blocked", "cancelled"],
+            default: "booked",
+            index: true,
+        },
+        cancelledAt: {
+            type: Date,
+            default: null,
+        },
+        cancelActionType: {
+            type: String,
+            enum: ["", "REFUND_ORIGINAL", "ISSUE_VOUCHER", "NO_REFUND"],
+            default: "",
+        },
+        refund: {
+            type: RefundSchema,
+            default: null,
+        },
+    },
+    { _id: false }
+);
+
 const BookingSchema = new mongoose.Schema(
     {
         scheduleId: {
@@ -39,8 +91,15 @@ const BookingSchema = new mongoose.Schema(
             index: true,
         },
 
+        // OLD field can keep temporarily for backward compatibility
         seats: {
             type: [String],
+            default: [],
+        },
+
+        // NEW
+        seatItems: {
+            type: [SeatItemSchema],
             required: true,
             default: [],
         },
@@ -114,23 +173,16 @@ const BookingSchema = new mongoose.Schema(
             min: 0,
         },
 
-        seatStatus: {
-            type: String,
-            enum: ["booked", "blocked", "cancelled"],
-            default: "booked",
-            index: true,
-        },
-
         bookingStatus: {
             type: String,
-            enum: ["PENDING", "CONFIRMED", "CANCELLED"],
+            enum: ["PENDING", "CONFIRMED", "PARTIAL_CANCELLED", "CANCELLED"],
             default: "CONFIRMED",
             index: true,
         },
 
         paymentStatus: {
             type: String,
-            enum: ["PAID", "UNPAID", "REFUNDED", "FAILED", "VOUCHER_ISSUED"],
+            enum: ["PAID", "UNPAID", "PARTIAL_REFUNDED", "REFUNDED", "FAILED", "VOUCHER_ISSUED"],
             default: "UNPAID",
             index: true,
         },
@@ -174,6 +226,6 @@ const BookingSchema = new mongoose.Schema(
 
 BookingSchema.index({ scheduleId: 1, travelDate: 1 });
 BookingSchema.index({ scheduleId: 1, travelDate: 1, bookingStatus: 1 });
-
+BookingSchema.index({ scheduleId: 1, travelDate: 1, "seatItems.seatNo": 1 });
 
 export default mongoose.models.Booking || mongoose.model("Booking", BookingSchema);

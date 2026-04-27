@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 
 const SeatHoldSchema = new mongoose.Schema(
     {
-        // Linked schedule (date-wise trip)
         scheduleId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Schedule",
@@ -10,7 +9,6 @@ const SeatHoldSchema = new mongoose.Schema(
             index: true,
         },
 
-        // If logged-in user is holding seats
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
@@ -18,7 +16,6 @@ const SeatHoldSchema = new mongoose.Schema(
             index: true,
         },
 
-        // Guest contact info (important for guest booking flow)
         guestPhoneNumber: {
             type: String,
             default: null,
@@ -34,9 +31,8 @@ const SeatHoldSchema = new mongoose.Schema(
             index: true,
         },
 
-        // Seats temporarily locked
         seatNumbers: {
-            type: [Number],
+            type: [String],
             required: true,
             validate: {
                 validator: function (value) {
@@ -46,34 +42,25 @@ const SeatHoldSchema = new mongoose.Schema(
             },
         },
 
-        // How long hold is valid
         holdDurationMinutes: {
             type: Number,
             default: 5,
             min: 1,
         },
 
-        // Expiry time
         expiresAt: {
             type: Date,
             required: true,
             index: true,
         },
 
-        // Hold lifecycle
         status: {
             type: String,
-            enum: [
-                "ACTIVE",               // currently locked
-                "EXPIRED",              // expired after 5 mins
-                "CANCELLED",            // manually cancelled
-                "CONVERTED_TO_BOOKING", // payment success -> booking confirmed
-            ],
+            enum: ["ACTIVE", "EXPIRED", "CANCELLED", "CONVERTED_TO_BOOKING"],
             default: "ACTIVE",
             index: true,
         },
 
-        // If converted after payment success
         convertedBookingId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Booking",
@@ -81,7 +68,6 @@ const SeatHoldSchema = new mongoose.Schema(
             index: true,
         },
 
-        // Booking flow source
         source: {
             type: String,
             enum: ["ONLINE", "USER", "STAFF", "ADMIN"],
@@ -89,14 +75,12 @@ const SeatHoldSchema = new mongoose.Schema(
             index: true,
         },
 
-        // Optional note
         notes: {
             type: String,
             default: "",
             trim: true,
         },
 
-        // Audit fields
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
@@ -109,7 +93,6 @@ const SeatHoldSchema = new mongoose.Schema(
             default: null,
         },
 
-        // Soft active flag
         isActive: {
             type: Boolean,
             default: true,
@@ -121,19 +104,12 @@ const SeatHoldSchema = new mongoose.Schema(
     }
 );
 
-/* ------------------------------------------
-   Helpful Indexes
-------------------------------------------- */
 SeatHoldSchema.index({ scheduleId: 1, status: 1, expiresAt: 1 });
 SeatHoldSchema.index({ userId: 1, status: 1 });
 SeatHoldSchema.index({ guestPhoneNumber: 1, status: 1 });
 SeatHoldSchema.index({ guestEmail: 1, status: 1 });
 SeatHoldSchema.index({ convertedBookingId: 1 }, { sparse: true });
 
-/* ------------------------------------------
-    Auto-calculate expiresAt before validation
-    if not explicitly passed
-------------------------------------------- */
 SeatHoldSchema.pre("validate", function () {
     if (!this.expiresAt) {
         const expiry = new Date();
@@ -143,3 +119,4 @@ SeatHoldSchema.pre("validate", function () {
 });
 
 export default mongoose.models.SeatHold || mongoose.model("SeatHold", SeatHoldSchema);
+

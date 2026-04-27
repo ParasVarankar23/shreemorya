@@ -58,6 +58,14 @@ const VoucherSchema = new mongoose.Schema(
             index: true,
         },
 
+        // Guest full name (if issued for a guest booking)
+        guestName: {
+            type: String,
+            default: null,
+            trim: true,
+            index: true,
+        },
+
         guestEmail: {
             type: String,
             default: null,

@@ -9,6 +9,7 @@ import {
     Phone,
     Printer,
     User,
+    Users,
     X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -24,6 +25,33 @@ import {
 } from "./bookingHelpers";
 
 let razorpayLoadPromise = null;
+
+function getSeatItemsFromBooking(booking = {}) {
+    if (Array.isArray(booking?.seatItems) && booking.seatItems.length > 0) {
+        return booking.seatItems;
+    }
+
+    const seats = Array.isArray(booking?.seats) ? booking.seats : [];
+    const topSeatStatus = String(booking?.seatStatus || "").toLowerCase();
+    const fallbackStatus =
+        topSeatStatus === "blocked"
+            ? "blocked"
+            : topSeatStatus === "cancelled"
+                ? "cancelled"
+                : "booked";
+
+    return seats.map((seatNo) => ({
+        seatNo: String(seatNo),
+        ticketNo: `${booking?.bookingCode || "BOOK"}-${String(seatNo)}`,
+        passengerName: booking?.customerName || "",
+        passengerGender: String(booking?.customerGender || "").toLowerCase(),
+        fare: booking?.fare || 0,
+        seatStatus: fallbackStatus,
+        refund: booking?.refund || null,
+        cancelActionType: booking?.cancelActionType || "",
+        cancelledAt: booking?.cancelledAt || null,
+    }));
+}
 
 export default function BookingProcessPanel({
     selectedBus,
@@ -42,6 +70,29 @@ export default function BookingProcessPanel({
     const [customerPhone, setCustomerPhone] = useState("");
     const [customerEmail, setCustomerEmail] = useState("");
     const [overrideTotalFare, setOverrideTotalFare] = useState("");
+    const [voucherCodeInput, setVoucherCodeInput] = useState("");
+    const [voucherData, setVoucherData] = useState(null);
+    const sanitizeVoucher = (v) => {
+        if (!v) return null;
+        return {
+            _id: v._id || v.id || "",
+            voucherCode: v.voucherCode || "",
+            originalAmount: Number(v.originalAmount || 0),
+            remainingAmount: Number(v.remainingAmount || 0),
+            expiresAt: v.expiresAt || null,
+            status: v.status || "",
+            guestName: v.guestName || v.guestFullName || "",
+            guestPhoneNumber: v.guestPhoneNumber || v.guestPhone || "",
+            guestEmail: v.guestEmail || "",
+        };
+    };
+    const [voucherModalOpen, setVoucherModalOpen] = useState(false);
+
+    const [holdData, setHoldData] = useState(null);
+    const [holdCountdown, setHoldCountdown] = useState(0);
+
+    // NEW: seat-wise passenger details
+    const [passengerDetails, setPassengerDetails] = useState({});
 
     const [seatDetailModalOpen, setSeatDetailModalOpen] = useState(false);
     const [selectedBookingDetail, setSelectedBookingDetail] = useState(null);
@@ -61,9 +112,36 @@ export default function BookingProcessPanel({
             setExistingBookings([]);
             setSelectedSeats([]);
             setOverrideTotalFare("");
+            setPassengerDetails({});
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus?._id, travelDate]);
+
+    // When admin views an existing booking, auto-fill contact & passenger fields
+    useEffect(() => {
+        const detail = selectedBookingDetail;
+        if (!detail || !detail.booking) return;
+
+        const booking = detail.booking;
+
+        // Fill top-level contact fields so admin can use them for edits or rebooking
+        if (booking.customerName) setCustomerName(booking.customerName);
+        if (booking.customerPhone) setCustomerPhone(booking.customerPhone);
+        if (booking.customerEmail) setCustomerEmail(booking.customerEmail || "");
+
+        // Fill the per-seat passenger details for the focused seat
+        const seatKey = String(detail.seatNo || "");
+        if (seatKey) {
+            setPassengerDetails((prev) => ({
+                ...prev,
+                [seatKey]: {
+                    seatNo: seatKey,
+                    passengerName: detail.passengerName || booking.customerName || "",
+                    passengerGender: detail.passengerGender || booking.customerGender || "",
+                },
+            }));
+        }
+    }, [selectedBookingDetail]);
 
     useEffect(() => {
         loadRazorpayScript().catch((error) => {
@@ -71,18 +149,61 @@ export default function BookingProcessPanel({
         });
     }, []);
 
+    // Keep passengerDetails synced with selectedSeats
+    // Also populate missing seat passenger names from the booking customer name
+    // so the user doesn't need to type the same name twice if they enter
+    // the booking customer name after selecting seats.
+    useEffect(() => {
+        setPassengerDetails((prev) => {
+            const next = { ...prev };
+            const selectedSet = new Set(selectedSeats.map(String));
+
+            // remove unselected
+            Object.keys(next).forEach((seatNo) => {
+                if (!selectedSet.has(String(seatNo))) {
+                    delete next[seatNo];
+                }
+            });
+
+            // add selected or fill missing passengerName from customerName
+            selectedSeats.forEach((seatNo) => {
+                const key = String(seatNo);
+                if (!next[key]) {
+                    next[key] = {
+                        seatNo: key,
+                        passengerName: customerName.trim() || "",
+                        passengerGender: "",
+                    };
+                } else {
+                    // if seat exists but passengerName is empty, fill it
+                    if (
+                        (!next[key].passengerName || String(next[key].passengerName).trim() === "") &&
+                        customerName.trim()
+                    ) {
+                        next[key].passengerName = customerName.trim();
+                    }
+                }
+            });
+
+            return next;
+        });
+    }, [selectedSeats, customerName]);
+
     const bookedMap = useMemo(() => {
         const map = {};
 
         existingBookings.forEach((booking) => {
-            const seats = Array.isArray(booking?.seats) ? booking.seats : [];
+            const seatItems = getSeatItemsFromBooking(booking);
 
-            seats.forEach((seatNo) => {
-                const normalizedSeatStatus = String(booking?.seatStatus || "").toLowerCase();
+            seatItems.forEach((seatItem) => {
+                const seatNo = String(seatItem?.seatNo || "");
+                if (!seatNo) return;
+
+                const normalizedSeatStatus = String(seatItem?.seatStatus || "").toLowerCase();
                 const normalizedBookingStatus = String(booking?.bookingStatus || "").toUpperCase();
 
-                // blocked => blocked seat
-                // cancelled => available again (except blocked records)
+                // cancelled real booking => available again
+                // blocked => still blocked
                 if (
                     normalizedSeatStatus === "cancelled" ||
                     (normalizedBookingStatus === "CANCELLED" && normalizedSeatStatus !== "blocked")
@@ -93,9 +214,14 @@ export default function BookingProcessPanel({
                 const resolvedStatus =
                     normalizedSeatStatus === "blocked" ? "blocked" : "booked";
 
-                map[String(seatNo)] = {
+                map[seatNo] = {
                     bookingId: booking?._id,
                     status: resolvedStatus,
+                    seatNo,
+                    ticketNo: seatItem?.ticketNo || "",
+                    passengerName: seatItem?.passengerName || booking?.customerName || "",
+                    passengerGender:
+                        seatItem?.passengerGender || booking?.customerGender || "",
                     customerName: booking?.customerName || "",
                     customerPhone: booking?.customerPhone || "",
                     customerEmail: booking?.customerEmail || "",
@@ -107,12 +233,13 @@ export default function BookingProcessPanel({
                         booking?.dropMarathi || dropStop?.marathiName || "",
                     pickupTime: booking?.pickupTime || pickupStop?.time || "",
                     dropTime: booking?.dropTime || dropStop?.time || "",
-                    fare: booking?.finalPayableAmount || booking?.fare || 0,
+                    fare: seatItem?.fare || booking?.fare || 0,
                     bookingCode: booking?.bookingCode || "",
                     paymentStatus: booking?.paymentStatus || "UNPAID",
                     paymentMethod: booking?.paymentMethod || "UNPAID",
                     bookingStatus: booking?.bookingStatus || "",
-                    seatStatus: booking?.seatStatus || "",
+                    seatStatus: seatItem?.seatStatus || booking?.seatStatus || "",
+                    booking,
                 };
             });
         });
@@ -142,15 +269,99 @@ export default function BookingProcessPanel({
 
     const effectiveTotalFare = useMemo(() => {
         const parsed = Number(overrideTotalFare);
-        if (
-            overrideTotalFare !== "" &&
-            !Number.isNaN(parsed) &&
-            parsed >= 0
-        ) {
+        if (overrideTotalFare !== "" && !Number.isNaN(parsed) && parsed >= 0) {
             return parsed;
         }
         return defaultTotalFare;
     }, [overrideTotalFare, defaultTotalFare]);
+
+    const fetchVoucherByCode = async (code) => {
+        if (!code || !code.trim()) return null;
+        try {
+            const params = new URLSearchParams({ search: code.trim(), limit: 1 });
+            const res = await fetch(`/api/admin/vouchers?${params.toString()}`, {
+                method: "GET",
+                headers: getAuthHeaders(),
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data?.success) {
+                throw new Error(data?.message || "Failed to fetch voucher");
+            }
+
+            const list = Array.isArray(data?.data) ? data.data : [];
+            return list[0] || null;
+        } catch (err) {
+            console.error("fetchVoucherByCode error:", err);
+            return null;
+        }
+    };
+
+    const applyVoucher = async () => {
+        const code = String(voucherCodeInput || "").trim();
+        if (!code) return showAppToast("error", "Enter voucher code");
+
+        const v = await fetchVoucherByCode(code);
+        if (!v) return showAppToast("error", "Voucher not found or expired");
+
+        // Reject fully used vouchers
+        const remaining = Number(v.remainingAmount || 0);
+        const status = String(v.status || "").toUpperCase();
+        if (remaining <= 0 || status === "USED") {
+            return showAppToast("error", "This voucher has no remaining balance or is already used");
+        }
+
+        setVoucherData(sanitizeVoucher(v));
+
+        // Apply voucher to override total fare (deduct remainingAmount)
+        const total = defaultTotalFare;
+        const newTotal = Math.max(0, Number((total - remaining).toFixed(2)));
+        setOverrideTotalFare(String(newTotal));
+
+        showAppToast("success", `Voucher applied: ${v.voucherCode} (₹${remaining})`);
+    };
+
+    const holdSeats = async () => {
+        if (!selectedBus?._id) return showAppToast("error", "Select a bus first");
+        if (!travelDate) return showAppToast("error", "Select travel date");
+        if (selectedFreshSeats.length === 0) return showAppToast("error", "Select at least one available seat to hold");
+
+        try {
+            setBlockingSeats(true);
+            const res = await fetch("/api/public/seat-hold", {
+                method: "POST",
+                headers: {
+                    ...getAuthHeaders(),
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ scheduleId: selectedBus._id, seatNumbers: selectedFreshSeats, guestPhoneNumber: customerPhone || null, guestEmail: customerEmail || null }),
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to hold seats");
+
+            setHoldData(data.data);
+            const expires = new Date(data.data.expiresAt).getTime();
+
+            const tick = () => {
+                const sec = Math.max(0, Math.floor((expires - Date.now()) / 1000));
+                setHoldCountdown(sec);
+                if (sec <= 0) setHoldData(null);
+            };
+
+            tick();
+            const timer = setInterval(tick, 1000);
+            // cleanup when hold expires
+            setTimeout(() => clearInterval(timer), (data.data.holdDurationMinutes || 5) * 60 * 1000 + 2000);
+
+            showAppToast("success", data.message || "Seats held");
+        } catch (err) {
+            console.error("holdSeats error:", err);
+            showAppToast("error", err.message || "Failed to hold seats");
+        } finally {
+            setBlockingSeats(false);
+        }
+    };
 
     const effectivePerSeatFare = useMemo(() => {
         if (selectedSeats.length === 0) return defaultPerSeatFare;
@@ -168,6 +379,17 @@ export default function BookingProcessPanel({
                 !bookedSeats.includes(String(seat))
         );
     }, [selectedSeats, blockedSeats, bookedSeats]);
+
+    const passengerDetailsArray = useMemo(() => {
+        return selectedFreshSeats.map((seatNo) => ({
+            seatNo: String(seatNo),
+            passengerName:
+                passengerDetails[String(seatNo)]?.passengerName?.trim() ||
+                customerName.trim(),
+            passengerGender:
+                passengerDetails[String(seatNo)]?.passengerGender || "",
+        }));
+    }, [selectedFreshSeats, passengerDetails, customerName]);
 
     const loadExistingBookings = async () => {
         try {
@@ -209,40 +431,134 @@ export default function BookingProcessPanel({
         });
     };
 
-    const handleViewBooking = (seatNoOrBooking, bookingData) => {
-        const booking = bookingData || (typeof seatNoOrBooking === "object" ? seatNoOrBooking : null);
-        let seatNo = "";
+    const handlePassengerNameChange = (seatNo, value) => {
+        const key = String(seatNo);
+        setPassengerDetails((prev) => ({
+            ...prev,
+            [key]: {
+                seatNo: key,
+                passengerName: value,
+                passengerGender: prev[key]?.passengerGender || "",
+            },
+        }));
+    };
 
+    const handlePassengerGenderChange = (seatNo, gender) => {
+        const key = String(seatNo);
+        setPassengerDetails((prev) => ({
+            ...prev,
+            [key]: {
+                seatNo: key,
+                passengerName: prev[key]?.passengerName || customerName.trim() || "",
+                passengerGender: gender,
+            },
+        }));
+    };
+
+    const handleViewBooking = (seatNoOrBooking, bookingData) => {
+        // From seat click
         if (bookingData) {
-            seatNo = String(seatNoOrBooking || "");
-        } else if (Array.isArray(booking?.seats)) {
-            seatNo = String(booking.seats[0] ?? "");
+            const seatNo = String(seatNoOrBooking || "");
+            const booking = bookingData;
+
+            const seatItems = getSeatItemsFromBooking(booking);
+            const seatItem = seatItems.find((item) => String(item?.seatNo) === seatNo);
+
+            setSelectedBookingDetail({
+                seatNo,
+                ticketNo: seatItem?.ticketNo || "",
+                passengerName: seatItem?.passengerName || booking?.customerName || "",
+                passengerGender:
+                    seatItem?.passengerGender || booking?.customerGender || "",
+                booking,
+                bookingId: booking?._id || null,
+                status:
+                    String(seatItem?.seatStatus || booking?.seatStatus || "").toLowerCase() ===
+                        "blocked"
+                        ? "blocked"
+                        : "booked",
+                customerName: booking?.customerName || "",
+                customerPhone: booking?.customerPhone || "",
+                customerEmail: booking?.customerEmail || "",
+                pickupName: booking?.pickupName || pickupStop?.name || "",
+                dropName: booking?.dropName || dropStop?.name || "",
+                pickupMarathi:
+                    booking?.pickupMarathi || pickupStop?.marathiName || "",
+                dropMarathi:
+                    booking?.dropMarathi || dropStop?.marathiName || "",
+                pickupTime: booking?.pickupTime || pickupStop?.time || "",
+                dropTime: booking?.dropTime || dropStop?.time || "",
+                fare: seatItem?.fare || booking?.fare || 0,
+                bookingCode: booking?.bookingCode || "",
+                paymentStatus: booking?.paymentStatus || "UNPAID",
+                paymentMethod: booking?.paymentMethod || "UNPAID",
+                seatItems,
+            });
+
+            setSeatDetailModalOpen(true);
+            return;
         }
 
+        // From booking list
+        const booking = typeof seatNoOrBooking === "object" ? seatNoOrBooking : null;
         if (!booking) return;
 
-        const matchedBooking = existingBookings.find((existing) =>
-            (existing?.seats || []).map(String).includes(String(seatNo))
-        );
+        const seatItems = getSeatItemsFromBooking(booking);
+        const firstSeatItem = seatItems[0] || null;
+        const firstSeat = String(firstSeatItem?.seatNo || "");
 
         setSelectedBookingDetail({
-            seatNo: String(seatNo || ""),
-            ...booking,
-            booking: matchedBooking || null,
-            bookingId: matchedBooking?._id || booking?.bookingId || null,
+            seatNo: firstSeat,
+            ticketNo: firstSeatItem?.ticketNo || "",
+            passengerName: firstSeatItem?.passengerName || booking?.customerName || "",
+            passengerGender:
+                firstSeatItem?.passengerGender || booking?.customerGender || "",
+            booking,
+            bookingId: booking?._id || null,
+            status:
+                String(firstSeatItem?.seatStatus || booking?.seatStatus || "").toLowerCase() ===
+                    "blocked"
+                    ? "blocked"
+                    : "booked",
+            customerName: booking?.customerName || "",
+            customerPhone: booking?.customerPhone || "",
+            customerEmail: booking?.customerEmail || "",
+            pickupName: booking?.pickupName || pickupStop?.name || "",
+            dropName: booking?.dropName || dropStop?.name || "",
+            pickupMarathi:
+                booking?.pickupMarathi || pickupStop?.marathiName || "",
+            dropMarathi:
+                booking?.dropMarathi || dropStop?.marathiName || "",
+            pickupTime: booking?.pickupTime || pickupStop?.time || "",
+            dropTime: booking?.dropTime || dropStop?.time || "",
+            fare: firstSeatItem?.fare || booking?.fare || 0,
+            bookingCode: booking?.bookingCode || "",
+            paymentStatus: booking?.paymentStatus || "UNPAID",
+            paymentMethod: booking?.paymentMethod || "UNPAID",
+            seatItems,
         });
+
         setSeatDetailModalOpen(true);
     };
 
     const handleViewBlockedSeat = (seatNo) => {
-        const matchedBooking = existingBookings.find((booking) =>
-            (booking?.seats || []).map(String).includes(String(seatNo))
-        );
+        const seatKey = String(seatNo);
+
+        const matchedBooking = existingBookings.find((booking) => {
+            const seatItems = getSeatItemsFromBooking(booking);
+            return seatItems.some((item) => String(item?.seatNo) === seatKey);
+        });
 
         if (!matchedBooking) return;
 
+        const seatItems = getSeatItemsFromBooking(matchedBooking);
+        const seatItem = seatItems.find((item) => String(item?.seatNo) === seatKey);
+
         setSelectedBookingDetail({
-            seatNo: String(seatNo),
+            seatNo: seatKey,
+            ticketNo: seatItem?.ticketNo || "",
+            passengerName: seatItem?.passengerName || "Blocked Seat",
+            passengerGender: seatItem?.passengerGender || "",
             booking: matchedBooking,
             bookingId: matchedBooking?._id,
             status: "blocked",
@@ -257,11 +573,13 @@ export default function BookingProcessPanel({
                 matchedBooking?.dropMarathi || dropStop?.marathiName || "",
             pickupTime: matchedBooking?.pickupTime || pickupStop?.time || "",
             dropTime: matchedBooking?.dropTime || dropStop?.time || "",
-            fare: matchedBooking?.finalPayableAmount || matchedBooking?.fare || 0,
+            fare: seatItem?.fare || matchedBooking?.fare || 0,
             bookingCode: matchedBooking?.bookingCode || "",
             paymentStatus: matchedBooking?.paymentStatus || "UNPAID",
             paymentMethod: matchedBooking?.paymentMethod || "OFFLINE_UNPAID",
+            seatItems,
         });
+
         setSeatDetailModalOpen(true);
     };
 
@@ -271,11 +589,34 @@ export default function BookingProcessPanel({
         setCustomerPhone("");
         setCustomerEmail("");
         setOverrideTotalFare("");
+        setPassengerDetails({});
+        setVoucherCodeInput("");
+        setVoucherData(null);
+        // release hold if present
+        if (holdData?.holdId) {
+            fetch("/api/public/seat-hold", {
+                method: "DELETE",
+                headers: {
+                    ...getAuthHeaders(),
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ holdId: holdData.holdId }),
+            }).catch(() => { });
+        }
+        setHoldData(null);
+        setHoldCountdown(0);
+    };
+
+    const closeVoucherModal = () => {
+        setVoucherModalOpen(false);
+        // keep voucherData so admin can still see applied code in panel
     };
 
     const loadRazorpayScript = () => {
         if (typeof globalThis === "undefined") {
-            return Promise.reject(new Error("Razorpay is not available in this environment"));
+            return Promise.reject(
+                new Error("Razorpay is not available in this environment")
+            );
         }
 
         if (globalThis.Razorpay) {
@@ -295,7 +636,11 @@ export default function BookingProcessPanel({
                 if (globalThis.Razorpay) {
                     resolve(globalThis.Razorpay);
                 } else {
-                    reject(new Error("Razorpay checkout script loaded but Razorpay object is missing"));
+                    reject(
+                        new Error(
+                            "Razorpay checkout script loaded but Razorpay object is missing"
+                        )
+                    );
                 }
             };
 
@@ -317,7 +662,8 @@ export default function BookingProcessPanel({
             script.src = "https://checkout.razorpay.com/v1/checkout.js";
             script.async = true;
             script.onload = resolveRazorpay;
-            script.onerror = () => reject(new Error("Failed to load Razorpay checkout"));
+            script.onerror = () =>
+                reject(new Error("Failed to load Razorpay checkout"));
             document.body.appendChild(script);
         });
 
@@ -338,6 +684,41 @@ export default function BookingProcessPanel({
         return data;
     };
 
+    const validatePassengerDetails = () => {
+        if (selectedFreshSeats.length === 0) {
+            showAppToast("error", "Please select at least one available seat");
+            return false;
+        }
+
+        if (!customerName.trim()) {
+            showAppToast("error", "Passenger name is required");
+            return false;
+        }
+
+        if (!customerPhone.trim()) {
+            showAppToast("error", "Phone number is required");
+            return false;
+        }
+
+        for (const seatNo of selectedFreshSeats) {
+            const item = passengerDetails[String(seatNo)] || {};
+            const passengerName = String(item?.passengerName || customerName || "").trim();
+            const passengerGender = String(item?.passengerGender || "").trim().toLowerCase();
+
+            if (!passengerName) {
+                showAppToast("error", `Passenger name is required for seat ${seatNo}`);
+                return false;
+            }
+
+            if (!["male", "female", "other"].includes(passengerGender)) {
+                showAppToast("error", `Please select gender for seat ${seatNo}`);
+                return false;
+            }
+        }
+
+        return true;
+    };
+
     const handleCreateBooking = async (paymentMode) => {
         if (paymentMode === "ONLINE") {
             return handleCreateOnlineBooking();
@@ -356,17 +737,7 @@ export default function BookingProcessPanel({
                 return showAppToast("error", "Pickup and drop are required");
             }
 
-            if (selectedFreshSeats.length === 0) {
-                return showAppToast("error", "Please select at least one available seat");
-            }
-
-            if (!customerName.trim()) {
-                return showAppToast("error", "Passenger name is required");
-            }
-
-            if (!customerPhone.trim()) {
-                return showAppToast("error", "Phone number is required");
-            }
+            if (!validatePassengerDetails()) return;
 
             setSubmitting(true);
 
@@ -374,6 +745,7 @@ export default function BookingProcessPanel({
                 scheduleId: selectedBus._id,
                 travelDate,
                 seats: selectedFreshSeats,
+                passengerDetails: passengerDetailsArray, // NEW
                 customerName: customerName.trim(),
                 customerPhone: customerPhone.trim(),
                 customerEmail: customerEmail.trim(),
@@ -386,6 +758,8 @@ export default function BookingProcessPanel({
                 fare: defaultPerSeatFare,
                 overrideTotalFare:
                     overrideTotalFare !== "" ? Number(overrideTotalFare) : null,
+                voucherCode: voucherData?.voucherCode || String(voucherCodeInput || "").trim(),
+                holdId: holdData?.holdId || null,
                 paymentMode,
             };
 
@@ -401,7 +775,30 @@ export default function BookingProcessPanel({
                 throw new Error(data?.message || "Failed to create booking");
             }
 
-            showAppToast("success", "Booking created successfully");
+            showAppToast("success", data?.message || "Booking created successfully");
+
+            // Handle voucher consumption: if fully consumed remove from client state
+            if (data?.voucherApplied) {
+                const used = Number(data.voucherApplied.amountUsed || 0);
+                const removed = Boolean(data.voucherApplied.voucherRemoved);
+                const prevRemaining = Number(voucherData?.remainingAmount || voucherData?.originalAmount || 0);
+
+                if (removed || used >= prevRemaining) {
+                    setVoucherData(null);
+                    setVoucherCodeInput("");
+                } else {
+                    // refresh voucher info from server
+                    try {
+                        const updated = await fetchVoucherByCode(data.voucherApplied.voucherCode);
+                        setVoucherData(sanitizeVoucher(updated));
+                    } catch (e) {
+                        console.warn("Failed to refresh voucher after apply:", e);
+                    }
+                }
+
+                showAppToast("success", `Voucher used: ${formatCurrency(used)}${removed ? " (consumed)" : ""}`);
+            }
+
             resetForm();
             await loadExistingBookings();
         } catch (error) {
@@ -426,17 +823,7 @@ export default function BookingProcessPanel({
                 return showAppToast("error", "Pickup and drop are required");
             }
 
-            if (selectedFreshSeats.length === 0) {
-                return showAppToast("error", "Please select at least one available seat");
-            }
-
-            if (!customerName.trim()) {
-                return showAppToast("error", "Passenger name is required");
-            }
-
-            if (!customerPhone.trim()) {
-                return showAppToast("error", "Phone number is required");
-            }
+            if (!validatePassengerDetails()) return;
 
             setSubmitting(true);
             setOnlinePaymentProcessing(true);
@@ -445,6 +832,7 @@ export default function BookingProcessPanel({
                 scheduleId: selectedBus._id,
                 travelDate,
                 seats: selectedFreshSeats,
+                passengerDetails: passengerDetailsArray, // NEW
                 customerName: customerName.trim(),
                 customerPhone: customerPhone.trim(),
                 customerEmail: customerEmail.trim(),
@@ -457,6 +845,8 @@ export default function BookingProcessPanel({
                 fare: defaultPerSeatFare,
                 overrideTotalFare:
                     overrideTotalFare !== "" ? Number(overrideTotalFare) : null,
+                voucherCode: voucherData?.voucherCode || String(voucherCodeInput || "").trim(),
+                holdId: holdData?.holdId || null,
                 paymentMode: "ONLINE",
             };
 
@@ -469,7 +859,9 @@ export default function BookingProcessPanel({
             const bookingData = await bookingRes.json();
 
             if (!bookingRes.ok || !bookingData?.success) {
-                throw new Error(bookingData?.message || "Failed to create online booking");
+                throw new Error(
+                    bookingData?.message || "Failed to create online booking"
+                );
             }
 
             const booking = bookingData?.data;
@@ -480,6 +872,28 @@ export default function BookingProcessPanel({
 
             if (Number(booking.finalPayableAmount || 0) <= 0) {
                 showAppToast("success", "Booking created successfully. No payment required.");
+
+                // Voucher handling for zero-pay bookings
+                if (bookingData?.voucherApplied) {
+                    const used = Number(bookingData.voucherApplied.amountUsed || 0);
+                    const removed = Boolean(bookingData.voucherApplied.voucherRemoved);
+                    const prevRemaining = Number(voucherData?.remainingAmount || voucherData?.originalAmount || 0);
+
+                    if (removed || used >= prevRemaining) {
+                        setVoucherData(null);
+                        setVoucherCodeInput("");
+                    } else {
+                        try {
+                            const updated = await fetchVoucherByCode(bookingData.voucherApplied.voucherCode);
+                            setVoucherData(sanitizeVoucher(updated));
+                        } catch (e) {
+                            console.warn("Failed to refresh voucher after apply:", e);
+                        }
+                    }
+
+                    showAppToast("success", `Voucher used: ${formatCurrency(used)}${removed ? " (consumed)" : ""}`);
+                }
+
                 resetForm();
                 await loadExistingBookings();
                 return;
@@ -494,11 +908,15 @@ export default function BookingProcessPanel({
             const orderData = await orderRes.json();
 
             if (!orderRes.ok || !orderData?.success) {
-                throw new Error(orderData?.message || "Failed to create Razorpay order");
+                throw new Error(
+                    orderData?.message || "Failed to create Razorpay order"
+                );
             }
 
             if (!orderData?.data?.key || !orderData?.data?.razorpayOrderId) {
-                throw new Error("Invalid Razorpay order response. Please check server configuration.");
+                throw new Error(
+                    "Invalid Razorpay order response. Please check server configuration."
+                );
             }
 
             const RazorpayConstructor = await loadRazorpayScript();
@@ -514,7 +932,10 @@ export default function BookingProcessPanel({
             const options = {
                 key: orderData.data.key,
                 amount: orderData.data.razorpayAmount,
-                currency: orderData.data.razorpayCurrency || orderData.data.currency || "INR",
+                currency:
+                    orderData.data.razorpayCurrency ||
+                    orderData.data.currency ||
+                    "INR",
                 name: selectedBus?.operatorName || "SA Tours & Travels",
                 description: `Booking ${booking.bookingCode || booking._id}`,
                 order_id: orderData.data.razorpayOrderId,
@@ -528,15 +949,23 @@ export default function BookingProcessPanel({
                         });
 
                         if (!verifyRes?.success) {
-                            throw new Error(verifyRes?.message || "Payment verification failed");
+                            throw new Error(
+                                verifyRes?.message || "Payment verification failed"
+                            );
                         }
 
-                        showAppToast("success", "Payment successful and booking confirmed");
+                        showAppToast(
+                            "success",
+                            "Payment successful and booking confirmed"
+                        );
                         resetForm();
                         await loadExistingBookings();
                     } catch (err) {
                         console.error("Razorpay verification error:", err);
-                        showAppToast("error", err.message || "Payment verification failed");
+                        showAppToast(
+                            "error",
+                            err.message || "Payment verification failed"
+                        );
                         await loadExistingBookings();
                     } finally {
                         setSubmitting(false);
@@ -565,7 +994,9 @@ export default function BookingProcessPanel({
             const rzp = new RazorpayConstructor(options);
 
             if (typeof rzp.open !== "function") {
-                throw new TypeError("Razorpay instance is invalid or checkout script failed to initialize");
+                throw new TypeError(
+                    "Razorpay instance is invalid or checkout script failed to initialize"
+                );
             }
 
             rzp.on("payment.failed", async function (response) {
@@ -636,13 +1067,11 @@ export default function BookingProcessPanel({
                 throw new Error(data?.message || "Failed to block selected seats");
             }
 
-            showAppToast(
-                "success",
-                `Blocked seat(s): ${selectedFreshSeats.join(", ")}`
-            );
+            showAppToast("success", `Blocked seat(s): ${selectedFreshSeats.join(", ")}`);
 
             setSelectedSeats([]);
             setOverrideTotalFare("");
+            setPassengerDetails({});
             await loadExistingBookings();
         } catch (error) {
             console.error("handleBlockSelectedSeats error:", error);
@@ -661,13 +1090,14 @@ export default function BookingProcessPanel({
             setUnblockingSeats(true);
 
             const blockedBookings = existingBookings.filter((booking) => {
-                const seats = (booking?.seats || []).map(String);
-
-                return (
-                    (booking?.bookingStatus === "CANCELLED" ||
-                        booking?.seatStatus === "blocked") &&
-                    seats.some((seat) => selectedBlockedSeats.includes(seat))
+                const seatItems = getSeatItemsFromBooking(booking);
+                const hasSelectedBlockedSeat = seatItems.some(
+                    (item) =>
+                        selectedBlockedSeats.includes(String(item?.seatNo)) &&
+                        String(item?.seatStatus || "").toLowerCase() === "blocked"
                 );
+
+                return hasSelectedBlockedSeat;
             });
 
             for (const booking of blockedBookings) {
@@ -690,6 +1120,7 @@ export default function BookingProcessPanel({
 
             setSelectedSeats([]);
             setOverrideTotalFare("");
+            setPassengerDetails({});
             await loadExistingBookings();
         } catch (error) {
             console.error("handleUnblockSelectedSeats error:", error);
@@ -720,7 +1151,7 @@ export default function BookingProcessPanel({
                 throw new Error(data?.message || "Failed to update booking");
             }
 
-            showAppToast("success", "Booking updated successfully");
+            showAppToast("success", data?.message || "Booking updated successfully");
             setSeatDetailModalOpen(false);
             setSelectedBookingDetail(null);
             await loadExistingBookings();
@@ -734,31 +1165,104 @@ export default function BookingProcessPanel({
 
     const handleCancelBooking = async (actionType) => {
         try {
-            const bookingId = selectedBookingDetail?.booking?._id || selectedBookingDetail?.bookingId;
+            // Prefer explicit booking id from selectedBookingDetail, but
+            // fall back to searching existingBookings by seat number.
+            let bookingId =
+                selectedBookingDetail?.booking?._id || selectedBookingDetail?.bookingId;
+
+            // fallback: try to locate booking by seatNo in existingBookings
+            if (!bookingId && selectedBookingDetail?.seatNo) {
+                const seatKey = String(selectedBookingDetail.seatNo);
+                const matched = existingBookings.find((booking) => {
+                    const seatItems = getSeatItemsFromBooking(booking);
+                    return seatItems.some((item) => String(item?.seatNo) === seatKey);
+                });
+                bookingId = matched?._id || bookingId;
+                if (bookingId) {
+                    console.warn("handleCancelBooking: resolved bookingId from existingBookings", bookingId);
+                }
+            }
 
             if (!bookingId) {
+                console.warn("handleCancelBooking: bookingId not found on selectedBookingDetail", selectedBookingDetail);
                 showAppToast("error", "Booking ID not found");
+                return;
+            }
+
+            if (!selectedBookingDetail?.seatNo) {
+                showAppToast("error", "Seat number not found");
+                return;
+            }
+
+            // Pre-check latest seat status to avoid cancelling an already-cancelled seat
+            const seatKey = String(selectedBookingDetail.seatNo || "");
+            let currentSeatStatus = null;
+
+            // Check in selectedBookingDetail.booking if available
+            if (selectedBookingDetail?.booking?.seatItems) {
+                const si = (selectedBookingDetail.booking.seatItems || []).find(
+                    (it) => String(it?.seatNo) === seatKey
+                );
+                currentSeatStatus = si?.seatStatus || selectedBookingDetail?.status || null;
+            }
+
+            // Fallback: lookup in existingBookings
+            if (!currentSeatStatus) {
+                const matched = existingBookings.find((booking) => {
+                    const items = getSeatItemsFromBooking(booking);
+                    return items.some((item) => String(item?.seatNo) === seatKey);
+                });
+
+                if (matched) {
+                    const items = getSeatItemsFromBooking(matched);
+                    const si = items.find((it) => String(it?.seatNo) === seatKey);
+                    currentSeatStatus = si?.seatStatus || null;
+                }
+            }
+
+            if (String(currentSeatStatus || "").toLowerCase() === "cancelled") {
+                showAppToast("error", `Seat ${seatKey} is already cancelled`);
                 return;
             }
 
             setCancelLoading(true);
 
-            const res = await fetch(
-                `/api/admin/bookings/${bookingId}/cancel`,
-                {
-                    method: "POST",
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ actionType }),
-                }
-            );
+            const res = await fetch(`/api/admin/bookings/${bookingId}/cancel`, {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    seatNo: selectedBookingDetail?.seatNo, // IMPORTANT
+                    actionType,
+                }),
+            });
 
             const data = await res.json();
 
             if (!res.ok || !data?.success) {
-                throw new Error(data?.message || "Failed to cancel booking");
+                showAppToast("error", data?.message || "Failed to cancel booking");
+                setCancelLoading(false);
+                return;
             }
 
-            showAppToast("success", data?.message || "Booking cancelled successfully");
+            showAppToast("success", data?.message || "Seat cancelled successfully");
+
+            // If server created a voucher, surface it and prefill voucher input
+            if (data?.voucher) {
+                const v = data.voucher;
+                setVoucherData(sanitizeVoucher(v));
+                setVoucherCodeInput(v.voucherCode || "");
+
+                // If server returned the updated booking object, copy contact info
+                const returnedBooking = data?.data || selectedBookingDetail?.booking;
+                if (returnedBooking) {
+                    if (returnedBooking.customerName) setCustomerName(returnedBooking.customerName);
+                    if (returnedBooking.customerPhone) setCustomerPhone(returnedBooking.customerPhone);
+                    if (returnedBooking.customerEmail) setCustomerEmail(returnedBooking.customerEmail || "");
+                }
+
+                setVoucherModalOpen(true);
+                showAppToast("success", `Voucher created: ${v.voucherCode} (₹${v.remainingAmount || 0})`);
+            }
 
             setCancelModalOpen(false);
             setSeatDetailModalOpen(false);
@@ -782,13 +1286,10 @@ export default function BookingProcessPanel({
 
             setCancelLoading(true);
 
-            const res = await fetch(
-                `/api/admin/bookings/${selectedBookingDetail.bookingId}`,
-                {
-                    method: "DELETE",
-                    headers: getAuthHeaders(),
-                }
-            );
+            const res = await fetch(`/api/admin/bookings/${selectedBookingDetail.bookingId}`, {
+                method: "DELETE",
+                headers: getAuthHeaders(),
+            });
 
             const data = await res.json();
 
@@ -816,6 +1317,78 @@ export default function BookingProcessPanel({
     if (!selectedBus) return null;
 
     const totalSeats = Number(selectedBus?.seatLayout || 39);
+
+    /* =========================================================
+       Voucher Created Modal (renders inside the same file)
+    ========================================================= */
+    function VoucherCreatedModal({ open, voucher, onClose }) {
+        if (!open || !voucher) return null;
+
+        const copyToClipboard = async (text) => {
+            try {
+                await navigator.clipboard.writeText(text);
+                // Lightweight feedback - site uses toasts, but keep this function minimal
+                // window.alert could be used but prefers toast from parent
+            } catch (e) {
+                console.warn("copy failed", e);
+            }
+        };
+
+        return (
+            <div className="fixed inset-0 z-[1400] flex items-center justify-center bg-slate-900/55 p-4" onClick={onClose}>
+                <div className="w-full max-w-md rounded-lg bg-white p-6" onClick={(e) => e.stopPropagation()}>
+                    <h3 className="text-lg font-bold">Voucher Issued</h3>
+                    {/* <div className="mt-3 text-sm text-slate-700">
+                        <div><strong>Code:</strong> {voucher.voucherCode}</div>
+                        <div className="mt-1"><strong>ID:</strong> {voucher._id || voucher.id}</div>
+                        <div className="mt-1"><strong>Remaining:</strong> {formatCurrency(voucher.remainingAmount || 0)}</div>
+                        <div className="mt-1 text-xs text-slate-500"><strong>Expires:</strong> {voucher.expiresAt ? new Date(voucher.expiresAt).toLocaleString() : "-"}</div>
+                        <div className="mt-1 text-xs text-slate-500"><strong>Guest:</strong> {voucher.guestName || ""} {voucher.guestPhoneNumber ? `• ${voucher.guestPhoneNumber}` : ""} {voucher.guestEmail ? `• ${voucher.guestEmail}` : ""}</div>
+                        <div className="mt-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!voucher) return;
+                                    if (voucher.guestName) setCustomerName(voucher.guestName);
+                                    if (voucher.guestPhoneNumber) setCustomerPhone(voucher.guestPhoneNumber);
+                                    if (voucher.guestEmail) setCustomerEmail(voucher.guestEmail);
+                                }}
+                                className="rounded-md bg-[#0B5D5A] px-3 py-1 text-xs font-semibold text-white"
+                            >
+                                Use guest
+                            </button>
+                        </div>
+                    </div> */}
+
+                    <div className="mt-4 flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => copyToClipboard(voucher.voucherCode)}
+                            className="rounded-md border px-3 py-2 text-sm bg-slate-50"
+                        >
+                            Copy Code
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => copyToClipboard(voucher._id || voucher.id || "")}
+                            className="rounded-md border px-3 py-2 text-sm bg-slate-50"
+                        >
+                            Copy ID
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="ml-auto rounded-md bg-[#0B5D5A] px-4 py-2 text-sm font-bold text-white"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
     const availableCount = Math.max(
         totalSeats - bookedSeats.length - blockedSeats.length,
         0
@@ -936,9 +1509,7 @@ export default function BookingProcessPanel({
                                 <button
                                     type="button"
                                     onClick={handleUnblockSelectedSeats}
-                                    disabled={
-                                        unblockingSeats || selectedBlockedSeats.length === 0
-                                    }
+                                    disabled={unblockingSeats || selectedBlockedSeats.length === 0}
                                     className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     <Ban className="h-4 w-4" />
@@ -990,10 +1561,10 @@ export default function BookingProcessPanel({
                             </div>
 
                             <div className="rounded-[18px] border border-slate-200 bg-white p-4">
-                                {/* Name */}
+                                {/* Booking Owner Name */}
                                 <div className="mb-4">
                                     <label className="mb-2 block text-sm font-semibold text-slate-800">
-                                        Passenger Name <span className="text-red-500">*</span>
+                                        Booking Customer Name <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
                                         <User className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
@@ -1001,9 +1572,38 @@ export default function BookingProcessPanel({
                                             type="text"
                                             value={customerName}
                                             onChange={(e) => setCustomerName(e.target.value)}
-                                            placeholder="Enter passenger name"
+                                            placeholder="Enter booking customer name"
                                             className="h-12 w-full rounded-[16px] border border-slate-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
                                         />
+
+                                        {selectedBookingDetail?.booking ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const b = selectedBookingDetail.booking;
+                                                    if (!b) return;
+                                                    if (b.customerName) setCustomerName(b.customerName);
+                                                    if (b.customerPhone) setCustomerPhone(b.customerPhone);
+                                                    if (b.customerEmail) setCustomerEmail(b.customerEmail || "");
+
+                                                    // also fill seat passenger for the focused seat
+                                                    const seatKey = String(selectedBookingDetail.seatNo || "");
+                                                    if (seatKey) {
+                                                        setPassengerDetails((prev) => ({
+                                                            ...prev,
+                                                            [seatKey]: {
+                                                                seatNo: seatKey,
+                                                                passengerName: selectedBookingDetail.passengerName || b.customerName || "",
+                                                                passengerGender: selectedBookingDetail.passengerGender || b.customerGender || "",
+                                                            },
+                                                        }));
+                                                    }
+                                                }}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-[#0B5D5A] px-3 py-1 text-xs font-semibold text-white"
+                                            >
+                                                Use booking
+                                            </button>
+                                        ) : null}
                                     </div>
                                 </div>
 
@@ -1047,12 +1647,109 @@ export default function BookingProcessPanel({
                                     <div className="text-sm font-semibold text-slate-500">
                                         Selected Seat(s):{" "}
                                         <span className="font-bold text-slate-900">
-                                            {selectedSeats.length > 0
-                                                ? selectedSeats.join(", ")
-                                                : "—"}
+                                            {selectedSeats.length > 0 ? selectedSeats.join(", ") : "—"}
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* NEW: Seat-wise Passenger Details with Radio Buttons */}
+                                {selectedFreshSeats.length > 0 && (
+                                    <div className="mt-4 rounded-[18px] border border-[#D7ECEA] bg-[#F8FCFC] p-4">
+                                        <div className="mb-4 flex items-center gap-2">
+                                            <Users className="h-5 w-5 text-[#0B5D5A]" />
+                                            <div className="text-base font-bold text-slate-900">
+                                                Seat-wise Passenger Details
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {selectedFreshSeats.map((seatNo) => {
+                                                const item = passengerDetails[String(seatNo)] || {
+                                                    seatNo: String(seatNo),
+                                                    passengerName: customerName.trim() || "",
+                                                    passengerGender: "",
+                                                };
+
+                                                return (
+                                                    <div
+                                                        key={seatNo}
+                                                        className="rounded-[16px] border border-[#CFE5E3] bg-white p-4"
+                                                    >
+                                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                                            <div className="text-sm font-bold text-[#0B5D5A]">
+                                                                Seat {seatNo}
+                                                            </div>
+
+                                                            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700">
+                                                                {formatCurrency(effectivePerSeatFare)}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                            {/* Passenger Name */}
+                                                            <div>
+                                                                <label className="mb-2 block text-sm font-semibold text-slate-800">
+                                                                    Passenger Name <span className="text-red-500">*</span>
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={item?.passengerName || ""}
+                                                                    onChange={(e) =>
+                                                                        handlePassengerNameChange(
+                                                                            seatNo,
+                                                                            e.target.value
+                                                                        )
+                                                                    }
+                                                                    placeholder={`Enter name for seat ${seatNo}`}
+                                                                    className="h-11 w-full rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
+                                                                />
+                                                            </div>
+
+                                                            {/* Gender Radio Buttons */}
+                                                            <div>
+                                                                <label className="mb-2 block text-sm font-semibold text-slate-800">
+                                                                    Gender <span className="text-red-500">*</span>
+                                                                </label>
+
+                                                                <div className="flex flex-wrap gap-3">
+                                                                    {["male", "female", "other"].map((gender) => {
+                                                                        const active =
+                                                                            item?.passengerGender === gender;
+
+                                                                        return (
+                                                                            <label
+                                                                                key={gender}
+                                                                                className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all ${active
+                                                                                    ? "border-[#0B5D5A] bg-[#0B5D5A] text-white"
+                                                                                    : "border-slate-300 bg-white text-slate-700 hover:border-[#0B5D5A]"
+                                                                                    }`}
+                                                                            >
+                                                                                <input
+                                                                                    type="radio"
+                                                                                    name={`gender-${seatNo}`}
+                                                                                    value={gender}
+                                                                                    checked={item?.passengerGender === gender}
+                                                                                    onChange={() =>
+                                                                                        handlePassengerGenderChange(
+                                                                                            seatNo,
+                                                                                            gender
+                                                                                        )
+                                                                                    }
+                                                                                    className="hidden"
+                                                                                />
+                                                                                {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                                                                            </label>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Mini cards */}
                                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -1069,6 +1766,95 @@ export default function BookingProcessPanel({
                                         value={formatCurrency(effectiveTotalFare)}
                                         highlight
                                     />
+                                </div>
+
+                                {/* Voucher Apply */}
+                                <div className="mt-3 rounded-[12px] border border-slate-200 bg-white p-3">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={voucherCodeInput}
+                                            onChange={(e) => setVoucherCodeInput(e.target.value)}
+                                            placeholder="Enter voucher code to apply"
+                                            className="h-10 w-full rounded-[10px] border border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A]"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={applyVoucher}
+                                            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#0B5D5A] px-4 text-sm font-bold text-white"
+                                        >
+                                            Apply
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={holdSeats}
+                                            disabled={blockingSeats || selectedFreshSeats.length === 0}
+                                            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 ml-2"
+                                        >
+                                            {blockingSeats ? "Holding..." : "Hold seats"}
+                                        </button>
+                                    </div>
+
+                                    {voucherData && (
+                                        <div className="mt-3 text-sm text-slate-700">
+                                            <div>
+                                                <strong>Voucher:</strong> {voucherData.voucherCode} • Remaining: {formatCurrency(voucherData.remainingAmount || 0)}
+                                            </div>
+                                            <div className="mt-1 text-xs text-slate-500">Fare: {formatCurrency(defaultTotalFare)} • After voucher: {formatCurrency(effectiveTotalFare)}</div>
+                                            <div className="mt-1 text-xs text-slate-500">Expires: {voucherData.expiresAt ? new Date(voucherData.expiresAt).toLocaleString() : "-"}</div>
+                                            <div className="mt-1 text-xs text-slate-500">Voucher ID: {voucherData._id || voucherData.id || "-"} • Status: {voucherData.status || "-"}</div>
+                                            <div className="mt-1 text-xs text-slate-500">Guest: {voucherData.guestName || ""} {voucherData.guestPhoneNumber ? `• ${voucherData.guestPhoneNumber}` : ""} {voucherData.guestEmail ? `• ${voucherData.guestEmail}` : ""}</div>
+                                            <div className="mt-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        // autofill form from voucher guest
+                                                        if (!voucherData) return;
+                                                        if (voucherData.guestName) setCustomerName(voucherData.guestName);
+                                                        if (voucherData.guestPhoneNumber) setCustomerPhone(voucherData.guestPhoneNumber);
+                                                        if (voucherData.guestEmail) setCustomerEmail(voucherData.guestEmail);
+                                                    }}
+                                                    className="rounded-md bg-[#0B5D5A] px-3 py-1 text-xs font-semibold text-white"
+                                                >
+                                                    Use guest
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {holdData && (
+                                        <div className="mt-3 text-sm text-slate-700">
+                                            <div>
+                                                <strong>Hold:</strong> Seats held: {holdData.seatNumbers.join(", ")}
+                                            </div>
+                                            <div className="mt-1 text-xs text-slate-500">Expires in: {Math.floor(holdCountdown / 60)}:{String(holdCountdown % 60).padStart(2, "0")}</div>
+                                            <div className="mt-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        // release hold
+                                                        if (!holdData?.holdId) return;
+                                                        fetch("/api/public/seat-hold", {
+                                                            method: "DELETE",
+                                                            headers: {
+                                                                ...getAuthHeaders(),
+                                                                "Content-Type": "application/json",
+                                                            },
+                                                            body: JSON.stringify({ holdId: holdData.holdId }),
+                                                        })
+                                                            .then(() => {
+                                                                setHoldData(null);
+                                                                setHoldCountdown(0);
+                                                                showAppToast("success", "Hold released");
+                                                            })
+                                                            .catch(() => showAppToast("error", "Failed to release hold"));
+                                                    }}
+                                                    className="rounded-md bg-white border px-3 py-1 text-xs font-semibold text-slate-700"
+                                                >
+                                                    Release hold
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Admin Fare Control */}
@@ -1186,17 +1972,25 @@ export default function BookingProcessPanel({
                         loading={loadingBookings}
                         bookings={existingBookings}
                         onViewBooking={(booking) => {
-                            const firstSeat = Array.isArray(booking?.seats)
-                                ? booking.seats[0]
-                                : "";
+                            const seatItems = getSeatItemsFromBooking(booking);
+                            const firstSeatItem = seatItems[0] || null;
+                            const firstSeat = String(firstSeatItem?.seatNo || "");
 
                             setSelectedBookingDetail({
-                                seatNo: String(firstSeat || ""),
+                                seatNo: firstSeat,
+                                ticketNo: firstSeatItem?.ticketNo || "",
+                                passengerName:
+                                    firstSeatItem?.passengerName || booking?.customerName || "",
+                                passengerGender:
+                                    firstSeatItem?.passengerGender ||
+                                    booking?.customerGender ||
+                                    "",
                                 booking,
                                 bookingId: booking?._id,
                                 status:
-                                    booking?.bookingStatus === "CANCELLED" ||
-                                        booking?.seatStatus === "blocked"
+                                    String(
+                                        firstSeatItem?.seatStatus || booking?.seatStatus || ""
+                                    ).toLowerCase() === "blocked"
                                         ? "blocked"
                                         : "booked",
                                 customerName: booking?.customerName || "",
@@ -1210,10 +2004,11 @@ export default function BookingProcessPanel({
                                     booking?.dropMarathi || dropStop?.marathiName || "",
                                 pickupTime: booking?.pickupTime || pickupStop?.time || "",
                                 dropTime: booking?.dropTime || dropStop?.time || "",
-                                fare: booking?.finalPayableAmount || booking?.fare || 0,
+                                fare: firstSeatItem?.fare || booking?.fare || 0,
                                 bookingCode: booking?.bookingCode || "",
                                 paymentStatus: booking?.paymentStatus || "UNPAID",
                                 paymentMethod: booking?.paymentMethod || "UNPAID",
+                                seatItems,
                             });
 
                             setSeatDetailModalOpen(true);
@@ -1239,10 +2034,21 @@ export default function BookingProcessPanel({
                 onUnblock={handleUnblockBooking}
             />
 
+            {/* Voucher created popup */}
+            <VoucherCreatedModal open={voucherModalOpen} voucher={voucherData} onClose={closeVoucherModal} />
+
             {/* Cancel modal */}
             <CancelBookingModal
                 open={cancelModalOpen}
                 seatNo={selectedBookingDetail?.seatNo}
+                ticketNo={selectedBookingDetail?.ticketNo}
+                passengerName={selectedBookingDetail?.passengerName}
+                passengerGender={
+                    selectedBookingDetail?.passengerGender ||
+                    bookedMap[String(selectedBookingDetail?.seatNo || "")]?.passengerGender ||
+                    bookedMap[String(selectedBookingDetail?.seatNo || "")]?.gender ||
+                    ""
+                }
                 loading={cancelLoading}
                 onClose={() => setCancelModalOpen(false)}
                 onRefundOriginal={() => handleCancelBooking("REFUND_ORIGINAL")}
@@ -1287,8 +2093,8 @@ function MiniInfoCard({ title, value, highlight = false }) {
     return (
         <div
             className={`rounded-[16px] border p-4 ${highlight
-                    ? "border-[#CFE5E3] bg-[#F8FCFC]"
-                    : "border-slate-200 bg-slate-50"
+                ? "border-[#CFE5E3] bg-[#F8FCFC]"
+                : "border-slate-200 bg-slate-50"
                 }`}
         >
             <div
