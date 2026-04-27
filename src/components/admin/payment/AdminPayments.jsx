@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import {
     BadgeIndianRupee,
     CalendarDays,
@@ -13,6 +12,7 @@ import {
     Search,
     Wallet,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 function getAccessToken() {
     if (typeof window === "undefined") return "";
@@ -140,6 +140,10 @@ export default function AdminPayments() {
     const [page, setPage] = useState(1);
     const [limit] = useState(20);
     const [total, setTotal] = useState(0);
+    const [aggregates, setAggregates] = useState(null);
+    const [detailModalOpen, setDetailModalOpen] = useState(false);
+    const [selectedPayment, setSelectedPayment] = useState(null);
+    const [bookingDetail, setBookingDetail] = useState(null);
 
     const [filterMethod, setFilterMethod] = useState("");
     const [filterStatus, setFilterStatus] = useState("");
@@ -190,6 +194,7 @@ export default function AdminPayments() {
 
             setPayments(Array.isArray(json?.data) ? json.data : []);
             setTotal(json?.pagination?.total || 0);
+            setAggregates(json?.aggregates || null);
         } catch (err) {
             console.error("Failed to load payments:", err);
             setPayments([]);
@@ -282,6 +287,88 @@ export default function AdminPayments() {
                         </button>
                     </div>
                 </div>
+                {/* Detail Modal */}
+                {detailModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                        <div className="max-w-2xl w-full bg-white rounded-xl p-6">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-bold">Payment / Booking Details</h3>
+                                <button
+                                    onClick={() => {
+                                        setDetailModalOpen(false);
+                                        setSelectedPayment(null);
+                                        setBookingDetail(null);
+                                    }}
+                                    className="text-sm text-slate-600"
+                                >
+                                    Close
+                                </button>
+                            </div>
+
+                            <div className="mt-4 max-h-[60vh] overflow-auto">
+                                <div className="text-sm text-slate-700">
+                                    <div className="font-semibold">Payment</div>
+                                    <pre className="whitespace-pre-wrap break-words">{selectedPayment ? JSON.stringify(selectedPayment, null, 2) : "-"}</pre>
+                                </div>
+
+                                {bookingDetail && (
+                                    <div className="mt-4">
+                                        <div className="font-semibold text-slate-900">Booking</div>
+                                        <div className="mt-2 text-sm text-slate-700">{bookingDetail.customerName} • {bookingDetail.phone || '-'}</div>
+                                        <div className="mt-2 text-sm text-slate-600">Booking ID: {bookingDetail._id}</div>
+                                        <div className="mt-3 text-sm text-slate-700">Seats:</div>
+                                        <ul className="list-disc pl-5 text-sm text-slate-700">
+                                            {Array.isArray(bookingDetail.seatItems) ? bookingDetail.seatItems.map((s, i) => (
+                                                <li key={i}>{s.seatNumber || s.seat || '-'} — {s.passengerName || s.customerName || '-'}</li>
+                                            )) : <li>-</li>}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-4 flex justify-end gap-2">
+                                {bookingDetail && bookingDetail.status !== "CANCELLED" && bookingDetail._id && (
+                                    <button
+                                        onClick={async () => {
+                                            if (!confirm("Cancel booking? This will attempt server-side cancellation.")) return;
+                                            try {
+                                                const res = await fetch(`/api/admin/bookings/cancel`, {
+                                                    method: "POST",
+                                                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ bookingId: bookingDetail._id, action: "REFUND_ORIGINAL" }),
+                                                });
+                                                const j = await res.json();
+                                                if (!res.ok || !j?.success) throw new Error(j?.message || "Failed");
+                                                alert(j.message || "Cancelled");
+                                                setDetailModalOpen(false);
+                                                setSelectedPayment(null);
+                                                setBookingDetail(null);
+                                                loadData();
+                                            } catch (err) {
+                                                console.error("Cancel booking failed:", err);
+                                                alert(err.message || "Cancel failed");
+                                            }
+                                        }}
+                                        className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+                                    >
+                                        Cancel Booking
+                                    </button>
+                                )}
+
+                                <button
+                                    onClick={() => {
+                                        setDetailModalOpen(false);
+                                        setSelectedPayment(null);
+                                        setBookingDetail(null);
+                                    }}
+                                    className="rounded-md border px-4 py-2 text-sm font-semibold"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -449,8 +536,8 @@ export default function AdminPayments() {
                                     type="button"
                                     onClick={() => setPreset(item.value)}
                                     className={`rounded-2xl px-5 py-3 text-sm font-bold transition-all ${active
-                                            ? "bg-[#0B5D5A] text-white shadow-sm"
-                                            : "border border-slate-300 bg-white text-slate-700 hover:border-[#0B5D5A]/30 hover:text-[#0B5D5A]"
+                                        ? "bg-[#0B5D5A] text-white shadow-sm"
+                                        : "border border-slate-300 bg-white text-slate-700 hover:border-[#0B5D5A]/30 hover:text-[#0B5D5A]"
                                         }`}
                                 >
                                     {item.label}
@@ -467,6 +554,41 @@ export default function AdminPayments() {
                         </button>
                     </div>
                 </div>
+
+                {/* Aggregates */}
+                {aggregates && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                        <div className="rounded-[18px] border bg-white p-4">
+                            <div className="text-xs text-slate-500">Total Revenue</div>
+                            <div className="mt-2 text-xl font-bold">{formatCurrency(aggregates.totalFinal || 0)}</div>
+                        </div>
+                        <div className="rounded-[18px] border bg-white p-4">
+                            <div className="text-xs text-slate-500">Net Revenue</div>
+                            <div className="mt-2 text-xl font-bold">{formatCurrency(aggregates.netRevenue || 0)}</div>
+                        </div>
+                        <div className="rounded-[18px] border bg-white p-4">
+                            <div className="text-xs text-slate-500">Refunded</div>
+                            <div className="mt-2 text-xl font-bold">{formatCurrency(aggregates.totalRefunded || 0)}</div>
+                        </div>
+                        <div className="rounded-[18px] border bg-white p-4">
+                            <div className="text-xs text-slate-500">Cancelled Bookings</div>
+                            <div className="mt-2 text-xl font-bold">{aggregates.cancelledBookings || 0}</div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Provider breakdown */}
+                {aggregates?.byProvider && (
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        {aggregates.byProvider.map((b) => (
+                            <div key={b.provider} className="rounded-[18px] border bg-white p-4">
+                                <div className="text-xs text-slate-500">{b.provider}</div>
+                                <div className="mt-2 text-lg font-bold">{formatCurrency(b.total || 0)}</div>
+                                <div className="text-sm text-slate-600">{b.count} txn(s)</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="rounded-[28px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
@@ -509,6 +631,9 @@ export default function AdminPayments() {
                                     <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
                                         Transaction
                                     </th>
+                                    <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                                        Actions
+                                    </th>
                                 </tr>
                             </thead>
 
@@ -516,7 +641,7 @@ export default function AdminPayments() {
                                 {loading ? (
                                     <tr>
                                         <td
-                                            colSpan={6}
+                                            colSpan={7}
                                             className="px-5 py-12 text-center text-sm font-medium text-slate-500"
                                         >
                                             <div className="flex items-center justify-center gap-2">
@@ -528,7 +653,7 @@ export default function AdminPayments() {
                                 ) : payments.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={6}
+                                            colSpan={7}
                                             className="px-5 py-12 text-center text-sm text-slate-500"
                                         >
                                             <div className="mx-auto flex max-w-md flex-col items-center">
@@ -589,6 +714,58 @@ export default function AdminPayments() {
 
                                             <td className="px-5 py-4 text-sm text-slate-700">
                                                 {p.gatewayPaymentId || p.gatewayOrderId || "-"}
+                                            </td>
+                                            <td className="px-5 py-4 text-sm">
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={async () => {
+                                                            setSelectedPayment(p);
+                                                            setBookingDetail(null);
+                                                            setDetailModalOpen(true);
+                                                            // try fetch booking detail
+                                                            if (p.bookingId) {
+                                                                try {
+                                                                    const res = await fetch(`/api/admin/bookings?bookingId=${p.bookingId}`, { headers: getAuthHeaders() });
+                                                                    const jd = await res.json();
+                                                                    if (res.ok && jd?.success && Array.isArray(jd.data) && jd.data.length > 0) {
+                                                                        setBookingDetail(jd.data[0]);
+                                                                    } else if (res.ok && jd?.success && jd.data) {
+                                                                        setBookingDetail(jd.data);
+                                                                    }
+                                                                } catch (e) {
+                                                                    console.warn("Failed to fetch booking detail:", e);
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="rounded-md border px-3 py-1 text-xs font-semibold text-slate-700"
+                                                    >
+                                                        View
+                                                    </button>
+
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!p.bookingId) return alert("No booking associated");
+                                                            if (!confirm("Cancel booking? This will attempt server-side cancellation.")) return;
+                                                            try {
+                                                                const res = await fetch(`/api/admin/bookings/cancel`, {
+                                                                    method: "POST",
+                                                                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                                                                    body: JSON.stringify({ bookingId: p.bookingId, action: "REFUND_ORIGINAL" }),
+                                                                });
+                                                                const j = await res.json();
+                                                                if (!res.ok || !j?.success) throw new Error(j?.message || "Failed");
+                                                                alert(j.message || "Cancelled");
+                                                                loadData();
+                                                            } catch (err) {
+                                                                console.error("Cancel booking failed:", err);
+                                                                alert(err.message || "Cancel failed");
+                                                            }
+                                                        }}
+                                                        className="rounded-md bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 border border-red-100"
+                                                    >
+                                                        Cancel Booking
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
