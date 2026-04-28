@@ -2,6 +2,7 @@ import { generateBookingCode } from "@/lib/bookingCode";
 import { sendBookingConfirmation } from "@/lib/emailService";
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
+import Payment from "@/models/payment.model";
 import Schedule from "@/models/schedule.model";
 import SeatHold from "@/models/seat-hold.model";
 import Voucher from "@/models/voucher.model";
@@ -639,6 +640,44 @@ export async function POST(request) {
             return NextResponse.json({ success: false, message: "Failed to create booking (transaction)" }, { status: 500 });
         } finally {
             session.endSession();
+        }
+
+        // Create Payment record for offline paid bookings so admin aggregates include them
+        try {
+            const pm = String(booking?.paymentMethod || "").toUpperCase();
+            const status = String(booking?.paymentStatus || "").toUpperCase();
+
+            const isOffline = pm.startsWith("OFFLINE");
+            const isPaid = ["PAID", "SUCCESS"].includes(status);
+
+            if (isOffline && isPaid) {
+                const provider = pm === "OFFLINE_UPI" ? "UPI" : pm === "OFFLINE_CASH" ? "CASH" : "MANUAL";
+
+                const paymentData = {
+                    bookingId: booking._id,
+                    userId: authUser?._id || null,
+                    provider,
+                    paymentMethod: booking?.paymentMethod || "OFFLINE",
+                    paymentStatus: "PAID",
+                    amount: Number(booking?.finalPayableAmount || booking?.fare || 0),
+                    totalAmount: Number(booking?.finalPayableAmount || booking?.fare || 0),
+                    finalPayableAmount: Number(booking?.finalPayableAmount || 0),
+                    currency: "INR",
+                    gatewayResponse: {},
+                    paidAt: new Date(),
+                    initiatedAt: new Date(),
+                    createdBy: authUser?._id || null,
+                    isActive: true,
+                };
+
+                try {
+                    await Payment.create(paymentData);
+                } catch (pErr) {
+                    console.warn("CREATE_OFFLINE_PAYMENT_ERROR:", pErr?.message || pErr);
+                }
+            }
+        } catch (err) {
+            console.warn("OFFLINE_PAYMENT_HANDLER_ERROR:", err?.message || err);
         }
 
         if (booking.customerEmail && booking.bookingStatus === "CONFIRMED") {
