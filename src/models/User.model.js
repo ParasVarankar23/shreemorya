@@ -92,6 +92,12 @@ const UserSchema = new mongoose.Schema(
             default: "user",
         },
 
+        position: {
+            type: String,
+            enum: ["Driver", "Cleaner", "Booking Staff", "Office Staff"],
+            default: undefined,
+        },
+
         isGuest: {
             type: Boolean,
             default: false,

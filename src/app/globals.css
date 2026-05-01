@@ -55,3 +55,17 @@ body {
 .no-scrollbar::-webkit-scrollbar {
     display: none;
 }
+
+@keyframes slide {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+.animate-slide {
+    animation: slide 0.3s ease;
+}

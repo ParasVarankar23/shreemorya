@@ -621,3 +621,39 @@ export async function sendBookingLoginEmail({
 }) {
     return sendLoginNotificationEmail({ to, fullName, loginTime, loginMethod, ipAddress });
 }
+
+export async function sendStaffWelcomeEmail({
+    to,
+    fullName,
+    position,
+    email,
+    password,
+}) {
+    const html = createEmailTemplate({
+        preheader: "Staff account created",
+        title: "Welcome Staff Member",
+        subtitle: "Your staff account is ready",
+        badgeText: "STAFF",
+        introTitle: `Hello ${fullName},`,
+        introText: `You have been added as a ${position} in Morya Travels.`,
+        bodyHtml: card(
+            "Staff Details",
+            `
+        <table width="100%">
+          ${infoRow("Name", fullName)}
+          ${infoRow("Position", position, true)}
+          ${infoRow("Email", email)}
+          ${infoRow("Password", password, true)}
+        </table>
+      `
+        ),
+        buttonText: "Login Now",
+        buttonUrl: LOGIN_URL,
+    });
+
+    return sendTemplateMail({
+        to,
+        subject: "Staff Account Created",
+        html,
+    });
+}
