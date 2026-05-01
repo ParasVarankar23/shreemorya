@@ -11,8 +11,9 @@ import {
     ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
+import { showAppToast } from "../../lib/toast";
 
-export default function page() {
+export default function SettingsPage() {
     const [form, setForm] = useState({
         oldPassword: "",
         newPassword: "",
@@ -55,14 +56,8 @@ export default function page() {
         return token ? { Authorization: `Bearer ${token}` } : {};
     };
 
-    const showToast = (type, message) => {
-        if (type === "error") {
-            console.error(message);
-            alert(message);
-        } else {
-            alert(message);
-        }
-    };
+    // use centralized toast
+    const showToast = (type, message) => showAppToast(type, message);
 
     const safeJson = async (res) => {
         const contentType = res.headers.get("content-type") || "";

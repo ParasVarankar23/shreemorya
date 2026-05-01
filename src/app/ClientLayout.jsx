@@ -13,8 +13,8 @@ import DashboardNavbar from "@/components/common/Navbar";
 import Sidebar from "@/components/common/Sidebar";
 
 // Public website components
-import PublicNavbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import PublicNavbar from "@/components/layout/Navbar";
 
 import { AutoRefreshProvider } from "@/context/AutoRefreshContext";
 
@@ -114,11 +114,21 @@ export default function ClientLayout({ children }) {
     useEffect(() => {
         function resolveRoleFromToken() {
             try {
+                // Prefer decoding role from tokens: accessToken first, then refreshToken
                 const accessToken = localStorage.getItem("accessToken") || "";
-                const payload = decodeJwtPayload(accessToken);
-                const normalized = normalizeRole(payload?.role);
+                const refreshToken = localStorage.getItem("refreshToken") || "";
 
-                setTokenRole(normalized);
+                let payload = decodeJwtPayload(accessToken);
+
+                if (!payload && refreshToken) {
+                    payload = decodeJwtPayload(refreshToken);
+                }
+
+                if (payload && payload.role) {
+                    setTokenRole(normalizeRole(payload.role));
+                } else {
+                    setTokenRole("guest");
+                }
             } catch {
                 setTokenRole("guest");
             } finally {

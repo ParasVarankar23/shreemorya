@@ -428,12 +428,24 @@ export default function DashboardNavbar({
 
     function handleViewProfile() {
         setShowProfileMenu(false);
-        router.push("/profile");
+        const roleKey = String(role || "User").toLowerCase();
+        const path = `/${roleKey}/profile`;
+        try {
+            router.push(path);
+        } catch {
+            window.location.href = path;
+        }
     }
 
     function handleSettings() {
         setShowProfileMenu(false);
-        router.push("/settings");
+        const roleKey = String(role || "User").toLowerCase();
+        const path = `/${roleKey}/settings`;
+        try {
+            router.push(path);
+        } catch {
+            window.location.href = path;
+        }
     }
 
     function formatNotifDate(date) {

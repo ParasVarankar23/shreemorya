@@ -31,8 +31,8 @@ const roleLinks = {
         { href: "/admin/booking", label: "Booking", icon: Ticket },
         { href: "/admin/vouchers", label: "Vouchers", icon: BadgePercent },
         { href: "/admin/payment", label: "Payment History", icon: ReceiptText },
-        { href: "/notifications", label: "Notifications", icon: Bell },
-        { href: "/settings", label: "Settings", icon: Settings },
+        { href: "/admin/notifications", label: "Notifications", icon: Bell },
+        { href: "/admin/settings", label: "Settings", icon: Settings },
     ],
 
     staff: [
@@ -44,16 +44,16 @@ const roleLinks = {
             label: "View Payment History",
             icon: ReceiptText,
         },
-        { href: "/notifications", label: "Notifications", icon: Bell },
-        { href: "/settings", label: "Settings", icon: Settings },
+        { href: "/staff/notifications", label: "Notifications", icon: Bell },
+        { href: "/staff/settings", label: "Settings", icon: Settings },
     ],
 
     user: [
         { href: "/user/booking", label: "My Booking", icon: Ticket },
         { href: "/user/payment", label: "Payment History", icon: ReceiptText },
-        { href: "/notifications", label: "Notifications", icon: Bell },
-        { href: "/profile", label: "Profile", icon: UserCircle2 },
-        { href: "/settings", label: "Settings", icon: Settings },
+        { href: "/user/notifications", label: "Notifications", icon: Bell },
+        { href: "/user/profile", label: "Profile", icon: UserCircle2 },
+        { href: "/user/settings", label: "Settings", icon: Settings },
     ],
 
     guest: [
