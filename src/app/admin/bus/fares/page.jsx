@@ -374,7 +374,7 @@ function AdminFarePageContent() {
         try {
             setLoadingBuses(true);
 
-            const res = await fetchWithAutoRefresh("/api/admin/buses?limit=200&page=1", {
+            const res = await fetchWithAutoRefresh("/api/buses?limit=200&page=1", {
                 method: "GET",
             });
 
@@ -406,7 +406,7 @@ function AdminFarePageContent() {
             if (filterStatus) params.set("status", filterStatus);
             if (filterFareType) params.set("fareType", filterFareType);
 
-            const res = await fetchWithAutoRefresh(`/api/admin/fare?${params.toString()}`, {
+            const res = await fetchWithAutoRefresh(`/api/fare?${params.toString()}`, {
                 method: "GET",
             });
 
@@ -505,7 +505,7 @@ function AdminFarePageContent() {
                 reason: form.reason.trim(),
             };
 
-            let url = "/api/admin/fare";
+            let url = "/api/fare";
             let method = "POST";
             let payload = {
                 busId: form.busId,
@@ -527,7 +527,7 @@ function AdminFarePageContent() {
 
             if (editingFareId) {
                 method = "PUT";
-                url = `/api/admin/fare/${editingFareId}`;
+                url = `/api/fare/${editingFareId}`;
                 payload = {
                     ...basePayload,
                     status: form.status,
@@ -601,7 +601,7 @@ function AdminFarePageContent() {
         try {
             setDeletingId(fareId);
 
-            const res = await fetchWithAutoRefresh(`/api/admin/fare/${fareId}`, {
+            const res = await fetchWithAutoRefresh(`/api/fare/${fareId}`, {
                 method: "DELETE",
             });
 

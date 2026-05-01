@@ -2,6 +2,7 @@ import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import Schedule from "@/models/schedule.model";
 import SeatHold from "@/models/seat-hold.model";
+import { getAuthUserFromRequest } from "@/utils/auth";
 import { NextResponse } from "next/server";
 
 function hasDuplicates(arr = []) {
@@ -69,7 +70,38 @@ export async function POST(request) {
         const alreadyHeld = normalizedSeats.find((seat) => heldSeatSet.has(seat));
         if (alreadyHeld) return NextResponse.json({ success: false, message: `Seat ${alreadyHeld} is temporarily held by another user` }, { status: 400 });
 
-        const hold = await SeatHold.create({ scheduleId, guestPhoneNumber, guestEmail, seatNumbers: normalizedSeats, holdDurationMinutes, source });
+        // Attach authenticated user info to the hold when available so the
+        // same user/staff/admin can convert the hold to a booking later.
+        let authUser = null;
+        try {
+            authUser = await getAuthUserFromRequest(request);
+        } catch (e) {
+            authUser = null;
+        }
+
+        const resolvedSource = authUser
+            ? authUser.role === "admin"
+                ? "ADMIN"
+                : authUser.role === "staff"
+                    ? "STAFF"
+                    : "USER"
+            : source;
+
+        const holdPayload = {
+            scheduleId,
+            guestPhoneNumber,
+            guestEmail,
+            seatNumbers: normalizedSeats,
+            holdDurationMinutes,
+            source: resolvedSource,
+        };
+
+        if (authUser && authUser.userId) {
+            holdPayload.userId = authUser.userId;
+            holdPayload.createdBy = authUser.userId;
+        }
+
+        const hold = await SeatHold.create(holdPayload);
 
         return NextResponse.json({ success: true, message: `Seats held successfully for ${hold.holdDurationMinutes} minutes`, data: { holdId: hold._id, scheduleId: hold.scheduleId, seatNumbers: hold.seatNumbers, expiresAt: hold.expiresAt, holdDurationMinutes: hold.holdDurationMinutes } });
     } catch (error) {

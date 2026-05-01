@@ -1,23 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import {
-    Search,
-    CalendarDays,
-    RefreshCw,
-    IndianRupee,
-    Wallet,
-    Smartphone,
     BadgeIndianRupee,
     Ban,
-    Eye,
+    CalendarDays,
     ChevronLeft,
     ChevronRight,
-    X,
+    Eye,
     Filter,
+    IndianRupee,
     Receipt,
+    RefreshCw,
+    Search,
+    Smartphone,
     TicketX,
+    Wallet,
+    X,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import CancelBookingModal from "../booking/CancelBookingModal";
 
 /* =========================================================
@@ -207,6 +207,7 @@ export default function AdminPaymentPage() {
             setAggregates(null);
         } finally {
             setLoading(false);
+            initialLoadRef.current = true;
         }
     };
 
@@ -215,10 +216,27 @@ export default function AdminPaymentPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const initialLoadRef = useRef(false);
+    const debounceRef = useRef(null);
+
+    // Auto-fetch when filters change after initial load (debounced)
+    useEffect(() => {
+        if (!initialLoadRef.current) return;
+
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            fetchPayments(filters);
+        }, 300);
+
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filters.search, filters.paymentMethod, filters.paymentStatus, filters.from, filters.to, filters.page, filters.limit]);
+
     const handleSearch = () => {
         const next = { ...filters, page: 1 };
         setFilters(next);
-        fetchPayments(next);
     };
 
     const handleClear = () => {
@@ -232,7 +250,6 @@ export default function AdminPaymentPage() {
             limit: 20,
         };
         setFilters(reset);
-        fetchPayments(reset);
     };
 
     const handlePageChange = (newPage) => {
@@ -279,7 +296,7 @@ export default function AdminPaymentPage() {
             setViewLoading(true);
 
             if (payment?.bookingId) {
-                const res = await fetch(`/api/admin/bookings/${payment.bookingId}`, {
+                const res = await fetch(`/api/bookings/${payment.bookingId}`, {
                     headers: getAuthHeaders(),
                 });
 
@@ -301,7 +318,7 @@ export default function AdminPaymentPage() {
             let bookingData = null;
 
             if (payment?.bookingId) {
-                const res = await fetch(`/api/admin/bookings/${payment.bookingId}`, {
+                const res = await fetch(`/api/bookings/${payment.bookingId}`, {
                     headers: getAuthHeaders(),
                 });
 
@@ -348,7 +365,7 @@ export default function AdminPaymentPage() {
             setCancelLoading(true);
 
             const res = await fetch(
-                `/api/admin/bookings/${cancelTarget.payment.bookingId}/cancel`,
+                `/api/bookings/${cancelTarget.payment.bookingId}/cancel`,
                 {
                     method: "POST",
                     headers: {
@@ -833,8 +850,8 @@ export default function AdminPaymentPage() {
                                                 <td className="px-6 py-6">
                                                     <span
                                                         className={`inline-flex rounded-full px-4 py-2 text-sm font-bold ${isBookingAlreadyCancelled
-                                                                ? "bg-red-50 text-red-700 border border-red-200"
-                                                                : statusBadge(payment?.paymentStatus)
+                                                            ? "bg-red-50 text-red-700 border border-red-200"
+                                                            : statusBadge(payment?.paymentStatus)
                                                             }`}
                                                     >
                                                         {isBookingAlreadyCancelled
@@ -846,8 +863,8 @@ export default function AdminPaymentPage() {
                                                 <td className="px-6 py-6">
                                                     <span
                                                         className={`inline-flex rounded-full px-4 py-2 text-sm font-bold ${isCancelledRow
-                                                                ? "bg-red-50 text-red-700 border border-red-200"
-                                                                : methodBadge(method)
+                                                            ? "bg-red-50 text-red-700 border border-red-200"
+                                                            : methodBadge(method)
                                                             }`}
                                                     >
                                                         {isCancelledRow ? "CANCELLED" : method}

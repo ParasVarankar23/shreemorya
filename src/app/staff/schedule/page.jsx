@@ -19,6 +19,26 @@ const getStoredToken = (key) => {
     }
 };
 
+function parseJwt(token) {
+    try {
+        const base64Url = token.split(".")[1];
+        if (!base64Url) return null;
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split("")
+                .map(function (c) {
+                    return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+                })
+                .join("")
+        );
+
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+}
+
 const setStoredToken = (key, value) => {
     try {
         if (value) localStorage.setItem(key, value);
@@ -159,6 +179,7 @@ StatusBadge.propTypes = {
    PAGE
 ========================= */
 export default function SchedulePage() {
+    const [role, setRole] = useState(null);
     const [buses, setBuses] = useState([]);
     const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -227,22 +248,81 @@ export default function SchedulePage() {
         }
     };
 
-    const initialLoadRef = useRef(false);
+    const handleFilter = async () => {
+        // apply filter by selected bus
+        await fetchSchedules({ busId });
+    };
+
+    const handleResetFilter = async () => {
+        setBusId("");
+        await fetchSchedules();
+    };
 
     useEffect(() => {
         const init = async () => {
+            // Try to read role synchronously from accessToken to avoid UI flicker
+            try {
+                const token = getStoredToken("accessToken");
+                if (token) {
+                    const payload = parseJwt(token);
+                    const found = payload?.role || payload?.data?.role || payload?.roleName || null;
+                    if (found) {
+                        setRole(String(found).toUpperCase());
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            // If role still not known, try refresh (this may set accessToken) and parse again
+            if (!role) {
+                const newToken = await refreshAccessToken();
+                if (newToken) {
+                    const payload = parseJwt(newToken);
+                    const found = payload?.role || payload?.data?.role || null;
+                    if (found) setRole(String(found).toUpperCase());
+                }
+            }
+
+            // Final fallback: call profile endpoint to get role
+            if (!role) {
+                try {
+                    const res = await apiFetch("/api/auth/profile");
+                    if (res.ok) {
+                        const data = await res.json().catch(() => ({}));
+                        const found = data?.data?.role || data?.role || null;
+                        if (found) setRole(String(found).toUpperCase());
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+
+            // Load data after role resolution attempt
             await fetchBuses();
             await fetchSchedules();
+
+            // mark initial load done so busId changes trigger automatic filtering
             initialLoadRef.current = true;
         };
 
         init();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // avoid refetch on initial mount; only auto-filter after initial load
+    const initialLoadRef = useRef(false);
 
     useEffect(() => {
         if (!initialLoadRef.current) return;
-        if (busId) fetchSchedules({ busId });
-        else fetchSchedules();
+
+        // when busId changes, automatically apply filter
+        if (busId) {
+            fetchSchedules({ busId });
+        } else {
+            fetchSchedules();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [busId]);
 
     const handleCreate = async () => {
@@ -444,21 +524,35 @@ export default function SchedulePage() {
 
                                 <td className="px-4 py-4">
                                     <div className="flex items-center justify-center gap-2">
-                                        <button
-                                            onClick={() => openEditModal(item)}
-                                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                        >
-                                            <Pencil className="h-4 w-4" />
-                                            Edit
-                                        </button>
+                                        {role && role !== "STAFF" ? (
+                                            <>
+                                                <button
+                                                    onClick={() => openEditModal(item)}
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                    Edit
+                                                </button>
 
-                                        <button
-                                            onClick={() => handleDelete(item._id)}
-                                            className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                            Delete
-                                        </button>
+                                                <button
+                                                    onClick={() => handleDelete(item._id)}
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    Delete
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                onClick={() => {
+                                                    const txt = `Bus: ${item.busNumber}\nRoute: ${item.routeName || `${item.startPoint} → ${item.endPoint}`}\nDate: ${item.travelDate ? new Date(item.travelDate).toLocaleDateString('en-GB') : '-'}\nStart: ${item.startTime || '--:--'}\nEnd: ${item.endTime || '--:--'}\nFare: ₹ ${Number(item.effectiveFare || item.baseFare || 0)}\nStatus: ${item.status || 'SCHEDULED'}`;
+                                                    globalThis.alert(txt);
+                                                }}
+                                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                            >
+                                                View
+                                            </button>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -541,25 +635,47 @@ export default function SchedulePage() {
                     )}
                 </div>
 
-                <div className="mt-5">
+                <div className="mt-5 flex items-center gap-3">
                     <button
                         type="button"
-                        onClick={handleCreate}
-                        disabled={creating}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-[#0B5D5A] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#094B49] disabled:opacity-60"
+                        onClick={handleFilter}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                     >
-                        {creating ? (
-                            <>
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                                Creating...
-                            </>
-                        ) : (
-                            <>
-                                <Plus className="h-4 w-4" />
-                                Create Schedule
-                            </>
-                        )}
+                        Filter
                     </button>
+
+                    <button
+                        type="button"
+                        onClick={handleResetFilter}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                        Reset
+                    </button>
+
+                    <div className="ml-auto">
+                        {role && role !== "STAFF" && (
+                            <button
+                                type="button"
+                                onClick={handleCreate}
+                                disabled={creating}
+                                className="inline-flex items-center gap-2 rounded-2xl bg-[#0B5D5A] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#094B49] disabled:opacity-60"
+                            >
+                                {creating ? (
+                                    <>
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus className="h-4 w-4" />
+                                        Create Schedule
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

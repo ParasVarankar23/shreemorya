@@ -9,8 +9,11 @@ export default function BusTable({
     onEdit,
     onDelete,
     onViewLayout,
+    role = "",
 }) {
     const router = useRouter();
+
+    const isStaff = String(role || "").toLowerCase() === "staff";
 
     if (loading) {
         return (
@@ -123,32 +126,39 @@ export default function BusTable({
                                 {/* Actions */}
                                 <td className="px-6 py-5 align-top">
                                     <div className="flex flex-wrap items-center justify-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => onEdit?.(bus)}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
-                                        >
-                                            <Pencil className="h-4 w-4" />
-                                            Edit
-                                        </button>
+                                        {!isStaff && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onEdit?.(bus)}
+                                                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                    Edit
+                                                </button>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => router.push(`/admin/bus/fares?busId=${bus._id}`)}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                            View Fares
-                                        </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => router.push(`/admin/bus/fares?busId=${bus._id}`)}
+                                                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                    View Fares
+                                                </button>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => onDelete?.(bus)}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                            Delete
-                                        </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDelete?.(bus)}
+                                                    className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    Delete
+                                                </button>
+                                            </>
+                                        )}
+                                        {isStaff && (
+                                            <div className="text-sm font-medium text-slate-500">View Only</div>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -198,29 +208,39 @@ export default function BusTable({
 
                         {/* Actions */}
                         <div className="mt-4 grid grid-cols-3 gap-2">
-                            <button
-                                type="button"
-                                onClick={() => onEdit?.(bus)}
-                                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
-                            >
-                                Edit
-                            </button>
+                            {!isStaff ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => onEdit?.(bus)}
+                                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
+                                    >
+                                        Edit
+                                    </button>
 
-                            <button
-                                type="button"
-                                onClick={() => router.push(`/admin/bus/fares?busId=${bus._id}`)}
-                                className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
-                            >
-                                Fares
-                            </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => router.push(`/admin/bus/fares?busId=${bus._id}`)}
+                                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-[#0B5D5A]/20 hover:bg-[#0B5D5A]/5 hover:text-[#0B5D5A]"
+                                    >
+                                        Fares
+                                    </button>
 
-                            <button
-                                type="button"
-                                onClick={() => onDelete?.(bus)}
-                                className="rounded-2xl border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                            >
-                                Delete
-                            </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => onDelete?.(bus)}
+                                        className="rounded-2xl border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                                    >
+                                        Delete
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-500">View</div>
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-500">Fares</div>
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-500">View Only</div>
+                                </>
+                            )}
                         </div>
 
                         {/* View Layout Button */}

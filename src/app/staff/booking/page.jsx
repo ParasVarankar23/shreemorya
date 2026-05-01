@@ -8,7 +8,7 @@ import {
     normalizeStopsFromSchedules,
     showAppToast,
 } from "@/components/admin/booking/bookingHelpers";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function BookingPage() {
     const [loadingStops, setLoadingStops] = useState(true);
@@ -18,7 +18,7 @@ export default function BookingPage() {
 
     const [pickupStop, setPickupStop] = useState(null);
     const [dropStop, setDropStop] = useState(null);
-    const [travelDate, setTravelDate] = useState("");
+    const [travelDate, setTravelDate] = useState(() => new Date().toISOString().split("T")[0]);
 
     const [availableBuses, setAvailableBuses] = useState([]);
     const [selectedBus, setSelectedBus] = useState(null);
@@ -33,6 +33,8 @@ export default function BookingPage() {
     useEffect(() => {
         loadSchedulesAndStops();
     }, []);
+
+    const initialLoadRef = useRef(false);
 
     useEffect(() => {
         if (selectedBus) {
@@ -50,7 +52,7 @@ export default function BookingPage() {
         try {
             setLoadingStops(true);
 
-            const res = await fetch("/api/admin/buses?page=1&limit=500&status=ACTIVE", {
+            const res = await fetch("/api/buses?page=1&limit=500&status=ACTIVE", {
                 method: "GET",
                 headers: getAuthHeaders(),
             });
@@ -76,8 +78,28 @@ export default function BookingPage() {
             showAppToast("error", error.message || "Failed to load pickup/drop points");
         } finally {
             setLoadingStops(false);
+            // mark initial load finished so auto-search can run when inputs change
+            initialLoadRef.current = true;
         }
     };
+
+    // Auto-run search when pickup/drop/date change (debounced)
+    useEffect(() => {
+        if (!initialLoadRef.current) return;
+
+        let timer = null;
+
+        if (canSearch) {
+            timer = setTimeout(() => {
+                handleSearchBuses();
+            }, 300);
+        }
+
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pickupStop, dropStop, travelDate]);
 
     const handleSearchBuses = async () => {
         try {
@@ -100,7 +122,7 @@ export default function BookingPage() {
                 date: travelDate,
             });
 
-            const res = await fetch(`/api/admin/bookings/search-buses?${params.toString()}`, {
+            const res = await fetch(`/api/bookings/search-buses?${params.toString()}`, {
                 method: "GET",
                 headers: getAuthHeaders(),
             });

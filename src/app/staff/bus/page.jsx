@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Plus, BusFront, Armchair } from "lucide-react";
 import AddBusModal from "@/components/admin/buses/AddBusModal";
 import BusTable from "@/components/admin/buses/BusTable";
 import SeatLayout from "@/components/SeatLayout";
+import { Armchair, BusFront, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function SummaryCard({ title, value, icon }) {
   return (
@@ -30,6 +30,34 @@ export default function BusPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editBus, setEditBus] = useState(null);
   const [layoutBus, setLayoutBus] = useState(null);
+  // Try to derive role from access token first, fallback to fetching profile
+  const parseJwt = (token) => {
+    try {
+      const parts = String(token || "").split(".");
+      if (parts.length < 2) return null;
+      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const json = decodeURIComponent(
+        atob(payload)
+          .split("")
+          .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
+          .join("")
+      );
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  };
+
+  const [role, setRole] = useState(() => {
+    try {
+      const token = localStorage.getItem("accessToken") || "";
+      const decoded = parseJwt(token);
+      if (decoded && decoded.role) return String(decoded.role || "").toLowerCase();
+    } catch {
+      // ignore
+    }
+    return "";
+  });
 
   const fetchBuses = async () => {
     setLoading(true);
@@ -38,7 +66,7 @@ export default function BusPage() {
       if (query) params.set("q", query);
       if (seatFilter) params.set("seatLayout", seatFilter);
 
-      const res = await fetch(`/api/admin/buses?${params.toString()}`);
+      const res = await fetch(`/api/buses?${params.toString()}`);
       const data = await res.json();
 
       if (data.success) {
@@ -49,12 +77,92 @@ export default function BusPage() {
       alert("Failed to fetch buses");
     } finally {
       setLoading(false);
+      // mark that at least one fetch has completed so auto-filter can run
+      try {
+        initialLoadRef.current = true;
+      } catch (e) {
+        // ignore
+      }
     }
   };
 
+  const initialLoadRef = useRef(false);
+  const debounceRef = useRef(null);
+
   useEffect(() => {
     fetchBuses();
+
+    // If role not available from token, fetch profile (with refresh if needed)
+    const refreshAccessToken = async () => {
+      try {
+        const refreshToken = localStorage.getItem("refreshToken") || "";
+        if (!refreshToken) return null;
+
+        const r = await fetch("/api/auth/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d?.accessToken) return null;
+        localStorage.setItem("accessToken", d.accessToken);
+        return d.accessToken;
+      } catch {
+        return null;
+      }
+    };
+
+    const fetchProfileRole = async () => {
+      try {
+        let token = localStorage.getItem("accessToken") || "";
+
+        const doFetch = async (accessToken) =>
+          fetch("/api/auth/profile", {
+            method: "GET",
+            headers: accessToken
+              ? { Authorization: `Bearer ${accessToken}` }
+              : {},
+            cache: "no-store",
+          });
+
+        let res = await doFetch(token);
+        if (res.status === 401) {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
+            token = newToken;
+            res = await doFetch(token);
+          }
+        }
+
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const p = data?.data?.user || data?.data?.profile || data?.user || data?.profile || {};
+          const r = String(p?.role || p?.roleName || "").toLowerCase();
+          if (r) setRole(r);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    if (!role) fetchProfileRole();
   }, []);
+
+  // Auto-apply filters when query or seatFilter change after initial load
+  useEffect(() => {
+    if (!initialLoadRef.current) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchBuses();
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, seatFilter]);
 
   const stats = useMemo(() => {
     return {
@@ -71,7 +179,7 @@ export default function BusPage() {
     if (!ok) return;
 
     try {
-      const res = await fetch(`/api/admin/buses/${bus._id}`, {
+      const res = await fetch(`/api/buses/${bus._id}`, {
         method: "DELETE",
       });
 
@@ -105,17 +213,19 @@ export default function BusPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setEditBus(null);
-              setShowAddModal(true);
-            }}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0B5D5A] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#0B5D5A]/20 transition hover:bg-[#094B49]"
-          >
-            <Plus className="h-5 w-5" />
-            Add Bus
-          </button>
+          {role !== "staff" && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditBus(null);
+                setShowAddModal(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0B5D5A] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#0B5D5A]/20 transition hover:bg-[#094B49]"
+            >
+              <Plus className="h-5 w-5" />
+              Add Bus
+            </button>
+          )}
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -183,6 +293,7 @@ export default function BusPage() {
       <BusTable
         buses={buses}
         loading={loading}
+        role={role}
         onEdit={(bus) => {
           setEditBus(bus);
           setShowAddModal(true);

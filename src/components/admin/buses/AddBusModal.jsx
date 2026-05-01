@@ -609,7 +609,7 @@ export default function BusModalForm({
                 })),
             };
 
-            const endpoint = editMode ? `/api/admin/buses/${initialData._id}` : `/api/admin/buses`;
+            const endpoint = editMode ? `/api/buses/${initialData._id}` : `/api/buses`;
             const method = editMode ? "PUT" : "POST";
 
             const token = (() => {

@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
+import Staff from "@/models/staff.model";
 import jwt from "jsonwebtoken";
 
 export function generateRandomPassword(fullName = "User") {
@@ -85,12 +86,25 @@ export async function getAuthUserFromRequest(request) {
 
         await connectDB();
 
-        const user = await User.findById(decoded.userId)
+        // Try User first, then Staff as a fallback
+        let user = await User.findById(decoded.userId)
             .select("_id role isGuest authProvider")
             .lean();
 
         if (!user) {
-            return null;
+            const staff = await Staff.findById(decoded.userId)
+                .select("_id role authProvider")
+                .lean();
+
+            if (!staff) return null;
+
+            return {
+                userId: String(staff._id),
+                role: staff.role,
+                isGuest: false,
+                authProvider: staff.authProvider || "local",
+                sid: decoded.sid || null,
+            };
         }
 
         return {

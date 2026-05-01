@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import {
     BadgeIndianRupee,
     CalendarDays,
     ChevronLeft,
     ChevronRight,
+    Copy,
     Eye,
     Filter,
+    History,
     Loader2,
     Search,
     Ticket,
     Wallet,
     X,
-    History,
-    Copy,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 function getAccessToken() {
     if (typeof window === "undefined") return "";
@@ -126,7 +126,7 @@ export default function AdminVouchers() {
             if (startDate) params.set("startDate", startDate);
             if (endDate) params.set("endDate", endDate);
 
-            const res = await fetch(`/api/admin/vouchers?${params.toString()}`, {
+            const res = await fetch(`/api/vouchers?${params.toString()}`, {
                 headers: getAuthHeaders(),
             });
 
@@ -176,7 +176,7 @@ export default function AdminVouchers() {
         setSelectedVoucher(null);
 
         try {
-            const res = await fetch(`/api/admin/vouchers/${voucherId}`, {
+            const res = await fetch(`/api/vouchers/${voucherId}`, {
                 headers: getAuthHeaders(),
             });
 
@@ -404,8 +404,8 @@ export default function AdminVouchers() {
                                         setPage(1);
                                     }}
                                     className={`rounded-2xl px-4 py-2.5 text-sm font-bold transition-all ${active
-                                            ? "bg-[#0B5D5A] text-white shadow-sm"
-                                            : "border border-slate-300 bg-white text-slate-700 hover:border-[#0B5D5A]/30 hover:text-[#0B5D5A]"
+                                        ? "bg-[#0B5D5A] text-white shadow-sm"
+                                        : "border border-slate-300 bg-white text-slate-700 hover:border-[#0B5D5A]/30 hover:text-[#0B5D5A]"
                                         }`}
                                 >
                                     {preset.label}
@@ -877,10 +877,10 @@ function MiniCard({ title, value, highlight = false, amber = false }) {
     return (
         <div
             className={`rounded-[22px] border p-4 ${highlight
-                    ? "border-[#CFE5E3] bg-[#F7FBFB]"
-                    : amber
-                        ? "border-amber-200 bg-amber-50"
-                        : "border-slate-200 bg-white"
+                ? "border-[#CFE5E3] bg-[#F7FBFB]"
+                : amber
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-slate-200 bg-white"
                 }`}
         >
             <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">

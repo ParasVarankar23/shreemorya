@@ -12,7 +12,7 @@ import {
     Users,
     X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import SeatLayout from "../../SeatLayout";
 import CancelBookingModal from "./CancelBookingModal";
 import ExistingBookingsPanel from "./ExistingBookingsPanel";
@@ -149,10 +149,15 @@ export default function BookingProcessPanel({
         });
     }, []);
 
+    const prevCustomerNameRef = useRef("");
+
     // Keep passengerDetails synced with selectedSeats
     // Also populate missing seat passenger names from the booking customer name
     // so the user doesn't need to type the same name twice if they enter
-    // the booking customer name after selecting seats.
+    // the booking customer name after selecting seats. While typing the
+    // booking customer name, update per-seat names only if they were empty
+    // or previously matched the previous customer name (so custom edits
+    // are not overwritten).
     useEffect(() => {
         setPassengerDetails((prev) => {
             const next = { ...prev };
@@ -165,9 +170,11 @@ export default function BookingProcessPanel({
                 }
             });
 
-            // add selected or fill missing passengerName from customerName
+            // add selected or fill/refresh passengerName from customerName
             selectedSeats.forEach((seatNo) => {
                 const key = String(seatNo);
+                const prevCustomer = prevCustomerNameRef.current || "";
+
                 if (!next[key]) {
                     next[key] = {
                         seatNo: key,
@@ -175,15 +182,23 @@ export default function BookingProcessPanel({
                         passengerGender: "",
                     };
                 } else {
-                    // if seat exists but passengerName is empty, fill it
+                    const currentName = String(next[key].passengerName || "").trim();
+
+                    // If empty or previously set from the earlier customerName,
+                    // overwrite with the new customerName value. This lets typing
+                    // in the top field propagate live to per-seat inputs, but
+                    // preserves manual per-seat edits.
                     if (
-                        (!next[key].passengerName || String(next[key].passengerName).trim() === "") &&
+                        (!currentName || currentName === prevCustomer) &&
                         customerName.trim()
                     ) {
                         next[key].passengerName = customerName.trim();
                     }
                 }
             });
+
+            // update prevCustomerNameRef
+            prevCustomerNameRef.current = customerName.trim();
 
             return next;
         });
@@ -279,7 +294,7 @@ export default function BookingProcessPanel({
         if (!code || !code.trim()) return null;
         try {
             const params = new URLSearchParams({ search: code.trim(), limit: 1 });
-            const res = await fetch(`/api/admin/vouchers?${params.toString()}`, {
+            const res = await fetch(`/api/vouchers?${params.toString()}`, {
                 method: "GET",
                 headers: getAuthHeaders(),
             });
@@ -354,6 +369,21 @@ export default function BookingProcessPanel({
             // cleanup when hold expires
             setTimeout(() => clearInterval(timer), (data.data.holdDurationMinutes || 5) * 60 * 1000 + 2000);
 
+            // Populate passengerDetails for held seats from current customerName
+            setPassengerDetails((prev) => {
+                const next = { ...prev };
+                const selectedSet = new Set(selectedSeats.map(String));
+                selectedSeats.forEach((seatNo) => {
+                    const key = String(seatNo);
+                    next[key] = {
+                        seatNo: key,
+                        passengerName: customerName.trim() || "",
+                        passengerGender: next[key]?.passengerGender || "",
+                    };
+                });
+                return next;
+            });
+
             showAppToast("success", data.message || "Seats held");
         } catch (err) {
             console.error("holdSeats error:", err);
@@ -425,13 +455,23 @@ export default function BookingProcessPanel({
                 const headers = new Headers(getAuthHeaders());
                 if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
-                return fetch(`/api/admin/bookings?${params.toString()}`, {
+                return fetch(`/api/bookings?${params.toString()}`, {
                     method: "GET",
                     headers,
                 });
             };
 
-            let res = await doFetch(localStorage.getItem("accessToken") || "");
+            // If no access token present but refresh token exists, try refresh first
+            let initialToken = localStorage.getItem("accessToken") || "";
+            if (!initialToken) {
+                const hasRefresh = !!(localStorage.getItem("refreshToken") || "");
+                if (hasRefresh) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) initialToken = refreshed;
+                }
+            }
+
+            let res = await doFetch(initialToken || "");
 
             if (res.status === 401) {
                 const newToken = await refreshAccessToken();
@@ -473,11 +513,81 @@ export default function BookingProcessPanel({
     const handleSeatSelect = (seatNo) => {
         setSelectedSeats((prev) => {
             const key = String(seatNo);
-            if (prev.includes(key)) {
-                return prev.filter((item) => item !== key);
+            const isSelected = prev.includes(key);
+            const next = isSelected ? prev.filter((item) => item !== key) : [...prev, key];
+
+            // If user just added a seat, attempt to hold seats automatically
+            if (!isSelected) {
+                // compute fresh seats to hold (exclude already booked/blocked)
+                const nextFresh = next.filter(
+                    (s) => !blockedSeats.includes(String(s)) && !bookedSeats.includes(String(s))
+                );
+
+                // kick off auto-hold (don't await)
+                if (nextFresh.length > 0) {
+                    holdSeatsFor(nextFresh).catch((e) => console.warn("auto hold failed", e));
+                }
             }
-            return [...prev, key];
+
+            return next;
         });
+    };
+
+    // Helper: hold provided seat numbers (used for auto-hold on click)
+    const holdSeatsFor = async (seatNumbers = []) => {
+        if (!selectedBus?._id) return showAppToast("error", "Select a bus first");
+        if (!travelDate) return showAppToast("error", "Select travel date");
+        if (!Array.isArray(seatNumbers) || seatNumbers.length === 0) return;
+
+        try {
+            setBlockingSeats(true);
+
+            const res = await fetch("/api/public/seat-hold", {
+                method: "POST",
+                headers: {
+                    ...getAuthHeaders(),
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ scheduleId: selectedBus._id, seatNumbers, guestPhoneNumber: customerPhone || null, guestEmail: customerEmail || null }),
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to hold seats");
+
+            setHoldData(data.data);
+            const expires = new Date(data.data.expiresAt).getTime();
+
+            const tick = () => {
+                const sec = Math.max(0, Math.floor((expires - Date.now()) / 1000));
+                setHoldCountdown(sec);
+                if (sec <= 0) setHoldData(null);
+            };
+
+            tick();
+            const timer = setInterval(tick, 1000);
+            setTimeout(() => clearInterval(timer), (data.data.holdDurationMinutes || 5) * 60 * 1000 + 2000);
+
+            // Populate passengerDetails for held seats from current customerName
+            setPassengerDetails((prev) => {
+                const next = { ...prev };
+                seatNumbers.forEach((seatNo) => {
+                    const key = String(seatNo);
+                    next[key] = {
+                        seatNo: key,
+                        passengerName: customerName.trim() || "",
+                        passengerGender: next[key]?.passengerGender || "",
+                    };
+                });
+                return next;
+            });
+
+            showAppToast("success", data.message || "Seats held");
+        } catch (err) {
+            console.error("holdSeatsFor error:", err);
+            showAppToast("error", err.message || "Failed to hold seats");
+        } finally {
+            setBlockingSeats(false);
+        }
     };
 
     const handlePassengerNameChange = (seatNo, value) => {
@@ -812,7 +922,7 @@ export default function BookingProcessPanel({
                 paymentMode,
             };
 
-            const res = await fetch("/api/admin/bookings", {
+            const res = await fetch("/api/bookings", {
                 method: "POST",
                 headers: getAuthHeaders(),
                 body: JSON.stringify(payload),
@@ -899,7 +1009,7 @@ export default function BookingProcessPanel({
                 paymentMode: "ONLINE",
             };
 
-            const bookingRes = await fetch("/api/admin/bookings", {
+            const bookingRes = await fetch("/api/bookings", {
                 method: "POST",
                 headers: getAuthHeaders(),
                 body: JSON.stringify(bookingPayload),
@@ -1084,7 +1194,7 @@ export default function BookingProcessPanel({
 
             setBlockingSeats(true);
 
-            const res = await fetch("/api/admin/bookings", {
+            const res = await fetch("/api/bookings", {
                 method: "POST",
                 headers: getAuthHeaders(),
                 body: JSON.stringify({
@@ -1150,7 +1260,7 @@ export default function BookingProcessPanel({
             });
 
             for (const booking of blockedBookings) {
-                const res = await fetch(`/api/admin/bookings/${booking._id}`, {
+                const res = await fetch(`/api/bookings/${booking._id}`, {
                     method: "DELETE",
                     headers: getAuthHeaders(),
                 });
@@ -1186,7 +1296,7 @@ export default function BookingProcessPanel({
             setEditLoading(true);
 
             const res = await fetch(
-                `/api/admin/bookings/${selectedBookingDetail.booking._id}`,
+                `/api/bookings/${selectedBookingDetail.booking._id}`,
                 {
                     method: "PUT",
                     headers: getAuthHeaders(),
@@ -1276,7 +1386,7 @@ export default function BookingProcessPanel({
 
             setCancelLoading(true);
 
-            const res = await fetch(`/api/admin/bookings/${bookingId}/cancel`, {
+            const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
                 method: "POST",
                 headers: getAuthHeaders(),
                 body: JSON.stringify({
@@ -1335,7 +1445,7 @@ export default function BookingProcessPanel({
 
             setCancelLoading(true);
 
-            const res = await fetch(`/api/admin/bookings/${selectedBookingDetail.bookingId}`, {
+            const res = await fetch(`/api/bookings/${selectedBookingDetail.bookingId}`, {
                 method: "DELETE",
                 headers: getAuthHeaders(),
             });

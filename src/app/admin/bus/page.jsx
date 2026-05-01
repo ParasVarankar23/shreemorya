@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Plus, BusFront, Armchair } from "lucide-react";
 import AddBusModal from "@/components/admin/buses/AddBusModal";
 import BusTable from "@/components/admin/buses/BusTable";
 import SeatLayout from "@/components/SeatLayout";
+import { Armchair, BusFront, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function SummaryCard({ title, value, icon }) {
   return (
@@ -38,7 +38,7 @@ export default function BusPage() {
       if (query) params.set("q", query);
       if (seatFilter) params.set("seatLayout", seatFilter);
 
-      const res = await fetch(`/api/admin/buses?${params.toString()}`);
+      const res = await fetch(`/api/buses?${params.toString()}`);
       const data = await res.json();
 
       if (data.success) {
@@ -49,8 +49,28 @@ export default function BusPage() {
       alert("Failed to fetch buses");
     } finally {
       setLoading(false);
+      if (typeof initialLoadRef !== "undefined" && initialLoadRef?.current !== undefined) {
+        initialLoadRef.current = true;
+      }
     }
   };
+
+  const initialLoadRef = useRef(false);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    if (!initialLoadRef.current) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchBuses();
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, seatFilter]);
 
   useEffect(() => {
     fetchBuses();
@@ -71,7 +91,7 @@ export default function BusPage() {
     if (!ok) return;
 
     try {
-      const res = await fetch(`/api/admin/buses/${bus._id}`, {
+      const res = await fetch(`/api/buses/${bus._id}`, {
         method: "DELETE",
       });
 
