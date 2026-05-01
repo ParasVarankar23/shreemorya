@@ -1,6 +1,7 @@
 import dbConnect from "@/lib/db";
 import { getStopNameMarathi, normalizeStopName } from "@/lib/fare";
 import Bus from "@/models/bus.model";
+import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
 import { NextResponse } from "next/server";
 
 function cleanString(v) {
@@ -173,6 +174,16 @@ export async function GET(request) {
 export async function POST(request) {
     try {
         await dbConnect();
+
+        const authUser = await getAuthUserFromRequest(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+        }
+
+        if (!hasRole(authUser, ["admin"])) {
+            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
+        }
+
         const body = await request.json();
 
         const payload = normalizePayload(body);

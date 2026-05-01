@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
+import Staff from "@/models/staff.model";
 import { createSessionId, generateAccessToken, generateRefreshToken } from "@/utils/auth";
 import jwt from "jsonwebtoken";
 
@@ -48,31 +49,44 @@ export async function POST(request) {
         } else {
             await connectDB();
 
-            const user = await User.findById(decoded.userId)
+            // Try User then Staff
+            let user = await User.findById(decoded.userId)
                 .select("_id role isGuest authProvider sessionId")
                 .lean();
 
+            let isStaff = false;
+            let staff = null;
+
             if (!user) {
+                staff = await Staff.findById(decoded.userId)
+                    .select("_id role authProvider sessionId")
+                    .lean();
+                if (staff) isStaff = true;
+            }
+
+            if (!user && !staff) {
                 return Response.json(
                     { success: false, message: "User not found" },
                     { status: 401 }
                 );
             }
 
-            // Optional strict session validation
-            if (user.sessionId && decoded.sid && user.sessionId !== decoded.sid) {
+            // Optional strict session validation for User (Staff may not have sessionId)
+            if (user && user.sessionId && decoded.sid && user.sessionId !== decoded.sid) {
                 return Response.json(
                     { success: false, message: "Session expired. Please login again." },
                     { status: 401 }
                 );
             }
 
+            const effective = user || staff;
+
             tokenUser = {
-                id: String(user._id),
-                role: user.role,
-                isGuest: Boolean(user.isGuest),
-                authProvider: user.authProvider || "local",
-                sessionId: user.sessionId || decoded.sid || "",
+                id: String(effective._id),
+                role: effective.role,
+                isGuest: Boolean(effective.isGuest),
+                authProvider: effective.authProvider || "local",
+                sessionId: effective.sessionId || decoded.sid || "",
             };
         }
 
@@ -83,7 +97,17 @@ export async function POST(request) {
         // Save sessionId back to DB for non-guest
         if (String(decoded.userId) !== "guest-user") {
             await connectDB();
-            await User.findByIdAndUpdate(decoded.userId, { sessionId: nextSessionId });
+            // Update sessionId for User or Staff if possible
+            const existingUser = await User.findById(decoded.userId).select("_id");
+            if (existingUser) {
+                await User.findByIdAndUpdate(decoded.userId, { sessionId: nextSessionId });
+            } else {
+                // Try update Staff (may persist if schema allows)
+                const existingStaff = await Staff.findById(decoded.userId).select("_id");
+                if (existingStaff) {
+                    await Staff.findByIdAndUpdate(decoded.userId, { sessionId: nextSessionId });
+                }
+            }
         }
 
         return Response.json(

@@ -1,8 +1,9 @@
-import jwt from "jsonwebtoken";
+import { deleteCloudinaryImage, uploadAssetToCloudinary } from "@/lib/cloudinary";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
-import { successResponse, errorResponse } from "@/utils/apiResponse";
-import { uploadAssetToCloudinary, deleteCloudinaryImage } from "@/lib/cloudinary";
+import Staff from "@/models/staff.model";
+import { errorResponse, successResponse } from "@/utils/apiResponse";
+import jwt from "jsonwebtoken";
 
 async function getUserFromToken(req) {
     const authHeader =
@@ -27,11 +28,13 @@ async function getUserFromToken(req) {
 
     const user = await User.findById(decoded.userId);
 
-    if (!user) {
-        throw new Error("User not found");
-    }
+    if (user) return user;
 
-    return user;
+    // Try staff collection as fallback
+    const staff = await Staff.findById(decoded.userId);
+    if (staff) return staff;
+
+    throw new Error("User not found");
 }
 
 // =========================

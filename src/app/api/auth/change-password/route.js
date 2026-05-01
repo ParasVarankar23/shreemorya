@@ -1,8 +1,9 @@
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
-import { successResponse, errorResponse } from "@/utils/apiResponse";
+import Staff from "@/models/staff.model";
+import { errorResponse, successResponse } from "@/utils/apiResponse";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 export async function POST(req) {
     try {
@@ -61,20 +62,27 @@ export async function POST(req) {
             return errorResponse("New password cannot be the same as old password", 400);
         }
 
-        // Find user by token userId
-        const user = await User.findById(userId);
+        // Find account by token userId (try User then Staff)
+        await connectDB();
+        let account = await User.findById(userId);
+        let isStaff = false;
 
-        if (!user) {
+        if (!account) {
+            account = await Staff.findById(userId);
+            if (account) isStaff = true;
+        }
+
+        if (!account) {
             return errorResponse("User not found", 404);
         }
 
-        // Guest user cannot change password
-        if (user.isGuest) {
+        // Guest user cannot change password (only on User model)
+        if (!isStaff && account.isGuest) {
             return errorResponse("Guest users cannot change password", 400);
         }
 
         // If Google-only account with no password
-        if (!user.password) {
+        if (!account.password) {
             return errorResponse(
                 "This account does not have a password. Please use Google login.",
                 400
@@ -82,7 +90,7 @@ export async function POST(req) {
         }
 
         // Verify old password
-        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        const isMatch = await bcrypt.compare(oldPassword, account.password);
 
         if (!isMatch) {
             return errorResponse("Old password is incorrect", 401);
@@ -92,10 +100,12 @@ export async function POST(req) {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
         // Save new password
-        user.password = hashedPassword;
-        user.authProvider = "local";
+        account.password = hashedPassword;
+        if (!isStaff) {
+            account.authProvider = "local";
+        }
 
-        await user.save();
+        await account.save();
 
         return successResponse({}, "Password changed successfully", 200);
     } catch (error) {

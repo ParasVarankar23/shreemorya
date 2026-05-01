@@ -1,11 +1,12 @@
-import bcrypt from "bcryptjs";
-import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User.model";
-import { successResponse, errorResponse } from "@/utils/apiResponse";
 import {
     sendPasswordResetOtpEmail,
     sendPasswordResetSuccessEmail,
 } from "@/lib/emailService";
+import { connectDB } from "@/lib/mongodb";
+import User from "@/models/User.model";
+import Staff from "@/models/staff.model";
+import { errorResponse, successResponse } from "@/utils/apiResponse";
+import bcrypt from "bcryptjs";
 
 function generateOtp() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -38,13 +39,20 @@ export async function POST(req) {
                 return errorResponse("Please enter a valid email address", 400);
             }
 
-            const user = await User.findOne({ email });
+            // Try User then Staff
+            let user = await User.findOne({ email });
+            let isStaff = false;
+
+            if (!user) {
+                user = await Staff.findOne({ email });
+                if (user) isStaff = true;
+            }
 
             if (!user) {
                 return errorResponse("No account found with this email", 404);
             }
 
-            if (user.isGuest) {
+            if (!isStaff && user.isGuest) {
                 return errorResponse("Guest users cannot reset password", 400);
             }
 
@@ -83,7 +91,14 @@ export async function POST(req) {
                 return errorResponse("Email and OTP are required", 400);
             }
 
-            const user = await User.findOne({ email });
+            // Try User then Staff
+            let user = await User.findOne({ email });
+            let isStaff = false;
+
+            if (!user) {
+                user = await Staff.findOne({ email });
+                if (user) isStaff = true;
+            }
 
             if (!user) {
                 return errorResponse("No account found with this email", 404);
@@ -130,13 +145,20 @@ export async function POST(req) {
                 return errorResponse("Password must be at least 6 characters long", 400);
             }
 
-            const user = await User.findOne({ email });
+            // Try User then Staff
+            let user = await User.findOne({ email });
+            let isStaff = false;
+
+            if (!user) {
+                user = await Staff.findOne({ email });
+                if (user) isStaff = true;
+            }
 
             if (!user) {
                 return errorResponse("No account found with this email", 404);
             }
 
-            if (user.isGuest) {
+            if (!isStaff && user.isGuest) {
                 return errorResponse("Guest users cannot reset password", 400);
             }
 
@@ -168,7 +190,9 @@ export async function POST(req) {
             user.password = hashedPassword;
             user.resetOtp = null;
             user.resetOtpExpires = null;
-            user.authProvider = "local";
+            if (!isStaff) {
+                user.authProvider = "local";
+            }
 
             await user.save();
 

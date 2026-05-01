@@ -4,6 +4,7 @@ import { generateVoucherCode } from "@/lib/voucherCode";
 import Booking from "@/models/booking.model";
 import Schedule from "@/models/schedule.model";
 import Voucher from "@/models/voucher.model";
+import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
 import { NextResponse } from "next/server";
 
 /* =========================================================
@@ -203,6 +204,17 @@ function recomputeBookingSummary(booking, lastActionType = "NO_REFUND") {
 export async function POST(request, { params }) {
     try {
         await connectDB();
+
+        const authUser = await getAuthUserFromRequest(request);
+
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+        }
+
+        // Only admin can cancel bookings
+        if (!hasRole(authUser, ["admin"])) {
+            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
+        }
 
         const { bookingId } = await params;
         const body = await request.json().catch(() => ({}));

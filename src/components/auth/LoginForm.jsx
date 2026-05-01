@@ -184,7 +184,11 @@ export default function LoginForm() {
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                throw new Error(data.message || "Login failed");
+                const errMsg = data?.message || "Login failed";
+                setSuccess(false);
+                setMessage(errMsg);
+                showAppToast("error", errMsg);
+                return;
             }
 
             const user = saveAuthData(data.data);
@@ -224,7 +228,11 @@ export default function LoginForm() {
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                throw new Error(data.message || "Guest login failed");
+                const errMsg = data?.message || "Guest login failed";
+                setSuccess(false);
+                setMessage(errMsg);
+                showAppToast("error", errMsg);
+                return;
             }
 
             const user = saveAuthData(data.data);
@@ -271,7 +279,11 @@ export default function LoginForm() {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
-                throw new Error(data.message || "Google login failed");
+                const errMsg = data?.message || "Google login failed";
+                setSuccess(false);
+                setMessage(errMsg);
+                showAppToast("error", errMsg);
+                return;
             }
 
             const user = saveAuthData(data.data);

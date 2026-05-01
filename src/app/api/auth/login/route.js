@@ -1,6 +1,7 @@
 import { sendLoginEmail } from "@/lib/emailService";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User.model";
+import Staff from "@/models/staff.model";
 import { errorResponse, successResponse } from "@/utils/apiResponse";
 import {
     createSessionId,
@@ -25,37 +26,58 @@ export async function POST(req) {
 
         const isEmail = emailOrPhone.includes("@");
 
-        const user = await User.findOne(
-            isEmail
-                ? { email: emailOrPhone.toLowerCase() }
-                : { phoneNumber: emailOrPhone }
-        );
+        let user = null;
+        let staff = null;
 
-        if (!user) {
+        if (isEmail) {
+            const q = { email: emailOrPhone.toLowerCase() };
+            user = await User.findOne(q);
+            if (!user) staff = await Staff.findOne(q);
+        } else {
+            // Phone lookup: try raw, digits-only, and last 10 digits
+            const rawPhone = emailOrPhone;
+            const digits = rawPhone.replace(/\D/g, "");
+            const candidates = [rawPhone];
+            if (digits && digits !== rawPhone) candidates.push(digits);
+            if (digits.length > 10) candidates.push(digits.slice(-10));
+
+            for (const ph of candidates) {
+                if (!user) user = await User.findOne({ phoneNumber: ph });
+                if (!staff) staff = await Staff.findOne({ phoneNumber: ph });
+                if (user || staff) break;
+            }
+        }
+
+        const account = user || staff;
+
+        if (!account) {
+            console.warn("Login failed: account not found", { emailOrPhone });
             return errorResponse("Invalid credentials", 401);
         }
 
-        if (!user.password) {
+        if (!account.password) {
             return errorResponse("This account does not have a password. Please use Google login.", 400);
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(password, account.password);
 
         if (!isMatch) {
+            console.warn("Login failed: password mismatch", { id: String(account._id), email: account.email, phone: account.phoneNumber });
             return errorResponse("Invalid credentials", 401);
         }
 
         const sessionId = createSessionId();
-        const accessToken = generateAccessToken({ ...user.toObject(), sessionId });
-        const refreshToken = generateRefreshToken(user, sessionId);
+        const accessToken = generateAccessToken({ ...(account.toObject ? account.toObject() : account), sessionId });
+        const refreshToken = generateRefreshToken(account, sessionId);
 
         try {
-            const recipientEmail = user.email || (isEmail ? emailOrPhone.toLowerCase() : "");
+
+            const recipientEmail = account.email || (isEmail ? emailOrPhone.toLowerCase() : "");
 
             if (recipientEmail) {
                 await sendLoginEmail({
                     to: recipientEmail,
-                    fullName: user.fullName,
+                    fullName: account.fullName,
                     loginTime: new Date(),
                     loginMethod: "Password",
                     ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "",
@@ -68,13 +90,13 @@ export async function POST(req) {
         return successResponse(
             {
                 user: {
-                    id: user._id,
-                    fullName: user.fullName,
-                    email: user.email,
-                    phoneNumber: user.phoneNumber,
-                    role: user.role,
-                    isGuest: user.isGuest,
-                    authProvider: user.authProvider,
+                    id: account._id,
+                    fullName: account.fullName,
+                    email: account.email,
+                    phoneNumber: account.phoneNumber,
+                    role: account.role,
+                    isGuest: account.isGuest || false,
+                    authProvider: account.authProvider || "local",
                 },
                 accessToken,
                 refreshToken,

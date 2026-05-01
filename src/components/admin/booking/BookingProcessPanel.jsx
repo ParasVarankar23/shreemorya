@@ -392,6 +392,27 @@ export default function BookingProcessPanel({
     }, [selectedFreshSeats, passengerDetails, customerName]);
 
     const loadExistingBookings = async () => {
+        async function refreshAccessToken() {
+            try {
+                const refreshToken = localStorage.getItem("refreshToken") || "";
+                if (!refreshToken) return null;
+
+                const r = await fetch("/api/auth/refresh", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ refreshToken }),
+                });
+
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok || !d?.accessToken) return null;
+
+                localStorage.setItem("accessToken", d.accessToken);
+                return d.accessToken;
+            } catch (e) {
+                return null;
+            }
+        }
+
         try {
             setLoadingBookings(true);
 
@@ -400,12 +421,26 @@ export default function BookingProcessPanel({
                 date: travelDate || "",
             });
 
-            const res = await fetch(`/api/admin/bookings?${params.toString()}`, {
-                method: "GET",
-                headers: getAuthHeaders(),
-            });
+            const doFetch = async (accessToken) => {
+                const headers = new Headers(getAuthHeaders());
+                if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
-            const data = await res.json();
+                return fetch(`/api/admin/bookings?${params.toString()}`, {
+                    method: "GET",
+                    headers,
+                });
+            };
+
+            let res = await doFetch(localStorage.getItem("accessToken") || "");
+
+            if (res.status === 401) {
+                const newToken = await refreshAccessToken();
+                if (newToken) {
+                    res = await doFetch(newToken);
+                }
+            }
+
+            const data = await res.json().catch(() => ({}));
 
             if (!res.ok || !data?.success) {
                 throw new Error(data?.message || "Failed to load existing bookings");
@@ -415,6 +450,20 @@ export default function BookingProcessPanel({
         } catch (error) {
             console.error("loadExistingBookings error:", error);
             setExistingBookings([]);
+            // If unauthorized, clear stored tokens so app can prompt re-login
+            try {
+                const msg = String(error?.message || "").toLowerCase();
+                if (msg.includes("unauthorized") || msg.includes("401")) {
+                    localStorage.removeItem("accessToken");
+                    localStorage.removeItem("refreshToken");
+                    localStorage.removeItem("user");
+                    showAppToast("error", "Session expired. Please login again.");
+                    return;
+                }
+            } catch (e) {
+                // ignore
+            }
+
             showAppToast("error", error.message || "Failed to load existing bookings");
         } finally {
             setLoadingBookings(false);
