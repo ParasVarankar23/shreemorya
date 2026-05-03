@@ -18,7 +18,7 @@ import {
     X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import CancelBookingModal from "../booking/CancelBookingModal";
+import CancelBookingModal from "../admin/booking/CancelBookingModal";
 
 /* =========================================================
    AUTH HEADER
