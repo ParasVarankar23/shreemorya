@@ -161,6 +161,14 @@ const BookingSchema = new mongoose.Schema(
             trim: true,
         },
 
+        // Associate booking with a user when available for reliable ownership checks
+        userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+            index: true,
+        },
+
         fare: {
             type: Number,
             default: 0,

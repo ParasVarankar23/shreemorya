@@ -45,6 +45,11 @@ export async function POST(req) {
         const profileImage = payload.picture || "";
         const emailVerified = payload.email_verified || false;
 
+        // Try to extract phone number if Google token includes it.
+        // Many ID tokens don't include phone; in that case we leave it undefined
+        // so the sparse unique index is not violated.
+        const phoneNumber = (payload.phone_number || payload.phone || payload.phoneNumber) ?? undefined;
+
         if (!email) {
             return errorResponse("Google account email not found", 400);
         }
@@ -57,7 +62,8 @@ export async function POST(req) {
             user = await User.create({
                 fullName,
                 email,
-                phoneNumber: undefined,
+                // only store phone if provided by Google payload
+                phoneNumber: phoneNumber,
                 password: undefined,
                 authProvider: "google",
                 googleId,
@@ -84,7 +90,13 @@ export async function POST(req) {
                 needsUpdate = true;
             }
 
-            // Keep unique sparse index compatibility by omitting missing phone values.
+            // If Google provided phone and user doesn't have one, set it.
+            if (!user.phoneNumber && phoneNumber) {
+                user.phoneNumber = phoneNumber;
+                needsUpdate = true;
+            }
+
+            // Keep unique sparse index compatibility by omitting empty-string phone values.
             if (user.phoneNumber === "") {
                 user.phoneNumber = undefined;
                 needsUpdate = true;

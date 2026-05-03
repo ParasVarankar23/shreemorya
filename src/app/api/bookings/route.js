@@ -5,6 +5,7 @@ import Booking from "@/models/booking.model";
 import Payment from "@/models/payment.model";
 import Schedule from "@/models/schedule.model";
 import SeatHold from "@/models/seat-hold.model";
+import User from "@/models/User.model";
 import Voucher from "@/models/voucher.model";
 import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
 import { NextResponse } from "next/server";
@@ -207,6 +208,10 @@ function validateGenderAdjacency({
     normalizedSeats = [],
     normalizedPassengerDetails = [],
     isBlockSeat = false,
+    // additional context to allow same-owner adjacency
+    bookingsById = {},
+    requesterPhone = "",
+    requesterUserId = "",
 }) {
     if (isBlockSeat) return { valid: true };
 
@@ -236,6 +241,26 @@ function validateGenderAdjacency({
         // If old booking has no gender saved, skip restriction
         if (!adjacentGender) continue;
 
+        // If adjacent seat belongs to same user/phone as requester, allow mixed genders
+        try {
+            const adjBooking = bookingsById[String(adjacentExisting.bookingId)];
+            const adjPhoneRaw = String((adjBooking && (adjBooking.customerPhone || adjBooking.phone || adjBooking.customerPhoneNumber)) || "");
+            const adjPhone = adjPhoneRaw.replace(/\D/g, "").slice(-10);
+            const reqPhone = String(requesterPhone || "").replace(/\D/g, "").slice(-10);
+            const adjUserId = String((adjBooking && adjBooking.userId) || "");
+            const reqUserId = String(requesterUserId || "");
+
+            if (adjUserId && reqUserId && adjUserId === reqUserId) {
+                continue;
+            }
+
+            if (reqPhone && adjPhone && reqPhone === adjPhone) {
+                continue;
+            }
+        } catch (e) {
+            // ignore lookup errors and fall through to default check
+        }
+
         if (adjacentGender !== gender) {
             return {
                 valid: false,
@@ -255,6 +280,7 @@ async function buildBookingPayload({
     customerName,
     customerPhone,
     customerEmail,
+    customerGender,
     pickupName,
     pickupMarathi,
     pickupTime,
@@ -268,6 +294,7 @@ async function buildBookingPayload({
     bookingStatus,
     cancelActionType,
     isBlockSeat,
+    userId,
 }) {
     const blockSeatMode = Boolean(isBlockSeat);
 
@@ -352,6 +379,7 @@ async function buildBookingPayload({
         customerName: blockSeatMode ? "Blocked Seat" : customerName.trim(),
         customerPhone: blockSeatMode ? "BLOCKED" : customerPhone.trim(),
         customerEmail: customerEmail.trim(),
+        customerGender: blockSeatMode ? "" : (String(customerGender || "").trim() || ""),
 
         pickupName,
         pickupMarathi,
@@ -373,6 +401,7 @@ async function buildBookingPayload({
             ? cancelActionType || "NO_REFUND"
             : cancelActionType,
         expiresAt,
+        userId: userId || null,
     };
 }
 
@@ -392,7 +421,10 @@ export async function GET(request) {
             );
         }
 
-        if (!hasRole(authUser, ["admin", "staff"])) {
+        const isAdminOrStaff = hasRole(authUser, ["admin", "staff"]);
+        const isUser = String(authUser.role || "").toLowerCase() === "user";
+
+        if (!isAdminOrStaff && !isUser) {
             return NextResponse.json(
                 { success: false, message: "Forbidden: Admin/Staff only" },
                 { status: 403 }
@@ -410,12 +442,51 @@ export async function GET(request) {
             );
         }
 
-        const bookings = await Booking.find({
-            scheduleId,
-            travelDate: date,
-        })
-            .sort({ createdAt: -1 })
-            .lean();
+        let bookings = [];
+
+        if (isUser) {
+            // Prefer exact match by userId when available
+            const qByUser = { scheduleId, travelDate: date, userId: authUser.userId };
+            bookings = await Booking.find(qByUser).sort({ createdAt: -1 }).lean();
+
+            // If no bookings found by userId, fallback to matching by phone/email for older bookings
+            if (!bookings || bookings.length === 0) {
+                let userDoc = null;
+                try {
+                    userDoc = await User.findById(authUser.userId).select("phoneNumber phone email").lean();
+                } catch (e) {
+                    userDoc = null;
+                }
+
+                const phone = (userDoc?.phoneNumber || userDoc?.phone || "").toString().trim();
+                const email = (userDoc?.email || "").toString().trim();
+
+                if (phone || email) {
+                    const q = { scheduleId, travelDate: date, $or: [] };
+
+                    if (phone) {
+                        // Normalize to last 10 digits and match by regex to tolerate formats
+                        const digits = phone.replace(/\D/g, "");
+                        const last10 = digits.slice(-10);
+                        if (last10) {
+                            q.$or.push({ customerPhone: { $regex: `${last10}$` } });
+                        } else {
+                            q.$or.push({ customerPhone: phone });
+                        }
+                    }
+
+                    if (email) {
+                        q.$or.push({ customerEmail: email });
+                    }
+
+                    bookings = await Booking.find(q).sort({ createdAt: -1 }).lean();
+                } else {
+                    bookings = [];
+                }
+            }
+        } else {
+            bookings = await Booking.find({ scheduleId, travelDate: date }).sort({ createdAt: -1 }).lean();
+        }
 
         return NextResponse.json({
             success: true,
@@ -446,7 +517,10 @@ export async function POST(request) {
             );
         }
 
-        if (!hasRole(authUser, ["admin", "staff"])) {
+        const isAdminOrStaff = hasRole(authUser, ["admin", "staff"]);
+        const isUser = String(authUser.role || "").toLowerCase() === "user";
+
+        if (!isAdminOrStaff && !isUser) {
             return NextResponse.json(
                 { success: false, message: "Forbidden: Admin/Staff only" },
                 { status: 403 }
@@ -455,13 +529,14 @@ export async function POST(request) {
 
         const body = await request.json();
 
-        const {
+        let {
             scheduleId,
             travelDate,
             seats,
             passengerDetails = [], // NEW
             customerName,
             customerPhone,
+            customerGender = "",
             customerEmail = "",
             pickupName = "",
             pickupMarathi = "",
@@ -478,6 +553,44 @@ export async function POST(request) {
             isBlockSeat = false,
             voucherCode = "",
         } = body;
+
+        // If the requester is a normal user, enforce user-only rules and
+        // auto-fill contact info from their profile when missing.
+        if (isUser) {
+            // users must pay online only
+            if (String(paymentMode || "").toUpperCase() !== "ONLINE") {
+                return NextResponse.json({ success: false, message: "Users may only create ONLINE bookings" }, { status: 403 });
+            }
+
+            // users cannot create blocked/offline bookings
+            const blockSeatMode = isBlockSeatRequest({ isBlockSeat, seatStatus, bookingStatus });
+            if (blockSeatMode) {
+                return NextResponse.json({ success: false, message: "Users cannot block seats" }, { status: 403 });
+            }
+
+            // disallow force override from client for normal users
+            if (body?.force) {
+                return NextResponse.json({ success: false, message: "Users cannot force booking without hold" }, { status: 403 });
+            }
+
+            // attempt to fill contact details from user profile
+            try {
+                const userDoc = await User.findById(authUser.userId).lean();
+                if (userDoc) {
+                    if (!customerName || !String(customerName).trim()) {
+                        customerName = userDoc.fullName || userDoc.fullname || customerName;
+                    }
+                    if (!customerPhone || !String(customerPhone).trim()) {
+                        customerPhone = userDoc.phoneNumber || customerPhone || "";
+                    }
+                    if (!customerEmail || !String(customerEmail).trim()) {
+                        customerEmail = (userDoc.email || customerEmail || "").toString().trim();
+                    }
+                }
+            } catch (e) {
+                console.warn("AUTO_FILL_USER_PROFILE_FAILED:", e?.message || e);
+            }
+        }
 
         if (!scheduleId || !travelDate) {
             return NextResponse.json(
@@ -545,12 +658,24 @@ export async function POST(request) {
             );
         }
 
-        // 2) Adjacent gender validation
+        // 2) Adjacent gender validation (allow when adjacent booking belongs to same user/phone)
+        const bookingsById = (existingBookings || []).reduce((m, b) => {
+            try {
+                m[String(b._id)] = b;
+            } catch (e) {
+                // ignore
+            }
+            return m;
+        }, {});
+
         const genderValidation = validateGenderAdjacency({
             occupiedSeatMap,
             normalizedSeats,
             normalizedPassengerDetails,
             isBlockSeat: blockSeatMode,
+            bookingsById,
+            requesterPhone: customerPhone || "",
+            requesterUserId: authUser?.userId || "",
         });
 
         if (!genderValidation.valid) {
@@ -571,30 +696,71 @@ export async function POST(request) {
         const { holdId = null, force = false } = body;
         const now = new Date();
 
-        let usedHold = null;
+        let usedHolds = [];
         if (!force) {
             if (!holdId) {
                 return NextResponse.json({ success: false, message: "Please hold the selected seats before creating booking" }, { status: 409 });
             }
 
-            const hold = await SeatHold.findById(holdId);
-            if (!hold || String(hold.scheduleId) !== String(scheduleId) || hold.status !== "ACTIVE" || new Date(hold.expiresAt) <= now) {
+            // Find the primary hold provided by client
+            const primaryHold = await SeatHold.findById(holdId);
+            if (!primaryHold || String(primaryHold.scheduleId) !== String(scheduleId) || primaryHold.status !== "ACTIVE" || new Date(primaryHold.expiresAt) <= now) {
                 return NextResponse.json({ success: false, message: "Seat hold is missing or expired. Please hold seats again." }, { status: 409 });
             }
 
-            // Verify hold covers all requested seats
-            const missing = normalizedSeats.filter((s) => !((hold.seatNumbers || []).map(String).includes(String(s))));
-            if (missing.length > 0) {
-                return NextResponse.json({ success: false, message: `Hold does not cover seat(s): ${missing.join(", ")}` }, { status: 409 });
+            // Start with the seats covered by the primary hold
+            const covered = new Set((primaryHold.seatNumbers || []).map((x) => String(x)));
+
+            // If primary hold doesn't cover all seats, try to find other active holds
+            // owned by the same user or matching guest phone that can together cover missing seats.
+            const missingAfterPrimary = normalizedSeats.filter((s) => !covered.has(String(s)));
+
+            if (missingAfterPrimary.length > 0) {
+                // Find additional active holds for this schedule owned by the same user/guest
+                const extraQuery = {
+                    scheduleId,
+                    status: "ACTIVE",
+                    expiresAt: { $gt: now },
+                    _id: { $ne: primaryHold._id },
+                };
+
+                if (authUser && authUser.userId) {
+                    extraQuery.userId = authUser.userId;
+                } else if (customerPhone) {
+                    extraQuery.guestPhoneNumber = String(customerPhone);
+                }
+
+                let extraHolds = [];
+                try {
+                    extraHolds = await SeatHold.find(extraQuery).lean();
+                } catch (e) {
+                    console.warn("FIND_EXTRA_HOLDS_ERROR:", e?.message || e);
+                    extraHolds = [];
+                }
+
+                for (const h of extraHolds) {
+                    for (const s of (h.seatNumbers || [])) covered.add(String(s));
+                    // stop early if covered all
+                    const stillMissing = normalizedSeats.filter((s) => !covered.has(String(s)));
+                    if (stillMissing.length === 0) break;
+                }
+
+                const finalMissing = normalizedSeats.filter((s) => !covered.has(String(s)));
+                if (finalMissing.length > 0) {
+                    return NextResponse.json({ success: false, message: `Hold does not cover seat(s): ${finalMissing.join(", ")}` }, { status: 409 });
+                }
+
+                // If we get here, combine primary + extra holds as usedHolds
+                usedHolds = [primaryHold._id, ...extraHolds.map((h) => h._id)];
+            } else {
+                usedHolds = [primaryHold._id];
             }
 
-            // Verify ownership: allow if hold.userId matches authUser or guestPhone matches
-            const ownerOk = (hold.userId && authUser && String(hold.userId) === String(authUser.userId)) || (hold.guestPhoneNumber && String(hold.guestPhoneNumber) === String(customerPhone));
+            // Verify ownership for primary hold (and note: extra holds were filtered by owner in query)
+            const ownerOk = (primaryHold.userId && authUser && String(primaryHold.userId) === String(authUser.userId)) || (primaryHold.guestPhoneNumber && String(primaryHold.guestPhoneNumber) === String(customerPhone));
             if (!ownerOk) {
                 return NextResponse.json({ success: false, message: "Seat hold belongs to another user" }, { status: 403 });
             }
-
-            usedHold = hold;
         }
 
         // Create booking inside a transaction when supported. If transactions
@@ -628,6 +794,7 @@ export async function POST(request) {
                 customerName,
                 customerPhone,
                 customerEmail,
+                customerGender,
                 pickupName,
                 pickupMarathi,
                 pickupTime,
@@ -641,18 +808,21 @@ export async function POST(request) {
                 bookingStatus,
                 cancelActionType,
                 isBlockSeat: blockSeatMode,
+                userId: authUser?.userId || null,
             });
 
             if (usedTransaction && session) {
                 const created = await Booking.create([bookingPayload], { session });
                 booking = created[0];
 
-                if (usedHold) {
-                    await SeatHold.findByIdAndUpdate(
-                        usedHold._id,
-                        { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false },
-                        { session }
-                    );
+                if (usedHolds && usedHolds.length > 0) {
+                    for (const hid of usedHolds) {
+                        await SeatHold.findByIdAndUpdate(
+                            hid,
+                            { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false },
+                            { session }
+                        );
+                    }
                 }
 
                 await session.commitTransaction();
@@ -660,14 +830,16 @@ export async function POST(request) {
                 // Non-transactional fallback
                 booking = await Booking.create(bookingPayload);
 
-                if (usedHold) {
-                    try {
-                        await SeatHold.findByIdAndUpdate(
-                            usedHold._id,
-                            { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false }
-                        );
-                    } catch (holdErr) {
-                        console.warn("FAILED_UPDATING_HOLD_AFTER_BOOKING:", holdErr?.message || holdErr);
+                if (usedHolds && usedHolds.length > 0) {
+                    for (const hid of usedHolds) {
+                        try {
+                            await SeatHold.findByIdAndUpdate(
+                                hid,
+                                { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false }
+                            );
+                        } catch (holdErr) {
+                            console.warn("FAILED_UPDATING_HOLD_AFTER_BOOKING:", holdErr?.message || holdErr);
+                        }
                     }
                 }
             }

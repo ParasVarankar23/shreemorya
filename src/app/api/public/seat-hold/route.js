@@ -52,9 +52,17 @@ export async function POST(request) {
 
         const now = new Date();
 
+        // Attach authenticated user info early so we can allow same-user holds
+        let authUser = null;
+        try {
+            authUser = await getAuthUserFromRequest(request);
+        } catch (e) {
+            authUser = null;
+        }
+
         const [confirmedBookings, activeHolds] = await Promise.all([
             Booking.find({ scheduleId, bookingStatus: "CONFIRMED" }).select("seatItems seats").lean(),
-            SeatHold.find({ scheduleId, status: "ACTIVE", expiresAt: { $gt: now } }).select("seatNumbers").lean(),
+            SeatHold.find({ scheduleId, status: "ACTIVE", expiresAt: { $gt: now } }).select("seatNumbers guestPhoneNumber userId").lean(),
         ]);
 
         const bookedSeatSet = new Set(confirmedBookings.flatMap((b) => {
@@ -62,21 +70,92 @@ export async function POST(request) {
             return seats;
         }));
 
-        const heldSeatSet = new Set(activeHolds.flatMap((h) => (h.seatNumbers || []).map(String)));
+        // Build a map of seat => owner info for active holds
+        const heldSeatOwnerMap = {};
+        for (const h of activeHolds) {
+            const ownerId = h.userId ? String(h.userId) : null;
+            const guestPhone = h.guestPhoneNumber ? String(h.guestPhoneNumber) : null;
+            for (const s of (h.seatNumbers || [])) {
+                const seatKey = String(s);
+                heldSeatOwnerMap[seatKey] = { ownerId, guestPhone };
+            }
+        }
 
         const alreadyBooked = normalizedSeats.find((seat) => bookedSeatSet.has(seat));
         if (alreadyBooked) return NextResponse.json({ success: false, message: `Seat ${alreadyBooked} is already booked` }, { status: 400 });
 
-        const alreadyHeld = normalizedSeats.find((seat) => heldSeatSet.has(seat));
-        if (alreadyHeld) return NextResponse.json({ success: false, message: `Seat ${alreadyHeld} is temporarily held by another user` }, { status: 400 });
+        // Check held seats: allow seats already held by the same user (or matching guest phone),
+        // but reject seats held by other users.
+        const seatsToCreate = [];
+        for (const seat of normalizedSeats) {
+            const owner = heldSeatOwnerMap[String(seat)];
+            if (!owner) {
+                seatsToCreate.push(seat);
+                continue;
+            }
 
-        // Attach authenticated user info to the hold when available so the
-        // same user/staff/admin can convert the hold to a booking later.
-        let authUser = null;
-        try {
-            authUser = await getAuthUserFromRequest(request);
-        } catch (e) {
-            authUser = null;
+            // If authenticated and owns the hold, skip (do not attempt to re-hold)
+            if (authUser && owner.ownerId && String(owner.ownerId) === String(authUser.userId)) {
+                // skip adding to create list
+                continue;
+            }
+
+            // If guest phone matches an existing hold's guest phone, allow (treat as same owner)
+            if (!authUser && guestPhoneNumber && owner.guestPhone && String(owner.guestPhone) === String(guestPhoneNumber)) {
+                continue;
+            }
+
+            // Held by someone else -> conflict
+            return NextResponse.json({ success: false, message: `Seat ${seat} is temporarily held by another user` }, { status: 400 });
+        }
+
+        // If all requested seats are already held by this user, try to return
+        // the existing active hold id that owns these seats so callers can
+        // use it when creating a booking. Fall back to a no-op response
+        // with holdId=null if we can't locate the original hold document.
+        if (seatsToCreate.length === 0) {
+            let existingHold = null;
+
+            try {
+                if (authUser && authUser.userId) {
+                    existingHold = await SeatHold.findOne({
+                        scheduleId,
+                        status: "ACTIVE",
+                        userId: authUser.userId,
+                        expiresAt: { $gt: now },
+                        seatNumbers: { $all: normalizedSeats },
+                    }).lean();
+                }
+
+                if (!existingHold && guestPhoneNumber) {
+                    existingHold = await SeatHold.findOne({
+                        scheduleId,
+                        status: "ACTIVE",
+                        guestPhoneNumber: String(guestPhoneNumber),
+                        expiresAt: { $gt: now },
+                        seatNumbers: { $all: normalizedSeats },
+                    }).lean();
+                }
+            } catch (e) {
+                console.warn("FIND_EXISTING_HOLD_ERROR:", e?.message || e);
+                existingHold = null;
+            }
+
+            if (existingHold) {
+                return NextResponse.json({
+                    success: true,
+                    message: `Seats already held by you`,
+                    data: {
+                        holdId: existingHold._id,
+                        scheduleId: existingHold.scheduleId,
+                        seatNumbers: existingHold.seatNumbers,
+                        expiresAt: existingHold.expiresAt,
+                        holdDurationMinutes: existingHold.holdDurationMinutes || holdDurationMinutes,
+                    },
+                });
+            }
+
+            return NextResponse.json({ success: true, message: `Seats already held by you`, data: { holdId: null, scheduleId, seatNumbers: normalizedSeats } });
         }
 
         const resolvedSource = authUser
@@ -91,7 +170,7 @@ export async function POST(request) {
             scheduleId,
             guestPhoneNumber,
             guestEmail,
-            seatNumbers: normalizedSeats,
+            seatNumbers: seatsToCreate,
             holdDurationMinutes,
             source: resolvedSource,
         };

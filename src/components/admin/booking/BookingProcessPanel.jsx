@@ -59,6 +59,8 @@ export default function BookingProcessPanel({
     pickupStop,
     dropStop,
     onCloseBus,
+    // When rendered for normal users, set isAdmin to false to hide admin-only controls
+    isAdmin = true,
 }) {
     const [selectedSeats, setSelectedSeats] = useState([]);
     const [existingBookings, setExistingBookings] = useState([]);
@@ -68,6 +70,7 @@ export default function BookingProcessPanel({
 
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
+    const [customerGender, setCustomerGender] = useState("");
     const [customerEmail, setCustomerEmail] = useState("");
     const [overrideTotalFare, setOverrideTotalFare] = useState("");
     const [voucherCodeInput, setVoucherCodeInput] = useState("");
@@ -116,6 +119,105 @@ export default function BookingProcessPanel({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus?._id, travelDate]);
+
+    // Auto-fill booking contact fields from server-side profile (do not use localStorage user)
+    useEffect(() => {
+        let mounted = true;
+
+        async function fetchProfile() {
+            try {
+                const refreshToken = localStorage.getItem("refreshToken") || "";
+
+                const doFetch = async (accessToken) => {
+                    const headers = new Headers();
+                    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+                    return fetch("/api/auth/me", {
+                        method: "GET",
+                        headers,
+                    });
+                };
+
+                // Try with existing access token
+                let accessToken = localStorage.getItem("accessToken") || "";
+                let res = null;
+
+                if (accessToken) {
+                    res = await doFetch(accessToken);
+                }
+
+                // If we don't have an access token but have refresh token, try refresh
+                if (!res && refreshToken) {
+                    const r = await fetch("/api/auth/refresh", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ refreshToken }),
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    if (r.ok && d?.accessToken) {
+                        accessToken = d.accessToken;
+                        localStorage.setItem("accessToken", accessToken);
+                        res = await doFetch(accessToken);
+                    }
+                }
+
+                // If token expired, try refresh flow and fetch again
+                if (res && res.status === 401 && refreshToken) {
+                    const r2 = await fetch("/api/auth/refresh", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ refreshToken }),
+                    });
+                    const d2 = await r2.json().catch(() => ({}));
+                    if (r2.ok && d2?.accessToken) {
+                        accessToken = d2.accessToken;
+                        localStorage.setItem("accessToken", accessToken);
+                        res = await doFetch(accessToken);
+                    }
+                }
+
+                if (!res) return;
+
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data?.success) return;
+
+                if (!mounted) return;
+
+                const u = data?.data?.user || data?.data || null;
+                if (!u) return;
+
+                if (!customerName && (u.fullName || u.fullname)) {
+                    setCustomerName(u.fullName || u.fullname || "");
+                }
+
+                if (!customerPhone && (u.phoneNumber || u.phone)) {
+                    setCustomerPhone(u.phoneNumber || u.phone || "");
+                }
+
+                if (!customerEmail && (u.email || u.emailAddress)) {
+                    setCustomerEmail((u.email || u.emailAddress || "").toString().trim());
+                }
+
+                // Prefill gender if available and valid
+                try {
+                    const g = String(u.gender || "").trim().toLowerCase();
+                    if (g && ["male", "female", "other"].includes(g)) {
+                        setCustomerGender(g);
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        fetchProfile();
+
+        return () => {
+            mounted = false;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // When admin views an existing booking, auto-fill contact & passenger fields
     useEffect(() => {
@@ -179,7 +281,7 @@ export default function BookingProcessPanel({
                     next[key] = {
                         seatNo: key,
                         passengerName: customerName.trim() || "",
-                        passengerGender: "",
+                        passengerGender: customerGender || "",
                     };
                 } else {
                     const currentName = String(next[key].passengerName || "").trim();
@@ -378,7 +480,7 @@ export default function BookingProcessPanel({
                     next[key] = {
                         seatNo: key,
                         passengerName: customerName.trim() || "",
-                        passengerGender: next[key]?.passengerGender || "",
+                        passengerGender: next[key]?.passengerGender || customerGender || "",
                     };
                 });
                 return next;
@@ -417,7 +519,7 @@ export default function BookingProcessPanel({
                 passengerDetails[String(seatNo)]?.passengerName?.trim() ||
                 customerName.trim(),
             passengerGender:
-                passengerDetails[String(seatNo)]?.passengerGender || "",
+                passengerDetails[String(seatNo)]?.passengerGender || customerGender || "",
         }));
     }, [selectedFreshSeats, passengerDetails, customerName]);
 
@@ -451,42 +553,77 @@ export default function BookingProcessPanel({
                 date: travelDate || "",
             });
 
-            const doFetch = async (accessToken) => {
-                const headers = new Headers(getAuthHeaders());
-                if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+            if (isAdmin) {
+                const doFetch = async (accessToken) => {
+                    const headers = new Headers(getAuthHeaders());
+                    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
-                return fetch(`/api/bookings?${params.toString()}`, {
-                    method: "GET",
-                    headers,
-                });
-            };
+                    return fetch(`/api/bookings?${params.toString()}`, {
+                        method: "GET",
+                        headers,
+                    });
+                };
 
-            // If no access token present but refresh token exists, try refresh first
-            let initialToken = localStorage.getItem("accessToken") || "";
-            if (!initialToken) {
-                const hasRefresh = !!(localStorage.getItem("refreshToken") || "");
-                if (hasRefresh) {
-                    const refreshed = await refreshAccessToken();
-                    if (refreshed) initialToken = refreshed;
+                // If no access token present but refresh token exists, try refresh first
+                let initialToken = localStorage.getItem("accessToken") || "";
+                if (!initialToken) {
+                    const hasRefresh = !!(localStorage.getItem("refreshToken") || "");
+                    if (hasRefresh) {
+                        const refreshed = await refreshAccessToken();
+                        if (refreshed) initialToken = refreshed;
+                    }
                 }
-            }
 
-            let res = await doFetch(initialToken || "");
+                let res = await doFetch(initialToken || "");
 
-            if (res.status === 401) {
-                const newToken = await refreshAccessToken();
-                if (newToken) {
-                    res = await doFetch(newToken);
+                if (res.status === 401) {
+                    const newToken = await refreshAccessToken();
+                    if (newToken) {
+                        res = await doFetch(newToken);
+                    }
                 }
+
+                const data = await res.json().catch(() => ({}));
+
+                if (!res.ok || !data?.success) {
+                    throw new Error(data?.message || "Failed to load existing bookings");
+                }
+
+                setExistingBookings(Array.isArray(data?.data) ? data.data : []);
+            } else {
+                // Non-admin users: fetch only their bookings (protected endpoint)
+                const doFetch = async (accessToken) => {
+                    const headers = new Headers(getAuthHeaders());
+                    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+
+                    return fetch(`/api/bookings?${params.toString()}`, {
+                        method: "GET",
+                        headers,
+                    });
+                };
+
+                let initialToken = localStorage.getItem("accessToken") || "";
+                if (!initialToken) {
+                    const hasRefresh = !!(localStorage.getItem("refreshToken") || "");
+                    if (hasRefresh) {
+                        const refreshed = await refreshAccessToken();
+                        if (refreshed) initialToken = refreshed;
+                    }
+                }
+
+                let res = await doFetch(initialToken || "");
+                if (res.status === 401) {
+                    const newToken = await refreshAccessToken();
+                    if (newToken) res = await doFetch(newToken);
+                }
+
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data?.success) {
+                    throw new Error(data?.message || "Failed to load bookings");
+                }
+
+                setExistingBookings(Array.isArray(data?.data) ? data.data : []);
             }
-
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok || !data?.success) {
-                throw new Error(data?.message || "Failed to load existing bookings");
-            }
-
-            setExistingBookings(Array.isArray(data?.data) ? data.data : []);
         } catch (error) {
             console.error("loadExistingBookings error:", error);
             setExistingBookings([]);
@@ -511,26 +648,58 @@ export default function BookingProcessPanel({
     };
 
     const handleSeatSelect = (seatNo) => {
-        setSelectedSeats((prev) => {
-            const key = String(seatNo);
-            const isSelected = prev.includes(key);
-            const next = isSelected ? prev.filter((item) => item !== key) : [...prev, key];
+        const key = String(seatNo);
+        const isSelected = selectedSeats.includes(key);
+        const next = isSelected ? selectedSeats.filter((item) => item !== key) : [...selectedSeats, key];
 
-            // If user just added a seat, attempt to hold seats automatically
-            if (!isSelected) {
-                // compute fresh seats to hold (exclude already booked/blocked)
-                const nextFresh = next.filter(
-                    (s) => !blockedSeats.includes(String(s)) && !bookedSeats.includes(String(s))
-                );
+        setSelectedSeats(next);
 
-                // kick off auto-hold (don't await)
-                if (nextFresh.length > 0) {
-                    holdSeatsFor(nextFresh).catch((e) => console.warn("auto hold failed", e));
+        // Auto-hold / release logic for non-admin users
+        if (!isAdmin) {
+            const nextFresh = next.filter(
+                (s) => !blockedSeats.includes(String(s)) && !bookedSeats.includes(String(s))
+            );
+
+            (async () => {
+                try {
+                    // If selecting a seat (was not selected), create/update hold for new selection
+                    if (!isSelected) {
+                        if (nextFresh.length > 0) {
+                            await holdSeatsFor(nextFresh);
+                        }
+                        return;
+                    }
+
+                    // If deselecting a seat and we have an active hold, release old hold then re-hold remaining
+                    if (holdData && holdData.holdId) {
+                        // release existing hold
+                        try {
+                            await fetch("/api/public/seat-hold", {
+                                method: "DELETE",
+                                headers: {
+                                    ...getAuthHeaders(),
+                                    "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({ holdId: holdData.holdId }),
+                            });
+                        } catch (e) {
+                            console.warn("failed to release previous hold", e);
+                        }
+
+                        // clear holdData locally
+                        setHoldData(null);
+                        setHoldCountdown(0);
+                    }
+
+                    // If there are remaining seats, create a new hold for them
+                    if (nextFresh.length > 0) {
+                        await holdSeatsFor(nextFresh);
+                    }
+                } catch (err) {
+                    console.warn("auto hold/release error:", err);
                 }
-            }
-
-            return next;
-        });
+            })();
+        }
     };
 
     // Helper: hold provided seat numbers (used for auto-hold on click)
@@ -575,16 +744,18 @@ export default function BookingProcessPanel({
                     next[key] = {
                         seatNo: key,
                         passengerName: customerName.trim() || "",
-                        passengerGender: next[key]?.passengerGender || "",
+                        passengerGender: next[key]?.passengerGender || customerGender || "",
                     };
                 });
                 return next;
             });
 
             showAppToast("success", data.message || "Seats held");
+            return data.data;
         } catch (err) {
             console.error("holdSeatsFor error:", err);
             showAppToast("error", err.message || "Failed to hold seats");
+            return null;
         } finally {
             setBlockingSeats(false);
         }
@@ -615,6 +786,11 @@ export default function BookingProcessPanel({
     };
 
     const handleViewBooking = (seatNoOrBooking, bookingData) => {
+        if (!isAdmin) {
+            showAppToast("info", "Seat is already booked");
+            return;
+        }
+
         // From seat click
         if (bookingData) {
             const seatNo = String(seatNoOrBooking || "");
@@ -701,6 +877,10 @@ export default function BookingProcessPanel({
     };
 
     const handleViewBlockedSeat = (seatNo) => {
+        if (!isAdmin) {
+            showAppToast("info", "Seat is blocked");
+            return;
+        }
         const seatKey = String(seatNo);
 
         const matchedBooking = existingBookings.find((booking) => {
@@ -859,6 +1039,52 @@ export default function BookingProcessPanel({
             return false;
         }
 
+        // Phone number: accept inputs with country code or extra chars by
+        // normalizing to the last 10 digits (local mobile number).
+        const phoneDigits = String(customerPhone || "").replace(/\D/g, "");
+        if (phoneDigits.length < 10) {
+            showAppToast("error", "Phone number must contain at least 10 digits");
+            return false;
+        }
+
+        // If user entered more than 10 digits (e.g., country code), normalize
+        // to last 10 digits for validation and submission.
+        if (phoneDigits.length > 10) {
+            const last10 = phoneDigits.slice(-10);
+            // update the visible field so user sees normalized value
+            try {
+                setCustomerPhone(last10);
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        // If email provided, perform basic validation (must contain @ and domain)
+        if (customerEmail && String(customerEmail).trim()) {
+            const email = String(customerEmail).trim();
+            const simpleEmail = /\S+@\S+\.\S+/;
+            if (!simpleEmail.test(email)) {
+                showAppToast("error", "Please enter a valid email address (e.g. name@gmail.com)");
+                return false;
+            }
+
+            const domain = (email.split("@")[1] || "").toLowerCase();
+            const commonDomains = [
+                "gmail.com",
+                "yahoo.com",
+                "outlook.com",
+                "icloud.com",
+                "apple.com",
+                "hotmail.com",
+                "aol.com",
+            ];
+
+            if (!commonDomains.includes(domain) && !domain.includes(".")) {
+                showAppToast("error", "Please use a valid email domain (e.g. gmail.com, outlook.com, yahoo.com)");
+                return false;
+            }
+        }
+
         for (const seatNo of selectedFreshSeats) {
             const item = passengerDetails[String(seatNo)] || {};
             const passengerName = String(item?.passengerName || customerName || "").trim();
@@ -907,6 +1133,7 @@ export default function BookingProcessPanel({
                 passengerDetails: passengerDetailsArray, // NEW
                 customerName: customerName.trim(),
                 customerPhone: customerPhone.trim(),
+                customerGender: customerGender.trim(),
                 customerEmail: customerEmail.trim(),
                 pickupName: pickupStop?.name || "",
                 pickupMarathi: pickupStop?.marathiName || "",
@@ -982,7 +1209,28 @@ export default function BookingProcessPanel({
                 return showAppToast("error", "Pickup and drop are required");
             }
 
+            // Ensure seats selected and passenger details valid (phone/email)
             if (!validatePassengerDetails()) return;
+
+            // For normal users ensure there's an active seat hold covering selected seats.
+            let ensuredHold = null;
+            if (!isAdmin) {
+                const needed = selectedFreshSeats.map((s) => String(s));
+                const holdCovers =
+                    holdData &&
+                    Array.isArray(holdData.seatNumbers) &&
+                    needed.every((s) => (holdData.seatNumbers || []).map(String).includes(String(s)));
+
+                if (!holdCovers) {
+                    showAppToast("info", "Holding selected seats before booking...");
+                    const newHold = await holdSeatsFor(needed);
+                    ensuredHold = newHold;
+                    if (!newHold || !Array.isArray(newHold.seatNumbers) || !needed.every((s) => newHold.seatNumbers.map(String).includes(String(s)))) {
+                        showAppToast("error", "Failed to hold selected seats. Please try holding seats again.");
+                        return;
+                    }
+                }
+            }
 
             setSubmitting(true);
             setOnlinePaymentProcessing(true);
@@ -994,6 +1242,7 @@ export default function BookingProcessPanel({
                 passengerDetails: passengerDetailsArray, // NEW
                 customerName: customerName.trim(),
                 customerPhone: customerPhone.trim(),
+                customerGender: customerGender.trim(),
                 customerEmail: customerEmail.trim(),
                 pickupName: pickupStop?.name || "",
                 pickupMarathi: pickupStop?.marathiName || "",
@@ -1005,9 +1254,18 @@ export default function BookingProcessPanel({
                 overrideTotalFare:
                     overrideTotalFare !== "" ? Number(overrideTotalFare) : null,
                 voucherCode: voucherData?.voucherCode || String(voucherCodeInput || "").trim(),
-                holdId: holdData?.holdId || null,
+                holdId: holdData?.holdId || (ensuredHold?.holdId || null),
                 paymentMode: "ONLINE",
             };
+
+            // Debug info: log which holdId and seatNumbers we're sending
+            try {
+                console.debug("Creating booking with holdId:", holdData?.holdId || (ensuredHold?.holdId || null));
+                console.debug("Client hold seatNumbers:", (holdData?.seatNumbers || ensuredHold?.seatNumbers || selectedFreshSeats));
+                console.debug("Requested seats:", selectedFreshSeats);
+            } catch (e) {
+                // ignore
+            }
 
             const bookingRes = await fetch("/api/bookings", {
                 method: "POST",
@@ -1439,6 +1697,74 @@ export default function BookingProcessPanel({
         }
     };
 
+    // Direct cancel helper for row-level actions (doesn't rely on selectedBookingDetail)
+    const cancelBookingDirect = async (booking, seatNo, actionType = "NO_REFUND") => {
+        try {
+            if (!booking || !booking?._id) {
+                showAppToast("error", "Booking id not found");
+                return;
+            }
+
+            if (!seatNo) {
+                showAppToast("error", "Seat number not provided");
+                return;
+            }
+
+            const seatItems = getSeatItemsFromBooking(booking);
+            const seatItem = (seatItems || []).find((it) => String(it?.seatNo) === String(seatNo));
+            const currentSeatStatus = seatItem?.seatStatus || null;
+
+            if (String(currentSeatStatus || "").toLowerCase() === "cancelled") {
+                showAppToast("error", `Seat ${seatNo} is already cancelled`);
+                return;
+            }
+
+            setCancelLoading(true);
+
+            const res = await fetch(`/api/bookings/${booking._id}/cancel`, {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ seatNo, actionType }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data?.success) {
+                showAppToast("error", data?.message || "Failed to cancel booking");
+                setCancelLoading(false);
+                return;
+            }
+
+            showAppToast("success", data?.message || "Seat cancelled successfully");
+
+            if (data?.voucher) {
+                const v = data.voucher;
+                setVoucherData(sanitizeVoucher(v));
+                setVoucherCodeInput(v.voucherCode || "");
+
+                const returnedBooking = data?.data || booking;
+                if (returnedBooking) {
+                    if (returnedBooking.customerName) setCustomerName(returnedBooking.customerName);
+                    if (returnedBooking.customerPhone) setCustomerPhone(returnedBooking.customerPhone);
+                    if (returnedBooking.customerEmail) setCustomerEmail(returnedBooking.customerEmail || "");
+                }
+
+                setVoucherModalOpen(true);
+                showAppToast("success", `Voucher created: ${v.voucherCode} (₹${v.remainingAmount || 0})`);
+            }
+
+            // If we were tracking selected seats, remove cancelled seat
+            setSelectedSeats((prev) => prev.filter((seat) => String(seat) !== String(seatNo)));
+
+            await loadExistingBookings();
+        } catch (error) {
+            console.error("cancelBookingDirect error:", error);
+            showAppToast("error", error.message || "Failed to cancel booking");
+        } finally {
+            setCancelLoading(false);
+        }
+    };
+
     const handleUnblockBooking = async () => {
         try {
             if (!selectedBookingDetail?.bookingId) return;
@@ -1575,23 +1901,27 @@ export default function BookingProcessPanel({
                         </div>
 
                         <div className="flex flex-wrap gap-2.5">
-                            <button
-                                type="button"
-                                onClick={() => setPrintModalOpen(true)}
-                                className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-50"
-                            >
-                                <Printer className="h-4.5 w-4.5" />
-                                Print
-                            </button>
+                            {isAdmin && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPrintModalOpen(true)}
+                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-50"
+                                    >
+                                        <Printer className="h-4.5 w-4.5" />
+                                        Print
+                                    </button>
 
-                            <button
-                                type="button"
-                                onClick={() => setPrintModalOpen(true)}
-                                className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] bg-gradient-to-r from-[#0B5D5A] to-[#0A524F] px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(11,93,90,0.18)] transition-all duration-200 hover:from-[#094B49] hover:to-[#083F3E]"
-                            >
-                                <Download className="h-4.5 w-4.5" />
-                                PDF
-                            </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPrintModalOpen(true)}
+                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] bg-gradient-to-r from-[#0B5D5A] to-[#0A524F] px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(11,93,90,0.18)] transition-all duration-200 hover:from-[#094B49] hover:to-[#083F3E]"
+                                    >
+                                        <Download className="h-4.5 w-4.5" />
+                                        PDF
+                                    </button>
+                                </>
+                            )}
 
                             <button
                                 type="button"
@@ -1654,27 +1984,29 @@ export default function BookingProcessPanel({
                                 </div>
                             </div>
 
-                            <div className="mb-4 flex flex-wrap gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleBlockSelectedSeats}
-                                    disabled={blockingSeats || selectedFreshSeats.length === 0}
-                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] bg-[#EAB308] px-4 text-sm font-bold text-white transition hover:bg-[#CA8A04] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <Ban className="h-4 w-4" />
-                                    {blockingSeats ? "Blocking..." : "Block Selected Seats"}
-                                </button>
+                            {isAdmin && (
+                                <div className="mb-4 flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleBlockSelectedSeats}
+                                        disabled={blockingSeats || selectedFreshSeats.length === 0}
+                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] bg-[#EAB308] px-4 text-sm font-bold text-white transition hover:bg-[#CA8A04] disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Ban className="h-4 w-4" />
+                                        {blockingSeats ? "Blocking..." : "Block Selected Seats"}
+                                    </button>
 
-                                <button
-                                    type="button"
-                                    onClick={handleUnblockSelectedSeats}
-                                    disabled={unblockingSeats || selectedBlockedSeats.length === 0}
-                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <Ban className="h-4 w-4" />
-                                    {unblockingSeats ? "Unblocking..." : "Unblock Selected Seats"}
-                                </button>
-                            </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleUnblockSelectedSeats}
+                                        disabled={unblockingSeats || selectedBlockedSeats.length === 0}
+                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Ban className="h-4 w-4" />
+                                        {unblockingSeats ? "Unblocking..." : "Unblock Selected Seats"}
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="rounded-[20px] border border-slate-200 bg-white p-3 sm:p-4">
                                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -2017,61 +2349,63 @@ export default function BookingProcessPanel({
                                 </div>
 
                                 {/* Admin Fare Control */}
-                                <div className="mt-4 rounded-[18px] border border-orange-200 bg-orange-50/40 p-4">
-                                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                        <div>
-                                            <div className="text-sm font-bold uppercase tracking-[0.14em] text-orange-700">
-                                                Admin Fare Control
+                                {isAdmin && (
+                                    <div className="mt-4 rounded-[18px] border border-orange-200 bg-orange-50/40 p-4">
+                                        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <div className="text-sm font-bold uppercase tracking-[0.14em] text-orange-700">
+                                                    Admin Fare Control
+                                                </div>
+                                                <div className="mt-1 text-sm text-slate-600">
+                                                    Override total fare manually for this booking.
+                                                </div>
                                             </div>
-                                            <div className="mt-1 text-sm text-slate-600">
-                                                Override total fare manually for this booking.
+
+                                            <div className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-bold text-orange-700">
+                                                Admin / Staff Access
                                             </div>
                                         </div>
 
-                                        <div className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-bold text-orange-700">
-                                            Admin / Staff Access
+                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                                            <MiniInfoCard
+                                                title="FARE PER SEAT"
+                                                value={formatCurrency(defaultPerSeatFare)}
+                                            />
+
+                                            <MiniInfoCard
+                                                title="EFFECTIVE PER SEAT"
+                                                value={formatCurrency(effectivePerSeatFare)}
+                                                highlight
+                                            />
+
+                                            <div className="rounded-[16px] border border-orange-200 bg-white p-4">
+                                                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                                                    OVERRIDE TOTAL FARE
+                                                </div>
+
+                                                <div className="mt-2">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        value={overrideTotalFare}
+                                                        onChange={(e) => setOverrideTotalFare(e.target.value)}
+                                                        placeholder="Enter total fare"
+                                                        className="h-12 w-full rounded-[14px] border border-slate-300 bg-white px-4 text-base font-semibold text-slate-900 outline-none transition-all duration-200 focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10"
+                                                    />
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOverrideTotalFare("")}
+                                                    className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-700"
+                                                >
+                                                    Reset to Auto Fare
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-
-                                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                                        <MiniInfoCard
-                                            title="FARE PER SEAT"
-                                            value={formatCurrency(defaultPerSeatFare)}
-                                        />
-
-                                        <MiniInfoCard
-                                            title="EFFECTIVE PER SEAT"
-                                            value={formatCurrency(effectivePerSeatFare)}
-                                            highlight
-                                        />
-
-                                        <div className="rounded-[16px] border border-orange-200 bg-white p-4">
-                                            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                                                OVERRIDE TOTAL FARE
-                                            </div>
-
-                                            <div className="mt-2">
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    step="1"
-                                                    value={overrideTotalFare}
-                                                    onChange={(e) => setOverrideTotalFare(e.target.value)}
-                                                    placeholder="Enter total fare"
-                                                    className="h-12 w-full rounded-[14px] border border-slate-300 bg-white px-4 text-base font-semibold text-slate-900 outline-none transition-all duration-200 focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10"
-                                                />
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => setOverrideTotalFare("")}
-                                                className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-700"
-                                            >
-                                                Reset to Auto Fare
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+                                )}
 
                                 {/* Payment Buttons */}
                                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -2088,39 +2422,43 @@ export default function BookingProcessPanel({
                                         loading={onlinePaymentProcessing}
                                         onClick={() => handleCreateBooking("ONLINE")}
                                     />
-                                    <PaymentButton
-                                        label="Cash"
-                                        color="orange"
-                                        disabled={
-                                            submitting ||
-                                            selectedFreshSeats.length === 0 ||
-                                            !customerName.trim() ||
-                                            !customerPhone.trim()
-                                        }
-                                        onClick={() => handleCreateBooking("OFFLINE_CASH")}
-                                    />
-                                    <PaymentButton
-                                        label="UPI"
-                                        color="slate"
-                                        disabled={
-                                            submitting ||
-                                            selectedFreshSeats.length === 0 ||
-                                            !customerName.trim() ||
-                                            !customerPhone.trim()
-                                        }
-                                        onClick={() => handleCreateBooking("OFFLINE_UPI")}
-                                    />
-                                    <PaymentButton
-                                        label="Unpaid"
-                                        color="red"
-                                        disabled={
-                                            submitting ||
-                                            selectedFreshSeats.length === 0 ||
-                                            !customerName.trim() ||
-                                            !customerPhone.trim()
-                                        }
-                                        onClick={() => handleCreateBooking("OFFLINE_UNPAID")}
-                                    />
+                                    {isAdmin ? (
+                                        <>
+                                            <PaymentButton
+                                                label="Cash"
+                                                color="orange"
+                                                disabled={
+                                                    submitting ||
+                                                    selectedFreshSeats.length === 0 ||
+                                                    !customerName.trim() ||
+                                                    !customerPhone.trim()
+                                                }
+                                                onClick={() => handleCreateBooking("OFFLINE_CASH")}
+                                            />
+                                            <PaymentButton
+                                                label="UPI"
+                                                color="slate"
+                                                disabled={
+                                                    submitting ||
+                                                    selectedFreshSeats.length === 0 ||
+                                                    !customerName.trim() ||
+                                                    !customerPhone.trim()
+                                                }
+                                                onClick={() => handleCreateBooking("OFFLINE_UPI")}
+                                            />
+                                            <PaymentButton
+                                                label="Unpaid"
+                                                color="red"
+                                                disabled={
+                                                    submitting ||
+                                                    selectedFreshSeats.length === 0 ||
+                                                    !customerName.trim() ||
+                                                    !customerPhone.trim()
+                                                }
+                                                onClick={() => handleCreateBooking("OFFLINE_UNPAID")}
+                                            />
+                                        </>
+                                    ) : null}
                                 </div>
                             </div>
                         </div>
@@ -2130,10 +2468,10 @@ export default function BookingProcessPanel({
                     <ExistingBookingsPanel
                         loading={loadingBookings}
                         bookings={existingBookings}
-                        onViewBooking={(booking) => {
+                        onViewBooking={(booking, seatNo) => {
                             const seatItems = getSeatItemsFromBooking(booking);
-                            const firstSeatItem = seatItems[0] || null;
-                            const firstSeat = String(firstSeatItem?.seatNo || "");
+                            const firstSeatItem = seatItems.find((it) => String(it?.seatNo) === String(seatNo)) || seatItems[0] || null;
+                            const firstSeat = String(firstSeatItem?.seatNo || seatNo || "");
 
                             setSelectedBookingDetail({
                                 seatNo: firstSeat,
@@ -2170,50 +2508,57 @@ export default function BookingProcessPanel({
                                 seatItems,
                             });
 
-                            setSeatDetailModalOpen(true);
+                            // Only open admin modal for admins
+                            if (isAdmin) setSeatDetailModalOpen(true);
                         }}
                         onViewBlockedSeat={handleViewBlockedSeat}
+                        onCancel={!isAdmin ? cancelBookingDirect : undefined}
+                        onIssueVoucher={!isAdmin ? (b, s) => cancelBookingDirect(b, s, "ISSUE_VOUCHER") : undefined}
                     />
                 </div>
             </section>
 
-            {/* Seat detail modal */}
-            <SeatBookingDetailsModal
-                open={seatDetailModalOpen}
-                data={selectedBookingDetail}
-                loading={cancelLoading || editLoading}
-                onClose={() => {
-                    setSeatDetailModalOpen(false);
-                    setSelectedBookingDetail(null);
-                }}
-                onEdit={handleUpdateBooking}
-                onCancel={() => {
-                    setCancelModalOpen(true);
-                }}
-                onUnblock={handleUnblockBooking}
-            />
+            {/* Seat detail modal (admin only) */}
+            {isAdmin && (
+                <SeatBookingDetailsModal
+                    open={seatDetailModalOpen}
+                    data={selectedBookingDetail}
+                    loading={cancelLoading || editLoading}
+                    onClose={() => {
+                        setSeatDetailModalOpen(false);
+                        setSelectedBookingDetail(null);
+                    }}
+                    onEdit={handleUpdateBooking}
+                    onCancel={() => {
+                        setCancelModalOpen(true);
+                    }}
+                    onUnblock={handleUnblockBooking}
+                />
+            )}
 
             {/* Voucher created popup */}
             <VoucherCreatedModal open={voucherModalOpen} voucher={voucherData} onClose={closeVoucherModal} />
 
-            {/* Cancel modal */}
-            <CancelBookingModal
-                open={cancelModalOpen}
-                seatNo={selectedBookingDetail?.seatNo}
-                ticketNo={selectedBookingDetail?.ticketNo}
-                passengerName={selectedBookingDetail?.passengerName}
-                passengerGender={
-                    selectedBookingDetail?.passengerGender ||
-                    bookedMap[String(selectedBookingDetail?.seatNo || "")]?.passengerGender ||
-                    bookedMap[String(selectedBookingDetail?.seatNo || "")]?.gender ||
-                    ""
-                }
-                loading={cancelLoading}
-                onClose={() => setCancelModalOpen(false)}
-                onRefundOriginal={() => handleCancelBooking("REFUND_ORIGINAL")}
-                onIssueVoucher={() => handleCancelBooking("ISSUE_VOUCHER")}
-                onMarkCancelled={() => handleCancelBooking("NO_REFUND")}
-            />
+            {/* Cancel modal (admin only) */}
+            {isAdmin && (
+                <CancelBookingModal
+                    open={cancelModalOpen}
+                    seatNo={selectedBookingDetail?.seatNo}
+                    ticketNo={selectedBookingDetail?.ticketNo}
+                    passengerName={selectedBookingDetail?.passengerName}
+                    passengerGender={
+                        selectedBookingDetail?.passengerGender ||
+                        bookedMap[String(selectedBookingDetail?.seatNo || "")]?.passengerGender ||
+                        bookedMap[String(selectedBookingDetail?.seatNo || "")]?.gender ||
+                        ""
+                    }
+                    loading={cancelLoading}
+                    onClose={() => setCancelModalOpen(false)}
+                    onRefundOriginal={() => handleCancelBooking("REFUND_ORIGINAL")}
+                    onIssueVoucher={() => handleCancelBooking("ISSUE_VOUCHER")}
+                    onMarkCancelled={() => handleCancelBooking("NO_REFUND")}
+                />
+            )}
 
             {/* Print modal */}
             <PrintSeatTemplateModal

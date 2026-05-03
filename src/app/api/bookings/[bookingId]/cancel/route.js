@@ -454,11 +454,17 @@ export async function POST(request, { params }) {
                 if (totalVoucherAmount > 0) {
                     // Generate voucher code via atomic helper
                     const voucherCode = await generateVoucherCode();
-                    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+
+                    // Role-based expiry: users get 1 month, admins/staff get 1 year
+                    const isUserIssuer = String(authUser?.role || "").toLowerCase() === "user";
+                    const expiresAt = new Date(
+                        Date.now() + (isUserIssuer ? 30 : 365) * 24 * 60 * 60 * 1000
+                    );
 
                     const voucher = new Voucher({
                         voucherCode,
-                        userId: null,
+                        // If issued by a logged-in user, associate voucher.userId
+                        userId: isUserIssuer ? authUser.userId : null,
                         guestName: booking.customerName || null,
                         guestPhoneNumber: booking.customerPhone || null,
                         guestEmail: booking.customerEmail || null,
@@ -469,7 +475,7 @@ export async function POST(request, { params }) {
                         status: "ACTIVE",
                         expiresAt,
                         issueReason: `Issued for cancelled seats: ${cancelledNowSeats.join(", ")}`,
-                        issuedBy: null,
+                        issuedBy: authUser?.userId || null,
                     });
 
                     await voucher.save();

@@ -34,6 +34,8 @@ export default function ExistingBookingsPanel({
     loading = false,
     onViewBooking,
     onViewBlockedSeat,
+    onCancel, // (booking, seatNo, actionType)
+    onIssueVoucher, // (booking, seatNo)
 }) {
     const [query, setQuery] = useState("");
 
@@ -178,10 +180,17 @@ export default function ExistingBookingsPanel({
                                 <>
                                     {/* ACTIVE SEAT-WISE BOOKINGS */}
                                     {filteredActive.map((row) => (
-                                        <button
+                                        <div
                                             key={`${row.booking?._id}-${row.seatNo}-${row.ticketNo}`}
-                                            type="button"
+                                            role="button"
+                                            tabIndex={0}
                                             onClick={() => onViewBooking?.(row.booking, row.seatNo)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" || e.key === " ") {
+                                                    e.preventDefault();
+                                                    onViewBooking?.(row.booking, row.seatNo);
+                                                }
+                                            }}
                                             className="w-full rounded-[20px] border border-slate-200 bg-slate-50 p-3 text-left transition-all duration-200 hover:border-[#0B5D5A]/20 hover:bg-white"
                                         >
                                             <div className="flex items-start justify-between gap-3">
@@ -228,11 +237,47 @@ export default function ExistingBookingsPanel({
                                                     </div>
                                                 </div>
 
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0B5D5A] shadow-sm">
-                                                    <Eye className="h-4 w-4" />
+                                                <div className="flex items-center gap-2">
+                                                    {onCancel ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    onCancel?.(row.booking, row.seatNo, "NO_REFUND");
+                                                                } catch (err) {
+                                                                    // swallow
+                                                                }
+                                                            }}
+                                                            className="rounded-md bg-red-50 px-3 py-1 text-xs font-semibold text-red-700"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    ) : null}
+
+                                                    {onIssueVoucher ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    onIssueVoucher?.(row.booking, row.seatNo);
+                                                                } catch (err) {
+                                                                    // swallow
+                                                                }
+                                                            }}
+                                                            className="rounded-md bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700"
+                                                        >
+                                                            Issue Voucher
+                                                        </button>
+                                                    ) : null}
+
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0B5D5A] shadow-sm">
+                                                        <Eye className="h-4 w-4" />
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </button>
+                                        </div>
                                     ))}
 
                                     {/* BLOCKED SEATS */}
@@ -244,10 +289,17 @@ export default function ExistingBookingsPanel({
 
                                             <div className="space-y-2">
                                                 {filteredBlocked.map((row) => (
-                                                    <button
+                                                    <div
                                                         key={`${row.booking?._id}-${row.seatNo}-${row.ticketNo}`}
-                                                        type="button"
+                                                        role="button"
+                                                        tabIndex={0}
                                                         onClick={() => onViewBlockedSeat?.(row.seatNo)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter" || e.key === " ") {
+                                                                e.preventDefault();
+                                                                onViewBlockedSeat?.(row.seatNo);
+                                                            }
+                                                        }}
                                                         className="flex w-full items-center justify-between rounded-[18px] border border-orange-200 bg-orange-50 px-3 py-3 text-left transition hover:bg-orange-100"
                                                     >
                                                         <div className="flex min-w-0 items-center gap-3">
@@ -275,7 +327,7 @@ export default function ExistingBookingsPanel({
                                                         <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-[#C2410C]">
                                                             View
                                                         </span>
-                                                    </button>
+                                                    </div>
                                                 ))}
                                             </div>
                                         </div>
