@@ -524,6 +524,17 @@ export default function BookingProcessPanel({
     }, [selectedFreshSeats, passengerDetails, customerName]);
 
     const loadExistingBookings = async () => {
+        // If not admin and no auth tokens are available, skip protected fetch.
+        try {
+            const hasAccessToken = !!(localStorage.getItem("accessToken") || "");
+            const hasRefreshToken = !!(localStorage.getItem("refreshToken") || "");
+            if (!isAdmin && !hasAccessToken && !hasRefreshToken) {
+                setExistingBookings([]);
+                return;
+            }
+        } catch (e) {
+            // localStorage may be unavailable in some environments; if so, proceed with fetch and let it fail gracefully
+        }
         async function refreshAccessToken() {
             try {
                 const refreshToken = localStorage.getItem("refreshToken") || "";
@@ -708,6 +719,18 @@ export default function BookingProcessPanel({
         if (!travelDate) return showAppToast("error", "Select travel date");
         if (!Array.isArray(seatNumbers) || seatNumbers.length === 0) return;
 
+        // Guests must provide a phone number so holds are associated with them
+        if (!isAdmin) {
+            try {
+                if (!customerPhone || !String(customerPhone).trim()) {
+                    showAppToast("error", "Please enter your phone number before holding seats");
+                    return null;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
         try {
             setBlockingSeats(true);
 
@@ -724,6 +747,14 @@ export default function BookingProcessPanel({
             if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to hold seats");
 
             setHoldData(data.data);
+            // If server returned guestPhoneNumber and customerPhone is empty, auto-fill it
+            try {
+                if ((!customerPhone || !String(customerPhone).trim()) && data?.data?.guestPhoneNumber) {
+                    setCustomerPhone(String(data.data.guestPhoneNumber || ""));
+                }
+            } catch (e) {
+                // ignore
+            }
             const expires = new Date(data.data.expiresAt).getTime();
 
             const tick = () => {
@@ -1105,6 +1136,7 @@ export default function BookingProcessPanel({
     };
 
     const handleCreateBooking = async (paymentMode) => {
+        // allow anonymous guest bookings (no early redirect)
         if (paymentMode === "ONLINE") {
             return handleCreateOnlineBooking();
         }
@@ -1196,6 +1228,7 @@ export default function BookingProcessPanel({
     };
 
     const handleCreateOnlineBooking = async () => {
+        // allow anonymous guest online booking (server will accept guest data when hold and guestPhone are provided)
         try {
             if (!selectedBus?._id) {
                 return showAppToast("error", "Please select a bus first");
@@ -1959,7 +1992,7 @@ export default function BookingProcessPanel({
                 </div>
 
                 {/* Main Layout */}
-                <div className="grid grid-cols-1 gap-5 p-4 sm:p-5 xl:grid-cols-[1.5fr_0.9fr]">
+                <div className={isAdmin ? "grid grid-cols-1 gap-5 p-4 sm:p-5 xl:grid-cols-[1.5fr_0.9fr]" : "grid grid-cols-1 gap-5 p-4 sm:p-5"}>
                     {/* LEFT */}
                     <div className="space-y-5">
                         {/* Seat Layout */}
@@ -2465,56 +2498,58 @@ export default function BookingProcessPanel({
                     </div>
 
                     {/* RIGHT */}
-                    <ExistingBookingsPanel
-                        loading={loadingBookings}
-                        bookings={existingBookings}
-                        onViewBooking={(booking, seatNo) => {
-                            const seatItems = getSeatItemsFromBooking(booking);
-                            const firstSeatItem = seatItems.find((it) => String(it?.seatNo) === String(seatNo)) || seatItems[0] || null;
-                            const firstSeat = String(firstSeatItem?.seatNo || seatNo || "");
+                    {isAdmin && (
+                        <ExistingBookingsPanel
+                            loading={loadingBookings}
+                            bookings={existingBookings}
+                            onViewBooking={(booking, seatNo) => {
+                                const seatItems = getSeatItemsFromBooking(booking);
+                                const firstSeatItem = seatItems.find((it) => String(it?.seatNo) === String(seatNo)) || seatItems[0] || null;
+                                const firstSeat = String(firstSeatItem?.seatNo || seatNo || "");
 
-                            setSelectedBookingDetail({
-                                seatNo: firstSeat,
-                                ticketNo: firstSeatItem?.ticketNo || "",
-                                passengerName:
-                                    firstSeatItem?.passengerName || booking?.customerName || "",
-                                passengerGender:
-                                    firstSeatItem?.passengerGender ||
-                                    booking?.customerGender ||
-                                    "",
-                                booking,
-                                bookingId: booking?._id,
-                                status:
-                                    String(
-                                        firstSeatItem?.seatStatus || booking?.seatStatus || ""
-                                    ).toLowerCase() === "blocked"
-                                        ? "blocked"
-                                        : "booked",
-                                customerName: booking?.customerName || "",
-                                customerPhone: booking?.customerPhone || "",
-                                customerEmail: booking?.customerEmail || "",
-                                pickupName: booking?.pickupName || pickupStop?.name || "",
-                                dropName: booking?.dropName || dropStop?.name || "",
-                                pickupMarathi:
-                                    booking?.pickupMarathi || pickupStop?.marathiName || "",
-                                dropMarathi:
-                                    booking?.dropMarathi || dropStop?.marathiName || "",
-                                pickupTime: booking?.pickupTime || pickupStop?.time || "",
-                                dropTime: booking?.dropTime || dropStop?.time || "",
-                                fare: firstSeatItem?.fare || booking?.fare || 0,
-                                bookingCode: booking?.bookingCode || "",
-                                paymentStatus: booking?.paymentStatus || "UNPAID",
-                                paymentMethod: booking?.paymentMethod || "UNPAID",
-                                seatItems,
-                            });
+                                setSelectedBookingDetail({
+                                    seatNo: firstSeat,
+                                    ticketNo: firstSeatItem?.ticketNo || "",
+                                    passengerName:
+                                        firstSeatItem?.passengerName || booking?.customerName || "",
+                                    passengerGender:
+                                        firstSeatItem?.passengerGender ||
+                                        booking?.customerGender ||
+                                        "",
+                                    booking,
+                                    bookingId: booking?._id,
+                                    status:
+                                        String(
+                                            firstSeatItem?.seatStatus || booking?.seatStatus || ""
+                                        ).toLowerCase() === "blocked"
+                                            ? "blocked"
+                                            : "booked",
+                                    customerName: booking?.customerName || "",
+                                    customerPhone: booking?.customerPhone || "",
+                                    customerEmail: booking?.customerEmail || "",
+                                    pickupName: booking?.pickupName || pickupStop?.name || "",
+                                    dropName: booking?.dropName || dropStop?.name || "",
+                                    pickupMarathi:
+                                        booking?.pickupMarathi || pickupStop?.marathiName || "",
+                                    dropMarathi:
+                                        booking?.dropMarathi || dropStop?.marathiName || "",
+                                    pickupTime: booking?.pickupTime || pickupStop?.time || "",
+                                    dropTime: booking?.dropTime || dropStop?.time || "",
+                                    fare: firstSeatItem?.fare || booking?.fare || 0,
+                                    bookingCode: booking?.bookingCode || "",
+                                    paymentStatus: booking?.paymentStatus || "UNPAID",
+                                    paymentMethod: booking?.paymentMethod || "UNPAID",
+                                    seatItems,
+                                });
 
-                            // Only open admin modal for admins
-                            if (isAdmin) setSeatDetailModalOpen(true);
-                        }}
-                        onViewBlockedSeat={handleViewBlockedSeat}
-                        onCancel={!isAdmin ? cancelBookingDirect : undefined}
-                        onIssueVoucher={!isAdmin ? (b, s) => cancelBookingDirect(b, s, "ISSUE_VOUCHER") : undefined}
-                    />
+                                // Only open admin modal for admins
+                                if (isAdmin) setSeatDetailModalOpen(true);
+                            }}
+                            onViewBlockedSeat={handleViewBlockedSeat}
+                            onCancel={!isAdmin ? cancelBookingDirect : undefined}
+                            onIssueVoucher={!isAdmin ? (b, s) => cancelBookingDirect(b, s, "ISSUE_VOUCHER") : undefined}
+                        />
+                    )}
                 </div>
             </section>
 

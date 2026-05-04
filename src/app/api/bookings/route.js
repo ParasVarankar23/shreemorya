@@ -414,22 +414,13 @@ export async function GET(request) {
 
         const authUser = await getAuthUserFromRequest(request);
 
-        if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
-        }
 
-        const isAdminOrStaff = hasRole(authUser, ["admin", "staff"]);
-        const isUser = String(authUser.role || "").toLowerCase() === "user";
+        // allow anonymous guest bookings (authUser may be null)
+        const isAdminOrStaff = authUser ? hasRole(authUser, ["admin", "staff"]) : false;
+        const isUser = authUser ? String(authUser.role || "").toLowerCase() === "user" : false;
+        const isGuest = !authUser;
 
-        if (!isAdminOrStaff && !isUser) {
-            return NextResponse.json(
-                { success: false, message: "Forbidden: Admin/Staff only" },
-                { status: 403 }
-            );
-        }
+        // Admin/staff have elevated privileges; users and anonymous guests are allowed to create bookings
 
         const { searchParams } = new URL(request.url);
         const scheduleId = searchParams.get("scheduleId");
@@ -510,22 +501,10 @@ export async function POST(request) {
 
         const authUser = await getAuthUserFromRequest(request);
 
-        if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
-        }
-
-        const isAdminOrStaff = hasRole(authUser, ["admin", "staff"]);
-        const isUser = String(authUser.role || "").toLowerCase() === "user";
-
-        if (!isAdminOrStaff && !isUser) {
-            return NextResponse.json(
-                { success: false, message: "Forbidden: Admin/Staff only" },
-                { status: 403 }
-            );
-        }
+        // Allow anonymous guest bookings: authUser may be null for guests.
+        const isAdminOrStaff = authUser ? hasRole(authUser, ["admin", "staff"]) : false;
+        const isUser = authUser ? String(authUser.role || "").toLowerCase() === "user" : false;
+        const isGuest = !authUser;
 
         const body = await request.json();
 
@@ -757,7 +736,8 @@ export async function POST(request) {
             }
 
             // Verify ownership for primary hold (and note: extra holds were filtered by owner in query)
-            const ownerOk = (primaryHold.userId && authUser && String(primaryHold.userId) === String(authUser.userId)) || (primaryHold.guestPhoneNumber && String(primaryHold.guestPhoneNumber) === String(customerPhone));
+            const normalizePhone = (s = "") => String(s || "").replace(/\D/g, "").slice(-10);
+            const ownerOk = (primaryHold.userId && authUser && String(primaryHold.userId) === String(authUser.userId)) || (primaryHold.guestPhoneNumber && customerPhone && normalizePhone(primaryHold.guestPhoneNumber) && normalizePhone(primaryHold.guestPhoneNumber) === normalizePhone(customerPhone));
             if (!ownerOk) {
                 return NextResponse.json({ success: false, message: "Seat hold belongs to another user" }, { status: 403 });
             }

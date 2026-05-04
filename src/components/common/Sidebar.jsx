@@ -57,10 +57,9 @@ const roleLinks = {
     ],
 
     guest: [
-        { href: "/routes", label: "View Routes", icon: BusFront },
-        { href: "/book-now", label: "Book Ticket", icon: Ticket },
+        { href: "/guest/booking", label: "Booking", icon: BusFront },
         { href: "/login", label: "Login", icon: LogIn },
-        { href: "/register", label: "Register", icon: UserPlus },
+        { href: "/signup", label: "Register", icon: UserPlus },
     ],
 };
 

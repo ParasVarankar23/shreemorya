@@ -1,16 +1,18 @@
 "use client";
 
+import StopSearchDropdown from "@/components/admin/booking/StopSearchDropdown";
+import { getAuthHeaders, normalizeStopsFromSchedules } from "@/components/admin/booking/bookingHelpers";
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { Playfair_Display } from "next/font/google";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import {
     FaArrowRight,
     FaBus,
     FaBusAlt,
     FaCalendarAlt,
-    FaMapMarkerAlt,
-    FaRoute,
     FaPercent,
+    FaRoute
 } from "react-icons/fa";
 
 const playfair = Playfair_Display({
@@ -23,6 +25,139 @@ export default function HeroSection({
     handleHeroMouseMove,
     resetHeroTilt,
 }) {
+    const [pickupStop, setPickupStop] = useState(null);
+    const [dropStop, setDropStop] = useState(null);
+    const [date, setDate] = useState(() => {
+        const d = new Date();
+        return d.toISOString().slice(0, 10);
+    });
+    const [suggestionsVisible, setSuggestionsVisible] = useState({ pickup: false, drop: false });
+    const [results, setResults] = useState([]);
+    const [loadingResults, setLoadingResults] = useState(false);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const debounceRef = useRef(null);
+
+    // Stops loaded from admin schedules; fallback to fare.js if API fails
+    const [allStops, setAllStops] = useState([]);
+    const [loadingStops, setLoadingStops] = useState(true);
+
+    useEffect(() => {
+        let mounted = true;
+
+        const load = async () => {
+            setLoadingStops(true);
+            try {
+                const res = await fetch("/api/buses?page=1&limit=500&status=ACTIVE", {
+                    method: "GET",
+                    headers: getAuthHeaders(),
+                });
+
+                const data = await res.json().catch(() => ({}));
+                let items = [];
+                if (Array.isArray(data?.items)) items = data.items;
+                else if (Array.isArray(data?.data)) items = data.data;
+
+                if (items.length > 0) {
+                    const normalized = normalizeStopsFromSchedules(items || []);
+                    if (mounted) setAllStops(normalized);
+                    setLoadingStops(false);
+                    return;
+                }
+            } catch (e) {
+                // ignore and fallback
+            }
+
+            // Fallback to fare.js stops if API has no schedules
+            try {
+                // eslint-disable-next-line global-require
+                const fare = require("@/lib/fare");
+                const rawStops = [...(fare.VILLAGE_STOPS || []), ...(fare.CITY_STOPS || [])];
+                const withMr = fare.getStopsWithMarathi ? fare.getStopsWithMarathi(rawStops) : rawStops.map((s) => ({ english: s, marathi: "" }));
+                const shaped = withMr.map((s) => ({ value: s.english, label: s.display || s.english, name: s.english, marathiName: s.marathi }));
+                if (mounted) setAllStops(shaped);
+            } catch (e) {
+                if (mounted) setAllStops([]);
+            } finally {
+                if (mounted) setLoadingStops(false);
+            }
+        };
+
+        load();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        // check auth status (guest allowed to view results)
+        (async () => {
+            try {
+                const res = await fetch("/api/auth/me");
+                setIsLoggedIn(res.ok);
+            } catch (e) {
+                setIsLoggedIn(false);
+            }
+        })();
+    }, []);
+
+    // helper to fetch results
+    async function fetchResults(pickupVal, dropVal, dateVal) {
+        setLoadingResults(true);
+        try {
+            const params = new URLSearchParams({ pickup: pickupVal, drop: dropVal, date: dateVal });
+            const resp = await fetch(`/api/bookings/search-buses?${params.toString()}`);
+            const json = await resp.json();
+            if (json?.success) setResults(json.data || []);
+            else setResults([]);
+        } catch (err) {
+            console.error(err);
+            setResults([]);
+        } finally {
+            setLoadingResults(false);
+        }
+    }
+
+    // Auto-search when pickup, drop and date selected (debounced)
+    useEffect(() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+
+        if (!pickupStop?.value || !dropStop?.value || !date) return;
+
+        debounceRef.current = setTimeout(() => {
+            fetchResults(pickupStop.value, dropStop.value, date);
+        }, 300);
+
+        return () => clearTimeout(debounceRef.current);
+    }, [pickupStop?.value, dropStop?.value, date]);
+
+    function handleSearchClick() {
+        if (!pickupStop?.value || !dropStop?.value || !date) {
+            // minimal feedback
+            // eslint-disable-next-line no-alert
+            alert("Please select pickup, destination and travel date before searching.");
+            return;
+        }
+
+        const params = new URLSearchParams({
+            pickup: pickupStop.value,
+            drop: dropStop.value,
+            date,
+        });
+
+        // Redirect guest to booking/search page with query params
+        window.location.href = `/guest/booking?${params.toString()}`;
+    }
+
+    function handleBook(schedule) {
+        const redirectTo = `/login?redirect=/user/booking?scheduleId=${encodeURIComponent(schedule._id)}&date=${encodeURIComponent(date)}`;
+        if (!isLoggedIn) {
+            window.location.href = redirectTo;
+            return;
+        }
+        // if logged in, go to booking flow (best-effort)
+        window.location.href = `/user/booking?scheduleId=${encodeURIComponent(schedule._id)}&date=${encodeURIComponent(date)}`;
+    }
     const {
         heroTitleRef,
         heroTextRef,
@@ -118,41 +253,61 @@ export default function HeroSection({
                             ref={bookingRef}
                             className="mt-6 sm:mt-7 md:mt-8 bg-white/96 backdrop-blur-2xl rounded-[22px] sm:rounded-[28px] shadow-[0_25px_60px_rgba(0,0,0,0.18)] p-3 sm:p-4 max-w-5xl border border-white/60"
                         >
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                                <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
-                                    <label className="text-[11px] text-[#7A6D57] block mb-1">
-                                        Pickup
-                                    </label>
-                                    <div className="flex items-center gap-2 text-sm font-medium text-[#16302B]">
-                                        <FaMapMarkerAlt className="text-[#0E6B68] shrink-0" />
-                                        <span>Select Pickup</span>
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
+                                        <label className="text-[11px] text-[#7A6D57] block mb-1">Pickup</label>
+                                        <StopSearchDropdown
+                                            label="pickup"
+                                            placeholder="Select pickup"
+                                            value={pickupStop}
+                                            onChange={setPickupStop}
+                                            options={allStops}
+                                            loading={loadingStops}
+                                            excludeValue={dropStop?.value || ""}
+                                        />
+                                    </div>
+
+                                    <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
+                                        <label className="text-[11px] text-[#7A6D57] block mb-1">Destination</label>
+                                        <StopSearchDropdown
+                                            label="drop"
+                                            placeholder="Select destination"
+                                            value={dropStop}
+                                            onChange={setDropStop}
+                                            options={allStops}
+                                            loading={loadingStops}
+                                            excludeValue={pickupStop?.value || ""}
+                                        />
                                     </div>
                                 </div>
 
-                                <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
-                                    <label className="text-[11px] text-[#7A6D57] block mb-1">
-                                        Destination
-                                    </label>
-                                    <div className="flex items-center gap-2 text-sm font-medium text-[#16302B]">
-                                        <FaRoute className="text-[#0E6B68] shrink-0" />
-                                        <span>Select Destination</span>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
+                                        <label className="text-[11px] text-[#7A6D57] block mb-1">Travel Date</label>
+                                        <div className="flex items-center gap-2 text-sm font-medium text-[#16302B]">
+                                            <FaCalendarAlt className="text-[#0E6B68] shrink-0" />
+                                            <input
+                                                type="date"
+                                                value={date}
+                                                onChange={(e) => setDate(e.target.value)}
+                                                className="bg-transparent outline-none text-sm"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center">
+                                        <button
+                                            onClick={() => handleSearchClick()}
+                                            className="ml-auto w-full md:ml-0 md:w-full rounded-[22px] bg-gradient-to-r from-[#0B5D5A] to-[#0A524F] px-5 py-3 text-base font-bold text-white shadow-[0_10px_24px_rgba(11,93,90,0.22)] transition-all duration-200 hover:from-[#094B49] hover:to-[#083F3E]"
+                                        >
+                                            <span className="inline-flex items-center gap-2 justify-center">
+                                                Search
+                                                <FaArrowRight />
+                                            </span>
+                                        </button>
                                     </div>
                                 </div>
-
-                                <div className="bg-[#FFF8E7] rounded-2xl px-4 py-3 min-h-[68px] flex flex-col justify-center">
-                                    <label className="text-[11px] text-[#7A6D57] block mb-1">
-                                        Travel Date
-                                    </label>
-                                    <div className="flex items-center gap-2 text-sm font-medium text-[#16302B]">
-                                        <FaCalendarAlt className="text-[#0E6B68] shrink-0" />
-                                        <span>Choose Date</span>
-                                    </div>
-                                </div>
-
-                                <button className="bg-[#f5ad1b] hover:bg-[#e39b0a] text-[#16302B] rounded-2xl px-4 py-3 font-bold flex items-center justify-center gap-2 transition shadow-md min-h-[68px] text-sm sm:text-base">
-                                    Search
-                                    <FaArrowRight />
-                                </button>
                             </div>
                         </div>
                     </div>
