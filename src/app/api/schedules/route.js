@@ -1,4 +1,11 @@
 import createAuditLog from "@/lib/createAuditLog";
+import {
+    getDefaultFareAmountByRoute,
+    isCityStop,
+    isVillageStop,
+    normalizeStopName as normalizeFareStopName,
+    ROUTES,
+} from "@/lib/fare";
 import connectDB from "@/lib/mongodb";
 import Bus from "@/models/bus.model";
 import Fare from "@/models/fare.model";
@@ -9,13 +16,9 @@ import { NextResponse } from "next/server";
 /* ------------------------------------------
    Helper: get effective fare
 ------------------------------------------- */
-async function getScheduleFare({
-    busId,
-    travelDate,
-    busTripBaseFare,
-}) {
+async function getScheduleFare({ busId, travelDate, busTripBaseFare, tripStart = "", tripEnd = "", busType = "NON_AC" }) {
     const parsedBaseFare = Number(busTripBaseFare);
-    const safeBaseFare = Number.isFinite(parsedBaseFare) ? parsedBaseFare : 0;
+    let safeBaseFare = Number.isFinite(parsedBaseFare) ? parsedBaseFare : 0;
 
     const fareRule = await Fare.findOne({
         busId,
@@ -29,6 +32,20 @@ async function getScheduleFare({
         createdAt: -1,
     });
 
+    // If no fare rule found and base fare is missing (0), try to derive a sensible default
+    if (!fareRule && (!safeBaseFare || safeBaseFare === 0)) {
+        // infer route from trip start/end
+        const nStart = normalizeFareStopName(tripStart || "");
+        const nEnd = normalizeFareStopName(tripEnd || "");
+
+        let inferredRoute = null;
+        if (isVillageStop(nStart) && isCityStop(nEnd)) inferredRoute = ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR;
+        else if (isCityStop(nStart) && isVillageStop(nEnd)) inferredRoute = ROUTES.BORIVALI_VIRAR_TO_BORLI_SHRIVARDHAN;
+
+        const fallback = getDefaultFareAmountByRoute(inferredRoute || ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR, busType);
+        safeBaseFare = Number.isFinite(Number(fallback)) ? fallback : 0;
+    }
+
     if (!fareRule) {
         return {
             baseFare: safeBaseFare,
@@ -39,9 +56,7 @@ async function getScheduleFare({
     }
 
     const parsedRuleFare = Number(fareRule.fareAmount);
-    const safeRuleFare = Number.isFinite(parsedRuleFare)
-        ? parsedRuleFare
-        : safeBaseFare;
+    const safeRuleFare = Number.isFinite(parsedRuleFare) ? parsedRuleFare : safeBaseFare;
 
     return {
         baseFare: safeBaseFare,
@@ -290,6 +305,9 @@ export async function POST(request) {
                 busId: bus._id,
                 travelDate: travelDateObj,
                 busTripBaseFare: tripData.baseFare,
+                tripStart: tripData.startPoint,
+                tripEnd: tripData.endPoint,
+                busType: bus.busType,
             });
 
             const schedule = await Schedule.create({

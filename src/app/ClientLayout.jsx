@@ -249,7 +249,7 @@ export default function ClientLayout({ children }) {
                     <PublicNavbar />
 
                     {/* Public Page Content */}
-                    <main className="min-w-0 flex-1 pt-[20px] sm:pt-[96px] lg:pt-[20px]">
+                    <main className="min-w-0 flex-1 py-[50px] sm:py-[96px] lg:py-[20px]">
                         {children}
                     </main>
 

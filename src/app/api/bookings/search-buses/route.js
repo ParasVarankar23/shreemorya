@@ -10,6 +10,7 @@ import {
 import connectDB from "@/lib/mongodb";
 import Booking from "@/models/booking.model";
 import Bus from "@/models/bus.model";
+import Fare from "@/models/fare.model";
 import Schedule from "@/models/schedule.model";
 import { NextResponse } from "next/server";
 
@@ -26,12 +27,7 @@ function normalizeDateOnly(dateInput) {
     return { start, end };
 }
 
-function normalizeStopName(value) {
-    return String(value || "")
-        .trim()
-        .toLowerCase()
-        .replaceAll(/\s+/g, " ");
-}
+// Use `normalizeFareStopName` from lib/fare for robust normalization (aliases, Marathi)
 
 function normalizeBusType(busType) {
     const value = String(busType || "").trim().toUpperCase();
@@ -57,36 +53,56 @@ function inferRouteFromStops(pickup, drop) {
     return null;
 }
 
-function resolveFareAmount({ pickup, drop, busType, schedule }) {
+async function resolveFareAmount({ pickup, drop, busType, schedule }) {
     const normalizedBusType = normalizeBusType(busType);
     const route = inferRouteFromStops(pickup, drop);
 
+    // If schedule provides a positive effectiveFare (created from schedule/fare rules), prefer it
+    if (schedule && Number.isFinite(Number(schedule.effectiveFare)) && Number(schedule.effectiveFare) > 0) {
+        const ef = Number(schedule.effectiveFare);
+        return { amount: ef, fare: ef, route, fareSource: "schedule" };
+    }
+
+    // If schedule exists but effectiveFare is missing/zero, try to find a Fare rule covering this schedule date
+    if (schedule) {
+        try {
+            const travelDate = schedule.travelDate ? new Date(schedule.travelDate) : null;
+            const pickupName = pickup;
+            const dropName = drop;
+
+            if (travelDate) {
+                const fareRule = await Fare.findOne({
+                    busId: schedule.busId,
+                    pickupPointName: pickupName,
+                    dropPointName: dropName,
+                    isActive: true,
+                    validFrom: { $lte: travelDate },
+                    validTill: { $gte: travelDate },
+                }).sort({ validFrom: -1, createdAt: -1 });
+
+                if (fareRule) {
+                    const amt = Number(fareRule.fareAmount || 0);
+                    if (Number.isFinite(amt) && amt > 0) {
+                        return { amount: amt, fare: amt, route, fareSource: "fare.js" };
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Error while checking Fare rules in resolveFareAmount:", err);
+        }
+    }
+
     if (route) {
-        const fareResult = getFare({
-            route,
-            pickup,
-            drop,
-            busType: normalizedBusType,
-        });
+        const fareResult = getFare({ route, pickup, drop, busType: normalizedBusType });
 
         if (fareResult?.isValid && Number.isFinite(fareResult.amount)) {
-            return {
-                amount: Number(fareResult.amount),
-                fare: Number(fareResult.amount),
-                route,
-                fareSource: "fare.js",
-            };
+            return { amount: Number(fareResult.amount), fare: Number(fareResult.amount), route, fareSource: "fare.js" };
         }
     }
 
     const fallbackFare = getDefaultFareAmountByRoute(route || ROUTES.SHRIVARDHAN_BORLI_TO_BORIVALI_VIRAR, normalizedBusType);
 
-    return {
-        amount: fallbackFare,
-        fare: fallbackFare,
-        route,
-        fareSource: "fallback",
-    };
+    return { amount: fallbackFare, fare: fallbackFare, route, fareSource: "fallback" };
 }
 
 function getScheduleStops(schedule) {
@@ -198,13 +214,9 @@ export async function GET(request) {
         for (const schedule of schedules) {
             const stops = getScheduleStops(schedule);
 
-            const pickupIndex = stops.findIndex((s) => {
-                return normalizeStopName(s?.name) === normalizeStopName(pickup);
-            });
+            const pickupIndex = stops.findIndex((s) => normalizeFareStopName(s?.name) === normalizeFareStopName(pickup));
 
-            const dropIndex = stops.findIndex((s) => {
-                return normalizeStopName(s?.name) === normalizeStopName(drop);
-            });
+            const dropIndex = stops.findIndex((s) => normalizeFareStopName(s?.name) === normalizeFareStopName(drop));
 
             if (pickupIndex === -1 || dropIndex === -1 || pickupIndex >= dropIndex) {
                 continue;
@@ -228,6 +240,13 @@ export async function GET(request) {
                 }
                 return acc;
             }, 0);
+
+            const fareObj = await resolveFareAmount({
+                pickup: stops[pickupIndex]?.name || pickup,
+                drop: stops[dropIndex]?.name || drop,
+                busType: schedule?.busType,
+                schedule,
+            });
 
             filtered.push({
                 _id: schedule._id,
@@ -258,12 +277,7 @@ export async function GET(request) {
                     schedule?.endTime ||
                     "--:--",
                 seatLayout: Number(schedule?.seatLayout || 39),
-                ...resolveFareAmount({
-                    pickup: stops[pickupIndex]?.name || pickup,
-                    drop: stops[dropIndex]?.name || drop,
-                    busType: schedule?.busType,
-                    schedule,
-                }),
+                ...fareObj,
                 bookedCount,
                 blockedCount,
                 cabinCount: Number(schedule?.cabinCount || 0),

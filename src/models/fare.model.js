@@ -1,10 +1,15 @@
 import mongoose from "mongoose";
 
+/* =====================================================
+   FARE SCHEMA
+===================================================== */
+
 const FareSchema = new mongoose.Schema(
     {
-        /* ------------------------------------------
-           Bus / Route Snapshot
-        ------------------------------------------- */
+        /* =====================================================
+           BUS / ROUTE SNAPSHOT
+        ===================================================== */
+
         busId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Bus",
@@ -26,9 +31,10 @@ const FareSchema = new mongoose.Schema(
             index: true,
         },
 
-        /* ------------------------------------------
-           Pickup Point Snapshot
-        ------------------------------------------- */
+        /* =====================================================
+           PICKUP POINT SNAPSHOT
+        ===================================================== */
+
         pickupPointName: {
             type: String,
             required: true,
@@ -38,9 +44,9 @@ const FareSchema = new mongoose.Schema(
 
         pickupPointOrder: {
             type: Number,
-            required: true,
+            required: false,
+            default: null,
             min: 1,
-            index: true,
         },
 
         pickupPointTime: {
@@ -49,9 +55,10 @@ const FareSchema = new mongoose.Schema(
             trim: true,
         },
 
-        /* ------------------------------------------
-           Drop Point Snapshot
-        ------------------------------------------- */
+        /* =====================================================
+           DROP POINT SNAPSHOT
+        ===================================================== */
+
         dropPointName: {
             type: String,
             required: true,
@@ -61,9 +68,9 @@ const FareSchema = new mongoose.Schema(
 
         dropPointOrder: {
             type: Number,
-            required: true,
+            required: false,
+            default: null,
             min: 1,
-            index: true,
         },
 
         dropPointTime: {
@@ -72,9 +79,10 @@ const FareSchema = new mongoose.Schema(
             trim: true,
         },
 
-        /* ------------------------------------------
-           Fare Details
-        ------------------------------------------- */
+        /* =====================================================
+           FARE DETAILS
+        ===================================================== */
+
         fareAmount: {
             type: Number,
             required: true,
@@ -100,9 +108,10 @@ const FareSchema = new mongoose.Schema(
             index: true,
         },
 
-        /* ------------------------------------------
-           Grouping / Bulk Create Tracking
-        ------------------------------------------- */
+        /* =====================================================
+           BULK / GROUP TRACKING
+        ===================================================== */
+
         applyNextPickups: {
             type: Boolean,
             default: false,
@@ -120,9 +129,10 @@ const FareSchema = new mongoose.Schema(
             index: true,
         },
 
-        /* ------------------------------------------
-           Optional Labels
-        ------------------------------------------- */
+        /* =====================================================
+           OPTIONAL LABELS
+        ===================================================== */
+
         label: {
             type: String,
             default: "",
@@ -135,9 +145,10 @@ const FareSchema = new mongoose.Schema(
             trim: true,
         },
 
-        /* ------------------------------------------
-           Status
-        ------------------------------------------- */
+        /* =====================================================
+           STATUS
+        ===================================================== */
+
         status: {
             type: String,
             enum: ["ACTIVE", "INACTIVE", "EXPIRED"],
@@ -151,9 +162,10 @@ const FareSchema = new mongoose.Schema(
             index: true,
         },
 
-        /* ------------------------------------------
-           Audit Fields
-        ------------------------------------------- */
+        /* =====================================================
+           AUDIT FIELDS
+        ===================================================== */
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
@@ -171,14 +183,13 @@ const FareSchema = new mongoose.Schema(
     }
 );
 
-/* ------------------------------------------
-   Indexes
-------------------------------------------- */
+/* =====================================================
+   INDEXES
+===================================================== */
+
 FareSchema.index({
     busId: 1,
     tripDirection: 1,
-    pickupPointOrder: 1,
-    dropPointOrder: 1,
     validFrom: 1,
     validTill: 1,
     status: 1,
@@ -198,17 +209,28 @@ FareSchema.index({
     parentRuleGroupId: 1,
 });
 
-/* ------------------------------------------
-   Auto-expire
-------------------------------------------- */
-FareSchema.pre("save", function (next) {
+/* =====================================================
+   AUTO EXPIRE MIDDLEWARE
+===================================================== */
+
+FareSchema.pre("save", function () {
     const now = new Date();
 
-    if (this.validTill && this.validTill < now && this.status !== "INACTIVE") {
+    if (
+        this.validTill &&
+        this.validTill < now &&
+        this.status !== "INACTIVE"
+    ) {
         this.status = "EXPIRED";
     }
-
-    next();
 });
 
-export default mongoose.models.Fare || mongoose.model("Fare", FareSchema);
+/* =====================================================
+   SAFE MODEL EXPORT
+===================================================== */
+
+const Fare =
+    mongoose.models.Fare ||
+    mongoose.model("Fare", FareSchema);
+
+export default Fare;

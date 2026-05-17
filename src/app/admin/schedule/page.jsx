@@ -215,7 +215,53 @@ export default function SchedulePage() {
             const data = await res.json();
 
             if (res.ok && data.success) {
-                setSchedules(data.data || []);
+                let schedulesList = data.data || [];
+
+                // Fetch fares once to compute rule-based display when schedule effectiveFare is zero
+                try {
+                    const faresRes = await apiFetch(`/api/fare`);
+                    const faresData = await faresRes.json();
+                    const faresList = faresData?.data || [];
+
+                    schedulesList = schedulesList.map((sch) => {
+                        const travelDate = sch.travelDate ? new Date(sch.travelDate) : null;
+
+                        // Find any fare rule for this busId that covers the schedule date
+                        const matchingFare = faresList.find((f) => {
+                            if (!f || !f.busId) return false;
+                            if (String(f.busId) !== String(sch.busId)) return false;
+                            if (!f.validFrom || !f.validTill) return false;
+                            const vf = new Date(f.validFrom);
+                            const vt = new Date(f.validTill);
+                            if (!travelDate) return false;
+                            // compare date only
+                            const td = new Date(travelDate.toISOString().slice(0, 10));
+                            return td >= new Date(vf.toISOString().slice(0, 10)) && td <= new Date(vt.toISOString().slice(0, 10));
+                        });
+
+                        const computed = { ...sch };
+
+                        if (matchingFare) {
+                            computed._displayFare = Number(matchingFare.fareAmount || matchingFare.fareAmount === 0 ? matchingFare.fareAmount : 0);
+                            computed._fareSource = "fareRule";
+                        } else if (Number(sch.effectiveFare) > 0) {
+                            computed._displayFare = Number(sch.effectiveFare);
+                            computed._fareSource = "base";
+                        } else if (Number(sch.baseFare) > 0) {
+                            computed._displayFare = Number(sch.baseFare);
+                            computed._fareSource = "base";
+                        } else {
+                            computed._displayFare = null; // indicate unknown
+                            computed._fareSource = "default";
+                        }
+
+                        return computed;
+                    });
+                } catch (err) {
+                    console.warn("Failed to fetch fares for schedule display", err);
+                }
+
+                setSchedules(schedulesList);
             } else {
                 showAppToast("error", data.message || "Failed to fetch schedules");
             }
@@ -435,7 +481,21 @@ export default function SchedulePage() {
                                 <td className="px-4 py-4 text-sm text-slate-700">{item.endTime || "--:--"}</td>
 
                                 <td className="px-4 py-4 text-sm font-semibold text-slate-900">
-                                    ₹ {Number(item.effectiveFare || item.baseFare || 0)}
+                                    <div className="flex items-center gap-2">
+                                        {typeof item._displayFare === "number" && item._displayFare !== null ? (
+                                            <span>₹ {Number(item._displayFare)}</span>
+                                        ) : (
+                                            <span>-</span>
+                                        )}
+
+                                        <span className="ml-2 inline-flex items-center rounded-full bg-white/60 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                                            {item._fareSource === "fareRule"
+                                                ? "Fare rule"
+                                                : item._fareSource === "base"
+                                                    ? "Base"
+                                                    : "Default"}
+                                        </span>
+                                    </div>
                                 </td>
 
                                 <td className="px-4 py-4">

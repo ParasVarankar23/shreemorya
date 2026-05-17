@@ -11,6 +11,13 @@ function formatCurrency(amount) {
     }).format(Number(amount || 0));
 }
 
+function fareSourceLabel(source) {
+    if (!source) return "";
+    if (source === "schedule") return "Schedule";
+    if (source === "fare.js") return "Fare rule";
+    return "Default";
+}
+
 export default function AvailableBusCard({ bus, onViewSeats }) {
     const baseSeats = Number(bus?.seatLayout || 39);
     const cabins = Number(bus?.cabinCount || 0);
@@ -50,8 +57,13 @@ export default function AvailableBusCard({ bus, onViewSeats }) {
                                 {bus?.busType || "NON_AC"}
                             </span>
 
-                            <span className="rounded-full bg-amber-50 px-4 py-1.5 text-sm font-bold text-amber-700 sm:text-base">
-                                Fare {formatCurrency(bus?.fare)}
+                            <span className="rounded-full bg-amber-50 px-4 py-1.5 text-sm font-bold text-amber-700 sm:text-base flex items-center gap-2">
+                                <span>Fare {formatCurrency(bus?.fare)}</span>
+                                {bus?.fareSource && (
+                                    <span className="ml-2 rounded-full bg-white/60 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                                        {fareSourceLabel(bus.fareSource)}
+                                    </span>
+                                )}
                             </span>
                         </div>
                     </div>

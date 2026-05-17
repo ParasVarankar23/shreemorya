@@ -1,395 +1,402 @@
-import createAuditLog from "@/lib/createAuditLog";
 import connectDB from "@/lib/mongodb";
 import Bus from "@/models/bus.model";
 import Fare from "@/models/fare.model";
-import { getAuthUserFromRequest, hasRole } from "@/utils/auth";
+import Schedule from "@/models/schedule.model";
 import { NextResponse } from "next/server";
 
-/* ------------------------------------------
-   Helper: build fare combinations
-------------------------------------------- */
-function buildFareCombinations({
-    pickupPoints,
-    dropPoints,
-    selectedPickupOrder,
-    selectedDropOrder,
-    fareAmount,
-    applyNextPickups,
-    applyNextDrops,
-}) {
-    let pickupCandidates = pickupPoints.filter((p) => p.order === selectedPickupOrder);
-    let dropCandidates = dropPoints.filter((d) => d.order === selectedDropOrder);
+/* =====================================================
+   CONNECT DB
+===================================================== */
 
-    if (applyNextPickups) {
-        pickupCandidates = pickupPoints.filter(
-            (p) => p.order >= selectedPickupOrder && p.order < selectedDropOrder
-        );
-    }
+await connectDB();
 
-    if (applyNextDrops) {
-        dropCandidates = dropPoints.filter(
-            (d) => d.order >= selectedDropOrder && d.order > selectedPickupOrder
-        );
-    }
+/* =====================================================
+   GET ALL / SINGLE
+===================================================== */
 
-    const combinations = [];
-
-    for (const pickup of pickupCandidates) {
-        for (const drop of dropCandidates) {
-            if (pickup.order < drop.order) {
-                combinations.push({
-                    pickupPointName: pickup.name,
-                    pickupPointOrder: pickup.order,
-                    pickupPointTime: pickup.time || "",
-                    dropPointName: drop.name,
-                    dropPointOrder: drop.order,
-                    dropPointTime: drop.time || "",
-                    fareAmount,
-                });
-            }
-        }
-    }
-
-    return combinations;
-}
-
-/* ------------------------------------------
-   GET /api/fare
-------------------------------------------- */
 export async function GET(request) {
     try {
-        await connectDB();
-
-        const authUser = await getAuthUserFromRequest(request);
-
-        if (!authUser) {
-            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-        }
-
-        if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
-        }
-
         const { searchParams } = new URL(request.url);
 
-        const busId = searchParams.get("busId") || "";
-        const routeName = searchParams.get("routeName") || "";
-        const tripDirection = searchParams.get("tripDirection") || "";
-        const fareType = searchParams.get("fareType") || "";
-        const status = searchParams.get("status") || "";
-        const pickupPointName = searchParams.get("pickupPointName") || "";
-        const dropPointName = searchParams.get("dropPointName") || "";
-        const date = searchParams.get("date") || "";
-        const parentRuleGroupId = searchParams.get("parentRuleGroupId") || "";
-        const page = parseInt(searchParams.get("page") || "1", 10);
-        const limit = parseInt(searchParams.get("limit") || "20", 10);
+        const id = searchParams.get("id");
 
-        const query = {
-            isActive: true,
-        };
+        /* ================= SINGLE ================= */
 
-        if (busId) query.busId = busId;
-        if (routeName) query.routeName = { $regex: routeName, $options: "i" };
-        if (tripDirection) query.tripDirection = tripDirection;
-        if (fareType) query.fareType = fareType;
-        if (status) query.status = status;
-        if (pickupPointName) query.pickupPointName = { $regex: pickupPointName, $options: "i" };
-        if (dropPointName) query.dropPointName = { $regex: dropPointName, $options: "i" };
-        if (parentRuleGroupId) query.parentRuleGroupId = parentRuleGroupId;
+        if (id) {
+            const fare = await Fare.findById(id);
 
-        if (date) {
-            const dateObj = new Date(date);
-            query.validFrom = { $lte: dateObj };
-            query.validTill = { $gte: dateObj };
+            if (!fare) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Fare not found",
+                    },
+                    { status: 404 }
+                );
+            }
+
+            return NextResponse.json({
+                success: true,
+                data: fare,
+            });
         }
 
-        const skip = (page - 1) * limit;
+        /* ================= ALL ================= */
 
-        const [fares, total] = await Promise.all([
-            Fare.find(query)
-                .sort({
-                    tripDirection: 1,
-                    pickupPointOrder: 1,
-                    dropPointOrder: 1,
-                    validFrom: 1,
-                    createdAt: -1,
-                })
-                .skip(skip)
-                .limit(limit),
-            Fare.countDocuments(query),
-        ]);
+        const fares = await Fare.find({
+            isActive: true,
+        }).sort({
+            createdAt: -1,
+        });
 
         return NextResponse.json({
             success: true,
-            message: "Fare rules fetched successfully",
+            total: fares.length,
             data: fares,
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit),
-            },
         });
     } catch (error) {
-        console.error("GET /api/fare error:", error);
+        console.log(error);
 
-        return NextResponse.json({ success: false, message: "Failed to fetch fare rules" }, { status: 500 });
+        return NextResponse.json(
+            {
+                success: false,
+                message: "Failed to fetch fares",
+            },
+            { status: 500 }
+        );
     }
 }
 
-/* ------------------------------------------
-   POST /api/fare
-------------------------------------------- */
+/* =====================================================
+   CREATE
+===================================================== */
+
 export async function POST(request) {
     try {
-        await connectDB();
-
-        const authUser = await getAuthUserFromRequest(request);
-
-        if (!authUser) {
-            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-        }
-
-        if (!hasRole(authUser, ["admin"])) {
-            return NextResponse.json({ success: false, message: "Forbidden: Admin only" }, { status: 403 });
-        }
-
         const body = await request.json();
 
         const {
             busId,
-            tripDirection = "FORWARD",
+            tripDirection,
+            pickupPointName,
             pickupPointOrder,
+            dropPointName,
             dropPointOrder,
             fareAmount,
+            fareType,
             validFrom,
             validTill,
-            fareType = "REGULAR",
-            applyNextPickups = false,
-            applyNextDrops = false,
-            label = "",
-            reason = "",
+            label,
+            reason,
         } = body;
+
+        /* ================= VALIDATION ================= */
 
         if (
             !busId ||
-            !pickupPointOrder ||
-            !dropPointOrder ||
-            fareAmount == null ||
+            !pickupPointName ||
+            !dropPointName ||
+            !fareAmount ||
             !validFrom ||
             !validTill
         ) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "busId, pickupPointOrder, dropPointOrder, fareAmount, validFrom, validTill are required",
+                    message: "All required fields are mandatory",
                 },
                 { status: 400 }
             );
         }
 
-        if (Number(pickupPointOrder) >= Number(dropPointOrder)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "pickupPointOrder must be less than dropPointOrder",
-                },
-                { status: 400 }
-            );
-        }
-
-        const validFromDate = new Date(validFrom);
-        const validTillDate = new Date(validTill);
-
-        if (Number.isNaN(validFromDate.getTime()) || Number.isNaN(validTillDate.getTime())) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid validFrom or validTill date",
-                },
-                { status: 400 }
-            );
-        }
-
-        if (validTillDate < validFromDate) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "validTill must be greater than or equal to validFrom",
-                },
-                { status: 400 }
-            );
-        }
+        /* ================= CHECK BUS ================= */
 
         const bus = await Bus.findById(busId);
 
-        if (!bus || !bus.isActive) {
-            return NextResponse.json({ success: false, message: "Bus not found" }, { status: 404 });
+        if (!bus) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Bus not found",
+                },
+                { status: 404 }
+            );
         }
 
-        let tripData = null;
+        /* ================= DERIVE ORDERS & TIMES FROM BUS ================= */
 
-        if (tripDirection === "FORWARD") {
-            tripData = bus.forwardTrip;
-        } else if (tripDirection === "RETURN") {
-            if (!bus.returnTrip) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Return trip not configured for this bus",
-                    },
-                    { status: 400 }
-                );
-            }
-            tripData = bus.returnTrip;
+        function findPointInfo(points = [], name) {
+            if (!name) return null;
+            const idx = points.findIndex((p) => String(p.name || p).trim() === String(name).trim());
+            if (idx === -1) return null;
+            const p = points[idx];
+            return {
+                order: Number(p.order || idx + 1),
+                time: p.time || "",
+            };
+        }
+
+        let pickupInfo = null;
+        let dropInfo = null;
+
+        if ((tripDirection || "FORWARD") === "FORWARD") {
+            const forward = bus.forwardTrip || {};
+            pickupInfo = findPointInfo(forward.pickupPoints || [], pickupPointName);
+            dropInfo = findPointInfo(forward.dropPoints || [], dropPointName);
         } else {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid tripDirection. Allowed: FORWARD, RETURN",
-                },
-                { status: 400 }
-            );
+            const returnTrip = bus.returnTrip || null;
+
+            if (returnTrip) {
+                pickupInfo = findPointInfo(returnTrip.pickupPoints || [], pickupPointName);
+                dropInfo = findPointInfo(returnTrip.dropPoints || [], dropPointName);
+            } else {
+                // derive from forward reversed
+                const forward = bus.forwardTrip || {};
+                const reversedPickup = (forward.dropPoints || []).slice().reverse();
+                const reversedDrop = (forward.pickupPoints || []).slice().reverse();
+
+                pickupInfo = findPointInfo(reversedPickup, pickupPointName);
+                dropInfo = findPointInfo(reversedDrop, dropPointName);
+            }
         }
 
-        const pickupPoints = Array.isArray(tripData?.pickupPoints) ? tripData.pickupPoints : [];
-        const dropPoints = Array.isArray(tripData?.dropPoints) ? tripData.dropPoints : [];
+        const pickupPointOrderFinal = pickupInfo ? pickupInfo.order : null;
+        const dropPointOrderFinal = dropInfo ? dropInfo.order : null;
 
-        const selectedPickup = pickupPoints.find((p) => p.order === Number(pickupPointOrder));
-        const selectedDrop = dropPoints.find((d) => d.order === Number(dropPointOrder));
+        const pickupPointTimeFinal = pickupInfo ? pickupInfo.time : "";
+        const dropPointTimeFinal = dropInfo ? dropInfo.time : "";
 
-        if (!selectedPickup) {
-            return NextResponse.json(
-                { success: false, message: "Selected pickup point not found" },
-                { status: 400 }
-            );
-        }
+        /* ================= DUPLICATE ================= */
 
-        if (!selectedDrop) {
-            return NextResponse.json(
-                { success: false, message: "Selected drop point not found" },
-                { status: 400 }
-            );
-        }
-
-        const combinations = buildFareCombinations({
-            pickupPoints,
-            dropPoints,
-            selectedPickupOrder: Number(pickupPointOrder),
-            selectedDropOrder: Number(dropPointOrder),
-            fareAmount: Number(fareAmount),
-            applyNextPickups,
-            applyNextDrops,
-        });
-
-        if (!combinations.length) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "No valid fare combinations generated",
-                },
-                { status: 400 }
-            );
-        }
-
-        const duplicateConditions = combinations.map((item) => ({
-            busId: bus._id,
+        const existing = await Fare.findOne({
+            busId,
+            pickupPointName,
+            dropPointName,
             tripDirection,
-            pickupPointOrder: item.pickupPointOrder,
-            dropPointOrder: item.dropPointOrder,
-            validFrom: validFromDate,
-            validTill: validTillDate,
             isActive: true,
-        }));
-
-        const existingDuplicate = await Fare.findOne({
-            $or: duplicateConditions,
         });
 
-        if (existingDuplicate) {
+        if (existing) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "A fare rule already exists for one or more selected pickup-drop combinations in the same date range",
+                    message: "Fare rule already exists",
                 },
                 { status: 409 }
             );
         }
 
-        const parentRuleGroupId = `FRG-${Date.now()}`;
+        /* ================= CREATE ================= */
 
-        const docs = combinations.map((item) => ({
-            busId: bus._id,
+        const fare = await Fare.create({
+            busId,
             routeName: bus.routeName,
             tripDirection,
-            pickupPointName: item.pickupPointName,
-            pickupPointOrder: item.pickupPointOrder,
-            pickupPointTime: item.pickupPointTime,
-            dropPointName: item.dropPointName,
-            dropPointOrder: item.dropPointOrder,
-            dropPointTime: item.dropPointTime,
-            fareAmount: Number(item.fareAmount),
-            fareType,
-            validFrom: validFromDate,
-            validTill: validTillDate,
-            applyNextPickups,
-            applyNextDrops,
-            parentRuleGroupId,
-            label,
-            reason,
+
+            pickupPointName,
+            pickupPointOrder: pickupPointOrderFinal,
+            pickupPointTime: pickupPointTimeFinal,
+
+            dropPointName,
+            dropPointOrder: dropPointOrderFinal,
+            dropPointTime: dropPointTimeFinal,
+
+            fareAmount,
+
+            fareType: fareType || "REGULAR",
+
+            validFrom,
+            validTill,
+
+            label: label || "",
+            reason: reason || "",
+
+            applyNextPickups: body.applyNextPickups || false,
+            applyNextDrops: body.applyNextDrops || false,
+
             status: "ACTIVE",
             isActive: true,
-            createdBy: authUser.userId,
-            updatedBy: authUser.userId,
-        }));
+        });
 
-        const createdFares = await Fare.insertMany(docs);
-
+        // When a fare rule is created, update any existing schedules for this bus
+        // within the fare's validity so booking/search will pick up the new effective fare.
         try {
-            await createAuditLog({
-                userId: authUser.userId,
-                userRole: authUser.role,
-                action: "CREATE_FARE_RULES",
-                entityType: "FARE",
-                entityCode: bus.routeName,
-                message: `Created ${createdFares.length} fare rule(s) for ${bus.routeName}`,
-                metadata: {
-                    busId: String(bus._id),
-                    routeName: bus.routeName,
-                    tripDirection,
-                    parentRuleGroupId,
-                    totalRules: createdFares.length,
-                    applyNextPickups,
-                    applyNextDrops,
+            const vf = new Date(validFrom);
+            const vt = new Date(validTill);
+
+            await Schedule.updateMany(
+                {
+                    busId,
+                    travelDate: { $gte: vf, $lte: vt },
                 },
-                newValues: createdFares,
-                status: "SUCCESS",
-            });
-        } catch (auditError) {
-            console.error("Audit log fare create error:", auditError);
+                {
+                    $set: {
+                        effectiveFare: Number(fareAmount),
+                        fareType: fareType || "REGULAR",
+                    },
+                }
+            );
+        } catch (err) {
+            console.warn("Failed to update schedules after fare create:", err);
         }
 
         return NextResponse.json(
             {
                 success: true,
-                message: "Fare rule(s) created successfully",
-                data: {
-                    parentRuleGroupId,
-                    totalCreated: createdFares.length,
-                    rules: createdFares,
-                },
+                message: "Fare created successfully",
+                data: fare,
             },
             { status: 201 }
         );
     } catch (error) {
-        console.error("POST /api/fare error:", error);
+        console.log(error);
 
         return NextResponse.json(
             {
                 success: false,
-                message: error.message || "Failed to create fare rule(s)",
+                message: "Failed to create fare",
+            },
+            { status: 500 }
+        );
+    }
+}
+
+/* =====================================================
+   UPDATE
+===================================================== */
+
+export async function PUT(request) {
+    try {
+        const { searchParams } = new URL(request.url);
+
+        const id = searchParams.get("id");
+
+        if (!id) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Fare ID is required",
+                },
+                { status: 400 }
+            );
+        }
+
+        const body = await request.json();
+
+        const fare = await Fare.findById(id);
+
+        if (!fare) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Fare not found",
+                },
+                { status: 404 }
+            );
+        }
+
+        /* ================= UPDATE ================= */
+
+        fare.fareAmount =
+            body.fareAmount || fare.fareAmount;
+
+        fare.validFrom =
+            body.validFrom || fare.validFrom;
+
+        fare.validTill =
+            body.validTill || fare.validTill;
+
+        fare.fareType =
+            body.fareType || fare.fareType;
+
+        fare.label =
+            body.label || fare.label;
+
+        fare.reason =
+            body.reason || fare.reason;
+
+        if (typeof body.applyNextPickups !== "undefined") {
+            fare.applyNextPickups = !!body.applyNextPickups;
+        }
+
+        if (typeof body.applyNextDrops !== "undefined") {
+            fare.applyNextDrops = !!body.applyNextDrops;
+        }
+
+        fare.status =
+            body.status || fare.status;
+
+        await fare.save();
+
+        return NextResponse.json({
+            success: true,
+            message: "Fare updated successfully",
+            data: fare,
+        });
+    } catch (error) {
+        console.log(error);
+
+        return NextResponse.json(
+            {
+                success: false,
+                message: "Failed to update fare",
+            },
+            { status: 500 }
+        );
+    }
+}
+
+/* =====================================================
+   DELETE
+===================================================== */
+
+export async function DELETE(request) {
+    try {
+        const { searchParams } = new URL(request.url);
+
+        const id = searchParams.get("id");
+
+        if (!id) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Fare ID required",
+                },
+                { status: 400 }
+            );
+        }
+
+        const fare = await Fare.findById(id);
+
+        if (!fare) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Fare not found",
+                },
+                { status: 404 }
+            );
+        }
+
+        /* ================= SOFT DELETE ================= */
+
+        fare.isActive = false;
+
+        fare.status = "INACTIVE";
+
+        await fare.save();
+
+        return NextResponse.json({
+            success: true,
+            message: "Fare deleted successfully",
+        });
+    } catch (error) {
+        console.log(error);
+
+        return NextResponse.json(
+            {
+                success: false,
+                message: "Failed to delete fare",
             },
             { status: 500 }
         );
