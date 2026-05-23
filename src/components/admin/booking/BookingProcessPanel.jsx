@@ -1526,6 +1526,8 @@ export default function BookingProcessPanel({
                     bookingStatus: "CANCELLED",
                     cancelActionType: "NO_REFUND",
                     isBlockSeat: true,
+                    // Admin block operations should bypass the seat-hold requirement
+                    force: true,
                 }),
             });
 
@@ -2114,9 +2116,10 @@ export default function BookingProcessPanel({
                                             type="text"
                                             value={customerName}
                                             onChange={(e) => setCustomerName(e.target.value)}
-                                            placeholder="Enter booking customer name"
+                                            placeholder={selectedSeats.length === 0 ? "Select seat(s) first" : "Enter booking customer name"}
                                             autoComplete={autoFillPassengerFromCustomer ? "on" : "off"}
-                                            className="h-12 w-full rounded-[16px] border border-slate-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
+                                            disabled={selectedSeats.length === 0}
+                                            className={`h-12 w-full rounded-[16px] border pl-10 pr-4 text-sm font-medium outline-none transition-all duration-200 ${selectedSeats.length === 0 ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-white border-slate-300 text-slate-800 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"}`}
                                         />
 
                                         {selectedBookingDetail?.booking ? (
@@ -2162,9 +2165,10 @@ export default function BookingProcessPanel({
                                                 type="text"
                                                 value={customerPhone}
                                                 onChange={(e) => setCustomerPhone(e.target.value)}
-                                                placeholder="Enter phone number"
+                                                placeholder={selectedSeats.length === 0 ? "Select seat(s) first" : "Enter phone number"}
                                                 autoComplete={autoFillPassengerFromCustomer ? "on" : "off"}
-                                                className="h-12 w-full rounded-[16px] border border-slate-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
+                                                disabled={selectedSeats.length === 0}
+                                                className={`h-12 w-full rounded-[16px] border pl-10 pr-4 text-sm font-medium outline-none transition-all duration-200 ${selectedSeats.length === 0 ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-white border-slate-300 text-slate-800 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"}`}
                                             />
                                         </div>
                                     </div>
@@ -2179,9 +2183,10 @@ export default function BookingProcessPanel({
                                                 type="email"
                                                 value={customerEmail}
                                                 onChange={(e) => setCustomerEmail(e.target.value)}
-                                                placeholder="Enter email"
+                                                placeholder={selectedSeats.length === 0 ? "Select seat(s) first" : "Enter email"}
                                                 autoComplete={autoFillPassengerFromCustomer ? "on" : "off"}
-                                                className="h-12 w-full rounded-[16px] border border-slate-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
+                                                disabled={selectedSeats.length === 0}
+                                                className={`h-12 w-full rounded-[16px] border pl-10 pr-4 text-sm font-medium outline-none transition-all duration-200 ${selectedSeats.length === 0 ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-white border-slate-300 text-slate-800 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"}`}
                                             />
                                         </div>
                                     </div>
