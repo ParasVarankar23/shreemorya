@@ -48,6 +48,18 @@ export default function BookingPage() {
         };
     }, [selectedBus]);
 
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+    useEffect(() => {
+        try {
+            const hasAccess = !!(localStorage.getItem("accessToken") || "");
+            const hasRefresh = !!(localStorage.getItem("refreshToken") || "");
+            setIsLoggedIn(hasAccess || hasRefresh);
+        } catch (e) {
+            setIsLoggedIn(false);
+        }
+    }, []);
+
     const loadSchedulesAndStops = async () => {
         try {
             setLoadingStops(true);
@@ -245,6 +257,7 @@ export default function BookingPage() {
                                 dropStop={selectedDropMeta}
                                 onCloseBus={() => setSelectedBus(null)}
                                 isAdmin={false}
+                                autoFillPassengerFromCustomer={isLoggedIn}
                             />
                         </div>
                     </div>

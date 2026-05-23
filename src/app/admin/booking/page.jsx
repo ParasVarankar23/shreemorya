@@ -244,6 +244,8 @@ export default function BookingPage() {
                                 pickupStop={selectedPickupMeta}
                                 dropStop={selectedDropMeta}
                                 onCloseBus={() => setSelectedBus(null)}
+                                autoFillPassengerFromCustomer={false}
+                                autoHoldOnSelect={true}
                             />
                         </div>
                     </div>

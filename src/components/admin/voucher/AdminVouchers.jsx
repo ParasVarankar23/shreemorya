@@ -180,7 +180,14 @@ export default function AdminVouchers() {
                 headers: getAuthHeaders(),
             });
 
-            const json = await res.json();
+            const text = await res.text();
+            let json = null;
+            try {
+                json = JSON.parse(text || "{}");
+            } catch (err) {
+                console.error("AdminVouchers.handleRowClick: non-JSON response:", text);
+                throw new Error("Server returned non-JSON response when fetching voucher details");
+            }
 
             if (!res.ok || !json?.success) {
                 throw new Error(json?.message || "Failed to fetch voucher details");

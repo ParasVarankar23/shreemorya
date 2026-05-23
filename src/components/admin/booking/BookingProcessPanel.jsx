@@ -61,6 +61,12 @@ export default function BookingProcessPanel({
     onCloseBus,
     // When rendered for normal users, set isAdmin to false to hide admin-only controls
     isAdmin = true,
+    // When true, propagate top-level customer name into per-seat passenger names.
+    // Set to false for admin/staff pages to avoid auto-filling passenger inputs.
+    autoFillPassengerFromCustomer = true,
+    // When boolean, controls whether selecting a seat automatically creates a hold.
+    // If omitted, defaults to previous behaviour (auto-hold for non-admin users).
+    autoHoldOnSelect,
 }) {
     const [selectedSeats, setSelectedSeats] = useState([]);
     const [existingBookings, setExistingBookings] = useState([]);
@@ -121,7 +127,10 @@ export default function BookingProcessPanel({
     }, [selectedBus?._id, travelDate]);
 
     // Auto-fill booking contact fields from server-side profile (do not use localStorage user)
+    // Only run when autoFillPassengerFromCustomer is enabled (e.g., logged-in regular users).
     useEffect(() => {
+        if (!autoFillPassengerFromCustomer) return;
+
         let mounted = true;
 
         async function fetchProfile() {
@@ -217,7 +226,7 @@ export default function BookingProcessPanel({
             mounted = false;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [autoFillPassengerFromCustomer]);
 
     // When admin views an existing booking, auto-fill contact & passenger fields
     useEffect(() => {
@@ -253,13 +262,10 @@ export default function BookingProcessPanel({
 
     const prevCustomerNameRef = useRef("");
 
-    // Keep passengerDetails synced with selectedSeats
-    // Also populate missing seat passenger names from the booking customer name
-    // so the user doesn't need to type the same name twice if they enter
-    // the booking customer name after selecting seats. While typing the
-    // booking customer name, update per-seat names only if they were empty
-    // or previously matched the previous customer name (so custom edits
-    // are not overwritten).
+    // Keep passengerDetails synced with selectedSeats.
+    // When `autoFillPassengerFromCustomer` is true, populate per-seat passenger
+    // names from the top-level customer name (legacy behaviour). When false,
+    // do not propagate customerName into per-seat inputs (admin/staff preference).
     useEffect(() => {
         setPassengerDetails((prev) => {
             const next = { ...prev };
@@ -272,24 +278,23 @@ export default function BookingProcessPanel({
                 }
             });
 
-            // add selected or fill/refresh passengerName from customerName
             selectedSeats.forEach((seatNo) => {
                 const key = String(seatNo);
-                const prevCustomer = prevCustomerNameRef.current || "";
 
                 if (!next[key]) {
                     next[key] = {
                         seatNo: key,
-                        passengerName: customerName.trim() || "",
-                        passengerGender: customerGender || "",
+                        passengerName: autoFillPassengerFromCustomer
+                            ? customerName.trim() || ""
+                            : "",
+                        passengerGender: autoFillPassengerFromCustomer
+                            ? customerGender || ""
+                            : "",
                     };
-                } else {
+                } else if (autoFillPassengerFromCustomer) {
                     const currentName = String(next[key].passengerName || "").trim();
+                    const prevCustomer = prevCustomerNameRef.current || "";
 
-                    // If empty or previously set from the earlier customerName,
-                    // overwrite with the new customerName value. This lets typing
-                    // in the top field propagate live to per-seat inputs, but
-                    // preserves manual per-seat edits.
                     if (
                         (!currentName || currentName === prevCustomer) &&
                         customerName.trim()
@@ -299,12 +304,13 @@ export default function BookingProcessPanel({
                 }
             });
 
-            // update prevCustomerNameRef
-            prevCustomerNameRef.current = customerName.trim();
+            if (autoFillPassengerFromCustomer) {
+                prevCustomerNameRef.current = customerName.trim();
+            }
 
             return next;
         });
-    }, [selectedSeats, customerName]);
+    }, [selectedSeats, customerName, autoFillPassengerFromCustomer]);
 
     const bookedMap = useMemo(() => {
         const map = {};
@@ -335,7 +341,7 @@ export default function BookingProcessPanel({
                     bookingId: booking?._id,
                     status: resolvedStatus,
                     seatNo,
-                    ticketNo: seatItem?.ticketNo || "",
+                    ticketNo: seatItem?.ticketNo || `${booking?.bookingCode || "BOOK"}-${seatNo}`,
                     passengerName: seatItem?.passengerName || booking?.customerName || "",
                     passengerGender:
                         seatItem?.passengerGender || booking?.customerGender || "",
@@ -402,6 +408,7 @@ export default function BookingProcessPanel({
             });
 
             const data = await res.json();
+
             if (!res.ok || !data?.success) {
                 throw new Error(data?.message || "Failed to fetch voucher");
             }
@@ -426,6 +433,15 @@ export default function BookingProcessPanel({
         const status = String(v.status || "").toUpperCase();
         if (remaining <= 0 || status === "USED") {
             return showAppToast("error", "This voucher has no remaining balance or is already used");
+        }
+
+        // If voucher contains guest contact details, populate contact fields
+        try {
+            if (v.guestName) setCustomerName(String(v.guestName || ""));
+            if (v.guestPhoneNumber) setCustomerPhone(String(v.guestPhoneNumber || ""));
+            if (v.guestEmail) setCustomerEmail(String(v.guestEmail || ""));
+        } catch (e) {
+            // ignore
         }
 
         setVoucherData(sanitizeVoucher(v));
@@ -665,8 +681,10 @@ export default function BookingProcessPanel({
 
         setSelectedSeats(next);
 
-        // Auto-hold / release logic for non-admin users
-        if (!isAdmin) {
+        const shouldAutoHold = typeof autoHoldOnSelect === "boolean" ? autoHoldOnSelect : !isAdmin;
+
+        // Auto-hold / release logic (configurable via `autoHoldOnSelect` prop)
+        if (shouldAutoHold) {
             const nextFresh = next.filter(
                 (s) => !blockedSeats.includes(String(s)) && !bookedSeats.includes(String(s))
             );
@@ -832,7 +850,7 @@ export default function BookingProcessPanel({
 
             setSelectedBookingDetail({
                 seatNo,
-                ticketNo: seatItem?.ticketNo || "",
+                ticketNo: seatItem?.ticketNo || `${booking?.bookingCode || "BOOK"}-${seatNo}`,
                 passengerName: seatItem?.passengerName || booking?.customerName || "",
                 passengerGender:
                     seatItem?.passengerGender || booking?.customerGender || "",
@@ -875,7 +893,7 @@ export default function BookingProcessPanel({
 
         setSelectedBookingDetail({
             seatNo: firstSeat,
-            ticketNo: firstSeatItem?.ticketNo || "",
+            ticketNo: firstSeatItem?.ticketNo || `${booking?.bookingCode || "BOOK"}-${firstSeat}`,
             passengerName: firstSeatItem?.passengerName || booking?.customerName || "",
             passengerGender:
                 firstSeatItem?.passengerGender || booking?.customerGender || "",
@@ -926,7 +944,7 @@ export default function BookingProcessPanel({
 
         setSelectedBookingDetail({
             seatNo: seatKey,
-            ticketNo: seatItem?.ticketNo || "",
+            ticketNo: seatItem?.ticketNo || `${matchedBooking?.bookingCode || "BOOK"}-${seatKey}`,
             passengerName: seatItem?.passengerName || "Blocked Seat",
             passengerGender: seatItem?.passengerGender || "",
             booking: matchedBooking,
@@ -2097,6 +2115,7 @@ export default function BookingProcessPanel({
                                             value={customerName}
                                             onChange={(e) => setCustomerName(e.target.value)}
                                             placeholder="Enter booking customer name"
+                                            autoComplete={autoFillPassengerFromCustomer ? "on" : "off"}
                                             className="h-12 w-full rounded-[16px] border border-slate-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
                                         />
 
@@ -2144,6 +2163,7 @@ export default function BookingProcessPanel({
                                                 value={customerPhone}
                                                 onChange={(e) => setCustomerPhone(e.target.value)}
                                                 placeholder="Enter phone number"
+                                                autoComplete={autoFillPassengerFromCustomer ? "on" : "off"}
                                                 className="h-12 w-full rounded-[16px] border border-slate-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
                                             />
                                         </div>
@@ -2160,6 +2180,7 @@ export default function BookingProcessPanel({
                                                 value={customerEmail}
                                                 onChange={(e) => setCustomerEmail(e.target.value)}
                                                 placeholder="Enter email"
+                                                autoComplete={autoFillPassengerFromCustomer ? "on" : "off"}
                                                 className="h-12 w-full rounded-[16px] border border-slate-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
                                             />
                                         </div>
@@ -2226,6 +2247,7 @@ export default function BookingProcessPanel({
                                                                     }
                                                                     placeholder={`Enter name for seat ${seatNo}`}
                                                                     className="h-11 w-full rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 outline-none transition-all duration-200 focus:border-[#0B5D5A] focus:ring-4 focus:ring-[#0B5D5A]/10"
+                                                                    autoComplete={autoFillPassengerFromCustomer ? "on" : "off"}
                                                                 />
                                                             </div>
 
@@ -2509,7 +2531,7 @@ export default function BookingProcessPanel({
 
                                 setSelectedBookingDetail({
                                     seatNo: firstSeat,
-                                    ticketNo: firstSeatItem?.ticketNo || "",
+                                    ticketNo: firstSeatItem?.ticketNo || `${booking?.bookingCode || "BOOK"}-${firstSeat}`,
                                     passengerName:
                                         firstSeatItem?.passengerName || booking?.customerName || "",
                                     passengerGender:

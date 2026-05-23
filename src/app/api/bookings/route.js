@@ -766,7 +766,7 @@ export async function POST(request) {
                 }
             }
 
-            const bookingPayload = await buildBookingPayload({
+            let bookingPayload = await buildBookingPayload({
                 scheduleId,
                 travelDate,
                 normalizedSeats,
@@ -790,37 +790,86 @@ export async function POST(request) {
                 isBlockSeat: blockSeatMode,
                 userId: authUser?.userId || null,
             });
+            // Attempt to create booking; retry if we hit duplicate ticketNo due to race conditions
+            const maxCreateAttempts = 3;
+            let createAttempt = 0;
+            let lastCreateError = null;
 
-            if (usedTransaction && session) {
-                const created = await Booking.create([bookingPayload], { session });
-                booking = created[0];
+            while (createAttempt < maxCreateAttempts) {
+                createAttempt += 1;
+                try {
+                    if (usedTransaction && session) {
+                        const created = await Booking.create([bookingPayload], { session });
+                        booking = created[0];
 
-                if (usedHolds && usedHolds.length > 0) {
-                    for (const hid of usedHolds) {
-                        await SeatHold.findByIdAndUpdate(
-                            hid,
-                            { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false },
-                            { session }
-                        );
-                    }
-                }
+                        if (usedHolds && usedHolds.length > 0) {
+                            for (const hid of usedHolds) {
+                                await SeatHold.findByIdAndUpdate(
+                                    hid,
+                                    { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false },
+                                    { session }
+                                );
+                            }
+                        }
 
-                await session.commitTransaction();
-            } else {
-                // Non-transactional fallback
-                booking = await Booking.create(bookingPayload);
+                        await session.commitTransaction();
+                    } else {
+                        // Non-transactional fallback
+                        booking = await Booking.create(bookingPayload);
 
-                if (usedHolds && usedHolds.length > 0) {
-                    for (const hid of usedHolds) {
-                        try {
-                            await SeatHold.findByIdAndUpdate(
-                                hid,
-                                { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false }
-                            );
-                        } catch (holdErr) {
-                            console.warn("FAILED_UPDATING_HOLD_AFTER_BOOKING:", holdErr?.message || holdErr);
+                        if (usedHolds && usedHolds.length > 0) {
+                            for (const hid of usedHolds) {
+                                try {
+                                    await SeatHold.findByIdAndUpdate(
+                                        hid,
+                                        { status: "CONVERTED_TO_BOOKING", convertedBookingId: booking._id, isActive: false }
+                                    );
+                                } catch (holdErr) {
+                                    console.warn("FAILED_UPDATING_HOLD_AFTER_BOOKING:", holdErr?.message || holdErr);
+                                }
+                            }
                         }
                     }
+
+                    // created successfully
+                    lastCreateError = null;
+                    break;
+                } catch (createErr) {
+                    lastCreateError = createErr;
+
+                    // If transaction was started, abort it so we can retry cleanly
+                    try {
+                        if (session && usedTransaction) await session.abortTransaction();
+                    } catch (abortErr) {
+                        console.warn("ABORT_TRANSACTION_ERROR_ON_RETRY:", abortErr?.message || abortErr);
+                    }
+
+                    // Detect duplicate ticketNo error (unique index on seatItems.ticketNo)
+                    const isDuplicateTicketErr = createErr && (createErr.code === 11000 || (createErr.errorResponse && createErr.errorResponse.code === 11000));
+
+                    if (!isDuplicateTicketErr || createAttempt >= maxCreateAttempts) {
+                        // give up
+                        throw createErr;
+                    }
+
+                    console.warn(`Duplicate ticket detected on attempt ${createAttempt}, regenerating booking code and retrying`);
+
+                    // Regenerate bookingCode and update ticket numbers on payload
+                    try {
+                        const newCode = await generateBookingCode(travelDate);
+                        bookingPayload.bookingCode = newCode;
+                        if (Array.isArray(bookingPayload.seatItems)) {
+                            bookingPayload.seatItems = bookingPayload.seatItems.map((it) => ({
+                                ...it,
+                                ticketNo: generateTicketNo(newCode, it.seatNo),
+                            }));
+                        }
+                    } catch (regenErr) {
+                        console.warn("REGENERATE_BOOKING_CODE_FAILED:", regenErr?.message || regenErr);
+                        throw createErr;
+                    }
+
+                    // loop to retry
                 }
             }
         } catch (txErr) {

@@ -286,6 +286,7 @@ export default function BookingPage() {
                                 dropStop={selectedDropMeta}
                                 onCloseBus={() => setSelectedBus(null)}
                                 isAdmin={false}
+                                autoFillPassengerFromCustomer={false}
                             />
                         </div>
                     </div>

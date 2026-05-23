@@ -535,6 +535,21 @@ export async function sendBookingCancellation(email, name, booking = {}) {
     const retainedAmount = Math.max(fareAmount - refundAmount, 0);
     const paymentMethod = safeText(booking.paymentMethod || "Online Payment");
 
+    // Prefer cancelled seat numbers when available (cancel flow provides cancelledSeats/cancelledSeatItems)
+    const cancelledSeatList = Array.isArray(booking?.cancelledSeats) && booking.cancelledSeats.length
+        ? booking.cancelledSeats.map((s) => String(s || ""))
+        : Array.isArray(booking?.cancelledSeatItems) && booking.cancelledSeatItems.length
+            ? booking.cancelledSeatItems.map((it) => String(it?.seatNo || ""))
+            : null;
+
+    const seatDisplay = booking.seatNo
+        ? String(booking.seatNo)
+        : cancelledSeatList && cancelledSeatList.length
+            ? cancelledSeatList.join(", ")
+            : Array.isArray(booking.seats) && booking.seats.length
+                ? booking.seats.join(", ")
+                : "--";
+
     const bookingDetailsHtml = card(
         "Cancelled Booking Details",
         `
@@ -544,13 +559,7 @@ export async function sendBookingCancellation(email, name, booking = {}) {
                 ${infoRow("Bus Number", getBusNumber(booking))}
                 ${infoRow("Route Name", getRouteName(booking))}
                 ${infoRow("Travel Date", safeText(booking.date || booking.travelDate || "--"))}
-                ${infoRow(
-            "Seat Number",
-            safeText(
-                booking.seatNo ||
-                (Array.isArray(booking.seats) ? booking.seats.join(", ") : "--")
-            )
-        )}
+                ${infoRow("Seat Number", safeText(seatDisplay))}
                 ${infoRow(
             "Pickup Point",
             formatStopWithTime(pickup, startTime, booking.pickupMarathi)

@@ -24,13 +24,35 @@ export async function GET(request, { params }) {
             );
         }
 
-        const { voucherId } = params;
+        const p = await params;
+        const voucherId = p?.voucherId;
 
-        const voucher = await Voucher.findById(voucherId)
-            .populate("sourceBookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
-            .populate("issuedBy", "name email")
-            .populate("usedBookings.bookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
-            .lean();
+        console.log("GET /api/vouchers/[voucherId] request for:", voucherId);
+
+        // Try find by _id first; if not found and voucherId looks like a code,
+        // attempt a case-insensitive lookup by voucherCode as a fallback.
+        let voucher = null;
+        try {
+            voucher = await Voucher.findById(voucherId)
+                .populate("sourceBookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+                .populate("issuedBy", "name email")
+                .populate("usedBookings.bookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+                .lean();
+        } catch (e) {
+            voucher = null;
+        }
+
+        if (!voucher) {
+            const isObjectIdLike = typeof voucherId === "string" && /^[0-9a-fA-F]{24}$/.test(voucherId);
+            if (!isObjectIdLike) {
+                const found = await Voucher.findOne({ voucherCode: { $regex: `^${String(voucherId)}$`, $options: "i" } })
+                    .populate("sourceBookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+                    .populate("issuedBy", "name email")
+                    .populate("usedBookings.bookingId", "bookingCode customerName customerPhone customerEmail travelDate seats")
+                    .lean();
+                voucher = found || null;
+            }
+        }
 
         if (!voucher) {
             return NextResponse.json(
@@ -76,7 +98,8 @@ export async function PUT(request, { params }) {
             );
         }
 
-        const { voucherId } = params;
+        const p2 = await params;
+        const voucherId = p2?.voucherId;
         const body = await request.json();
 
         const voucher = await Voucher.findById(voucherId);

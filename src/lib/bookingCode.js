@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import Booking from "@/models/booking.model";
+import Counter from "@/models/counter.model";
 
 const MONTH_SHORT_NAMES = [
     "JAN",
@@ -41,8 +42,7 @@ export async function generateBookingCode(travelDate = null) {
 
     const prefix = `${yearShort}${monthShort}`;
 
-    // Find all ACTIVE codes for same month prefix (exclude cancelled)
-    // Example: 26APR0001, 26APR0002...
+    // Find last booking serial for this prefix to seed the counter if needed
     const lastBooking = await Booking.findOne({
         bookingCode: { $regex: `^${prefix}\\d{4}$` },
         bookingStatus: { $ne: "CANCELLED" },
@@ -51,15 +51,45 @@ export async function generateBookingCode(travelDate = null) {
         .select("bookingCode")
         .lean();
 
-    let nextNumber = 1;
-
+    let lastSerial = 0;
     if (lastBooking?.bookingCode) {
-        const lastSerial = parseInt(lastBooking.bookingCode.slice(-4), 10);
-        if (!Number.isNaN(lastSerial)) {
-            nextNumber = lastSerial + 1;
-        }
+        const parsed = parseInt(lastBooking.bookingCode.slice(-4), 10);
+        if (!Number.isNaN(parsed)) lastSerial = parsed;
     }
 
+    const counterKey = `bookingCode:${prefix}`;
+
+    // Ensure a Counter doc exists and seed it to lastSerial if absent.
+    try {
+        await Counter.findOneAndUpdate(
+            { key: counterKey },
+            { $setOnInsert: { seq: lastSerial } },
+            { upsert: true }
+        );
+    } catch (e) {
+        // ignore and continue — counter may already exist
+    }
+
+    // Ensure existing counter is at least lastSerial to avoid rolling back
+    try {
+        if (lastSerial && lastSerial > 0) {
+            await Counter.findOneAndUpdate(
+                { key: counterKey },
+                { $max: { seq: lastSerial } }
+            );
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    // Atomically increment and get the next sequence number
+    const updated = await Counter.findOneAndUpdate(
+        { key: counterKey },
+        { $inc: { seq: 1 } },
+        { new: true }
+    ).lean();
+
+    const nextNumber = (updated && Number(updated.seq)) || lastSerial + 1;
     const serial = String(nextNumber).padStart(4, "0");
 
     return `${prefix}${serial}`;
