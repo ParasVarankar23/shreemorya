@@ -25,6 +25,9 @@ function SummaryCard({ title, value, icon }) {
 export default function BusPage() {
   const [buses, setBuses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [query, setQuery] = useState("");
   const [seatFilter, setSeatFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -35,6 +38,8 @@ export default function BusPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(limit));
       if (query) params.set("q", query);
       if (seatFilter) params.set("seatLayout", seatFilter);
 
@@ -43,6 +48,7 @@ export default function BusPage() {
 
       if (data.success) {
         setBuses(data.items || []);
+        if (data.pagination) setPagination(data.pagination);
       }
     } catch (error) {
       console.error(error);
@@ -74,7 +80,16 @@ export default function BusPage() {
 
   useEffect(() => {
     fetchBuses();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  // when filters change, reset to first page and refetch
+  useEffect(() => {
+    if (!initialLoadRef.current) return;
+    setPage(1);
+    fetchBuses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, seatFilter]);
 
   const stats = useMemo(() => {
     return {
@@ -210,6 +225,32 @@ export default function BusPage() {
         onDelete={handleDelete}
         onViewLayout={(bus) => setLayoutBus(bus)}
       />
+
+      {(buses.length > 0 || pagination.total > 0) && (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 text-sm flex items-center justify-between">
+          <div className="text-slate-600">Page {pagination.page} of {pagination.totalPages} • {pagination.total} total</div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page <= 1}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              Prev
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPage(Math.min(pagination.totalPages || 1, page + 1))}
+              disabled={page >= (pagination.totalPages || 1)}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       <AddBusModal

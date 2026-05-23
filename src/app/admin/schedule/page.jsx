@@ -4,7 +4,7 @@
 
 import EditScheduleModal from "@/components/admin/schedule/EditScheduleModal";
 import { showAppToast } from "@/lib/toast";
-import { CalendarDays, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import PropTypes from "prop-types";
 import { useEffect, useRef, useState } from "react";
 
@@ -165,6 +165,15 @@ export default function SchedulePage() {
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    const [page, setPage] = useState(1);
+    const [limit] = useState(10);
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 10,
+        total: 0,
+        totalPages: 1,
+    });
+
     // Create form
     const [busId, setBusId] = useState("");
     const [dateMode, setDateMode] = useState("single");
@@ -208,7 +217,12 @@ export default function SchedulePage() {
     const fetchSchedules = async (opts = {}) => {
         setLoading(true);
         try {
-            const params = new URLSearchParams({ page: 1, limit: 100 });
+            const pageToFetch = opts.page || page || 1;
+            const limitToUse = opts.limit || limit || 10;
+
+            const params = new URLSearchParams();
+            params.set("page", String(pageToFetch));
+            params.set("limit", String(limitToUse));
             if (opts.busId) params.set("busId", opts.busId);
 
             const res = await apiFetch(`/api/schedules?${params.toString()}`);
@@ -262,6 +276,21 @@ export default function SchedulePage() {
                 }
 
                 setSchedules(schedulesList);
+
+                // update pagination if provided
+                const receivedPagination = data.pagination || data?.meta || null;
+                if (receivedPagination) {
+                    setPagination({
+                        page: Number(receivedPagination.page || pageToFetch || 1),
+                        limit: Number(receivedPagination.limit || limitToUse || 10),
+                        total: Number(receivedPagination.total || 0),
+                        totalPages: Number(receivedPagination.totalPages || Math.max(1, Math.ceil((receivedPagination.total || 0) / (receivedPagination.limit || limitToUse || 10)))),
+                    });
+                    // keep local page state in sync
+                    setPage(Number(receivedPagination.page || pageToFetch || 1));
+                } else {
+                    setPagination({ page: pageToFetch, limit: limitToUse, total: 0, totalPages: 1 });
+                }
             } else {
                 showAppToast("error", data.message || "Failed to fetch schedules");
             }
@@ -278,18 +307,25 @@ export default function SchedulePage() {
     useEffect(() => {
         const init = async () => {
             await fetchBuses();
-            await fetchSchedules();
+            await fetchSchedules({ page });
             initialLoadRef.current = true;
         };
 
         init();
     }, []);
 
+    // Reset to first page when bus filter changes
     useEffect(() => {
         if (!initialLoadRef.current) return;
-        if (busId) fetchSchedules({ busId });
-        else fetchSchedules();
+        setPage(1);
     }, [busId]);
+
+    // Fetch schedules when page or busId changes after initial load
+    useEffect(() => {
+        if (!initialLoadRef.current) return;
+        fetchSchedules({ busId, page });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [busId, page]);
 
     const handleCreate = async () => {
         if (!busId) {
@@ -630,6 +666,36 @@ export default function SchedulePage() {
                 </div>
 
                 {scheduleTableContent}
+
+                {schedules.length > 0 && (
+                    <div className="border-t border-slate-200 p-4 flex items-center justify-between">
+                        <div className="text-sm text-slate-500">
+                            Page {pagination.page} of {pagination.totalPages} • {pagination.total} total
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setPage(Math.max(1, page - 1))}
+                                disabled={page <= 1}
+                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                                Prev
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setPage(Math.min(pagination.totalPages || 1, page + 1))}
+                                disabled={page >= (pagination.totalPages || 1)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                            >
+                                Next
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <EditScheduleModal

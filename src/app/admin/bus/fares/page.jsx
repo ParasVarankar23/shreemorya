@@ -30,6 +30,8 @@ export default function FarePage() {
     const [buses, setBuses] = useState([]);
 
     const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [limit] = useState(10);
 
     const [openModal, setOpenModal] = useState(false);
 
@@ -260,6 +262,11 @@ export default function FarePage() {
         fetchBuses();
     }, []);
 
+    // reset to first page when filters/search change
+    useEffect(() => {
+        setPage(1);
+    }, [search, filterDirection, filterType]);
+
     /* =====================================================
        API FETCH
     ===================================================== */
@@ -460,6 +467,11 @@ export default function FarePage() {
             (i) => i.fareType === "SPECIAL"
         ).length,
     };
+
+    const pageCount = Math.max(1, Math.ceil(filtered.length / limit));
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const pageItems = filtered.slice(start, end);
 
     /* =====================================================
        UI
@@ -676,7 +688,7 @@ export default function FarePage() {
 
                 ) : (
 
-                    filtered.map((i) => (
+                    pageItems.map((i) => (
 
                         <div
                             key={i._id}
