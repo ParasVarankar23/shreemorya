@@ -69,3 +69,15 @@ body {
 .animate-slide {
     animation: slide 0.3s ease;
 }
+
+/* globals.css */
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    body {
+        background: white;
+    }
+}
