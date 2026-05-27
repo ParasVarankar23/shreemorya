@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
     BadgeIndianRupee,
     CalendarDays,
@@ -108,6 +109,19 @@ export default function AdminVouchers() {
         loadVouchers();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, statusFilter, datePreset, startDate, endDate]);
+
+    // subscribe to global auto-refresh events
+    const { subscribeRefresh } = useAutoRefresh();
+
+    useEffect(() => {
+        const unsub = subscribeRefresh(() => {
+            // reload current listing when an external refresh is triggered
+            loadVouchers();
+        });
+
+        return () => unsub();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subscribeRefresh, page, statusFilter, datePreset, startDate, endDate]);
 
     const loadVouchers = async (searchOverride) => {
         setLoading(true);
@@ -253,21 +267,7 @@ export default function AdminVouchers() {
                             </p>
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={() => loadVouchers()}
-                            disabled={loading}
-                            className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#0B5D5A] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#094B49] disabled:opacity-60"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Refreshing...
-                                </>
-                            ) : (
-                                "Refresh Vouchers"
-                            )}
-                        </button>
+                        {/* Auto-refresh handled via AutoRefreshContext; manual refresh button removed. */}
                     </div>
                 </div>
 

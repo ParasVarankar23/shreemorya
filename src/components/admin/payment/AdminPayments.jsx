@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
     BadgeIndianRupee,
     Ban,
@@ -215,6 +216,18 @@ export default function AdminPaymentPage() {
         fetchPayments();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // subscribe to global auto-refresh events
+    const { subscribeRefresh } = useAutoRefresh();
+
+    useEffect(() => {
+        const unsub = subscribeRefresh(() => {
+            fetchPayments();
+        });
+
+        return () => unsub();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subscribeRefresh]);
 
     const initialLoadRef = useRef(false);
     const debounceRef = useRef(null);
@@ -467,13 +480,7 @@ export default function AdminPaymentPage() {
                                 {submitting ? "Syncing..." : "Sync Offline Payments"}
                             </button>
 
-                            <button
-                                onClick={() => fetchPayments()}
-                                className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-bold text-white backdrop-blur-sm transition hover:bg-white/20"
-                            >
-                                <RefreshCw className="h-4 w-4" />
-                                Refresh
-                            </button>
+                            {/* Manual Refresh removed — auto-refresh via AutoRefreshContext */}
                         </div>
                     </div>
                 </div>

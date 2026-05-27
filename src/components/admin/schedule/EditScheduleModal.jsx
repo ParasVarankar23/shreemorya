@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable jsx-a11y/label-has-associated-control */
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/toast";
 import { X } from "lucide-react";
 import PropTypes from "prop-types";
@@ -46,6 +47,7 @@ export default function EditScheduleModal({
     if (!open) return null;
 
     const notify = toast || showAppToast;
+    const { triggerRefresh } = useAutoRefresh();
 
     const handleClose = () => {
         notify("info", "Edit schedule modal closed");
@@ -54,7 +56,29 @@ export default function EditScheduleModal({
 
     const handleSave = () => {
         notify("info", "Saving schedule changes");
-        onSave?.();
+
+        try {
+            const res = onSave?.();
+            if (res && typeof res.then === "function") {
+                res
+                    .then(() => {
+                        try {
+                            triggerRefresh();
+                        } catch (e) {
+                            // ignore
+                        }
+                    })
+                    .catch(() => { });
+            } else {
+                try {
+                    triggerRefresh();
+                } catch (e) {
+                    // ignore
+                }
+            }
+        } catch (err) {
+            // ignore
+        }
     };
 
     return (

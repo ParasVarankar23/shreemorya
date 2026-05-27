@@ -1,6 +1,7 @@
 "use client";
 
 import SeatLayout from "@/components/SeatLayout";
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { getStopNameMarathi, normalizeStopName } from "@/lib/fare";
 import { showAppToast } from "@/lib/toast";
 import clsx from "clsx";
@@ -309,6 +310,7 @@ export default function BusModalForm({
     const [form, setForm] = useState(() => getInitialState(initialData));
     const [saving, setSaving] = useState(false);
     const [previewFareRule, setPreviewFareRule] = useState(null);
+    const { triggerRefresh } = useAutoRefresh();
 
     const editMode = Boolean(initialData && initialData._id);
 
@@ -638,6 +640,12 @@ export default function BusModalForm({
 
             onSaved?.(data?.item || data?.data || payload);
             showAppToast("success", editMode ? "Bus updated successfully" : "Bus created successfully");
+            // trigger global auto-refresh so listings and other views update
+            try {
+                triggerRefresh();
+            } catch (e) {
+                // ignore if context not available
+            }
             onClose?.();
         } catch (err) {
             console.error(err);

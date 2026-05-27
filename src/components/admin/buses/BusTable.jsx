@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { BusFront, Eye, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -14,6 +15,28 @@ export default function BusTable({
     const router = useRouter();
 
     const isStaff = String(role || "").toLowerCase() === "staff";
+    const { triggerRefresh } = useAutoRefresh();
+
+    const handleDelete = async (bus) => {
+        if (!bus) return;
+        const ok = window.confirm(`Delete bus ${bus.busNumber || bus.busName || ""}?`);
+        if (!ok) return;
+
+        try {
+            const res = onDelete?.(bus);
+            if (res && typeof res.then === "function") {
+                await res;
+            }
+        } catch (err) {
+            console.error("BusTable.delete error:", err);
+        }
+
+        try {
+            triggerRefresh();
+        } catch (e) {
+            // ignore if not available
+        }
+    };
 
     if (loading) {
         return (
@@ -148,7 +171,7 @@ export default function BusTable({
 
                                                 <button
                                                     type="button"
-                                                    onClick={() => onDelete?.(bus)}
+                                                    onClick={() => handleDelete(bus)}
                                                     className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                                                 >
                                                     <Trash2 className="h-4 w-4" />
@@ -228,7 +251,7 @@ export default function BusTable({
 
                                     <button
                                         type="button"
-                                        onClick={() => onDelete?.(bus)}
+                                        onClick={() => handleDelete(bus)}
                                         className="rounded-2xl border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                                     >
                                         Delete

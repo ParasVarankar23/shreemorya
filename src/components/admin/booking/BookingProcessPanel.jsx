@@ -13,10 +13,11 @@ import {
     X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAutoRefresh } from "../../../context/AutoRefreshContext";
 import SeatLayout from "../../SeatLayout";
 import CancelBookingModal from "./CancelBookingModal";
 import ExistingBookingsPanel from "./ExistingBookingsPanel";
-import PrintSeatTemplateModal from "./PrintSeatTemplateModal";
+import PrintSeatTemplateModal, { buildSeatTemplate } from "./PrintSeatTemplateModal";
 import SeatBookingDetailsModal from "./SeatBookingDetailsModal";
 import {
     formatCurrency,
@@ -113,6 +114,7 @@ export default function BookingProcessPanel({
     const [editLoading, setEditLoading] = useState(false);
     const [blockingSeats, setBlockingSeats] = useState(false);
     const [unblockingSeats, setUnblockingSeats] = useState(false);
+    const { triggerRefresh } = useAutoRefresh();
 
     useEffect(() => {
         if (selectedBus?._id && travelDate) {
@@ -1237,6 +1239,7 @@ export default function BookingProcessPanel({
 
             resetForm();
             await loadExistingBookings();
+            try { triggerRefresh(); } catch (e) { /* ignore */ }
         } catch (error) {
             console.error("handleCreateBooking error:", error);
             showAppToast("error", error.message || "Failed to create booking");
@@ -1364,6 +1367,7 @@ export default function BookingProcessPanel({
 
                 resetForm();
                 await loadExistingBookings();
+                try { triggerRefresh(); } catch (e) { /* ignore */ }
                 return;
             }
 
@@ -1543,6 +1547,7 @@ export default function BookingProcessPanel({
             setOverrideTotalFare("");
             setPassengerDetails({});
             await loadExistingBookings();
+            try { triggerRefresh(); } catch (e) { /* ignore */ }
         } catch (error) {
             console.error("handleBlockSelectedSeats error:", error);
             showAppToast("error", error.message || "Failed to block selected seats");
@@ -1592,6 +1597,7 @@ export default function BookingProcessPanel({
             setOverrideTotalFare("");
             setPassengerDetails({});
             await loadExistingBookings();
+            try { triggerRefresh(); } catch (e) { /* ignore */ }
         } catch (error) {
             console.error("handleUnblockSelectedSeats error:", error);
             showAppToast("error", error.message || "Failed to unblock selected seats");
@@ -1625,6 +1631,7 @@ export default function BookingProcessPanel({
             setSeatDetailModalOpen(false);
             setSelectedBookingDetail(null);
             await loadExistingBookings();
+            try { triggerRefresh(); } catch (e) { /* ignore */ }
         } catch (error) {
             console.error("handleUpdateBooking error:", error);
             showAppToast("error", error.message || "Failed to update booking");
@@ -1742,6 +1749,7 @@ export default function BookingProcessPanel({
             );
 
             await loadExistingBookings();
+            try { triggerRefresh(); } catch (e) { /* ignore */ }
         } catch (error) {
             console.error("handleCancelBooking error:", error);
             showAppToast("error", error.message || "Failed to cancel booking");
@@ -1808,8 +1816,8 @@ export default function BookingProcessPanel({
 
             // If we were tracking selected seats, remove cancelled seat
             setSelectedSeats((prev) => prev.filter((seat) => String(seat) !== String(seatNo)));
-
             await loadExistingBookings();
+            try { triggerRefresh(); } catch (e) { /* ignore */ }
         } catch (error) {
             console.error("cancelBookingDirect error:", error);
             showAppToast("error", error.message || "Failed to cancel booking");
@@ -1844,6 +1852,7 @@ export default function BookingProcessPanel({
             );
 
             await loadExistingBookings();
+            try { triggerRefresh(); } catch (e) { /* ignore */ }
         } catch (error) {
             console.error("handleUnblockBooking error:", error);
             showAppToast("error", error.message || "Failed to unblock seat");
@@ -1958,7 +1967,44 @@ export default function BookingProcessPanel({
                                 <>
                                     <button
                                         type="button"
-                                        onClick={() => setPrintModalOpen(true)}
+                                        onClick={() => {
+                                            try {
+                                                // build seatMap from existing bookings
+                                                const seatMap = {};
+                                                (existingBookings || []).forEach((b) => {
+                                                    const items = getSeatItemsFromBooking(b);
+                                                    items.forEach((it) => {
+                                                        seatMap[String(it.seatNo)] = {
+                                                            ticket: it.ticketNo,
+                                                            name: it.passengerName,
+                                                            phone: b.customerPhone || "",
+                                                            pickup: b.pickup || "",
+                                                            drop: b.drop || "",
+                                                        };
+                                                    });
+                                                });
+
+                                                const html = buildSeatTemplate({
+                                                    selectedBus,
+                                                    date: travelDate,
+                                                    seatMap,
+                                                    layout: Number(selectedBus?.seatLayout || selectedBus?.seatCount || 39),
+                                                });
+
+                                                const w = window.open("", "_blank", "width=1200,height=900");
+                                                if (!w) {
+                                                    alert("Allow Popup to preview the template");
+                                                    return;
+                                                }
+                                                w.document.open();
+                                                w.document.write(html);
+                                                w.document.close();
+                                                w.focus();
+                                            } catch (err) {
+                                                console.error(err);
+                                                alert("Failed to open template preview");
+                                            }
+                                        }}
                                         className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-50"
                                     >
                                         <Printer className="h-4.5 w-4.5" />
@@ -1967,7 +2013,66 @@ export default function BookingProcessPanel({
 
                                     <button
                                         type="button"
-                                        onClick={() => setPrintModalOpen(true)}
+                                        onClick={async () => {
+                                            try {
+                                                // build seatMap from existing bookings
+                                                const seatMap = {};
+                                                (existingBookings || []).forEach((b) => {
+                                                    const items = getSeatItemsFromBooking(b);
+                                                    items.forEach((it) => {
+                                                        seatMap[String(it.seatNo)] = {
+                                                            ticket: it.ticketNo,
+                                                            name: it.passengerName,
+                                                            phone: b.customerPhone || "",
+                                                            pickup: b.pickup || "",
+                                                            drop: b.drop || "",
+                                                        };
+                                                    });
+                                                });
+
+                                                const html = buildSeatTemplate({
+                                                    selectedBus,
+                                                    date: travelDate,
+                                                    seatMap,
+                                                    layout: Number(selectedBus?.seatLayout || selectedBus?.seatCount || 39),
+                                                });
+
+                                                // Try popup approach to run html2pdf and auto-save
+                                                const popup = window.open("", "_blank", "width=1200,height=900");
+                                                if (popup) {
+                                                    popup.document.open();
+                                                    // inject html and html2pdf script to auto-save
+                                                    popup.document.write(html + `\n<script src=\"https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js\"></script>\n<script>\n(function wait(){\n  if(window.html2pdf){\n    setTimeout(()=>{\n      const opt={margin:0.5,filename:'seat-template.pdf',image:{type:'jpeg',quality:0.98},html2canvas:{scale:2},jsPDF:{unit:'in',format:'a4',orientation:'portrait'}};\n      window.html2pdf().set(opt).from(document.body).save();\n    },300);\n  } else { setTimeout(wait,100); }\n})();\n<\/script>`);
+                                                    popup.document.close();
+                                                    popup.focus();
+                                                    return;
+                                                }
+
+                                                // fallback: create hidden container and use html2pdf in current window
+                                                const container = document.createElement("div");
+                                                container.style.position = "fixed";
+                                                container.style.left = "-9999px";
+                                                container.style.top = "-9999px";
+                                                container.innerHTML = html;
+                                                document.body.appendChild(container);
+
+                                                if (!window.html2pdf) {
+                                                    await new Promise((resolve, reject) => {
+                                                        const s = document.createElement("script");
+                                                        s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js";
+                                                        s.onload = resolve;
+                                                        s.onerror = reject;
+                                                        document.head.appendChild(s);
+                                                    });
+                                                }
+
+                                                await window.html2pdf().set({ margin: 0.5, filename: "seat-template.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } }).from(container).save();
+                                                document.body.removeChild(container);
+                                            } catch (err) {
+                                                console.error(err);
+                                                alert("Failed to generate PDF");
+                                            }
+                                        }}
                                         className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] bg-gradient-to-r from-[#0B5D5A] to-[#0A524F] px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(11,93,90,0.18)] transition-all duration-200 hover:from-[#094B49] hover:to-[#083F3E]"
                                     >
                                         <Download className="h-4.5 w-4.5" />

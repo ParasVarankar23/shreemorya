@@ -13,6 +13,7 @@ import {
     X,
 } from "lucide-react";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { useEffect, useState } from "react";
 
 export default function StaffPage() {
@@ -54,6 +55,17 @@ export default function StaffPage() {
     useEffect(() => {
         fetchStaff();
     }, []);
+
+    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
+
+    useEffect(() => {
+        const unsub = subscribeRefresh(() => {
+            fetchStaff();
+        });
+
+        return () => unsub();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subscribeRefresh]);
 
     /* ================= RESET ================= */
 
@@ -113,7 +125,13 @@ export default function StaffPage() {
 
             reset();
 
-            fetchStaff();
+            await fetchStaff();
+
+            try {
+                triggerRefresh();
+            } catch (e) {
+                // ignore if context not available
+            }
         } catch {
             showAppToast("error", "Something went wrong");
         } finally {
@@ -133,7 +151,13 @@ export default function StaffPage() {
 
             setConfirmDelete(null);
 
-            fetchStaff();
+            await fetchStaff();
+
+            try {
+                triggerRefresh();
+            } catch (e) {
+                // ignore
+            }
         } catch {
             showAppToast("error", "Delete failed");
         }
@@ -649,8 +673,8 @@ export default function StaffPage() {
                             <button
                                 disabled={loading}
                                 className={`w-full h-12 rounded-xl font-semibold flex items-center justify-center gap-2 transition ${loading
-                                        ? "bg-gray-400 cursor-not-allowed"
-                                        : "bg-[#0B5D5A] hover:bg-[#094B49] text-white"
+                                    ? "bg-gray-400 cursor-not-allowed"
+                                    : "bg-[#0B5D5A] hover:bg-[#094B49] text-white"
                                     }`}
                             >
 
